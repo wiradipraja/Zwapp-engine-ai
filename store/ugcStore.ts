@@ -19,9 +19,24 @@ import {
   NarrativeContext,
 } from '../types/ugc';
 
+// API Configuration for UGC services
+export interface UGCAPIConfig {
+  kieApiKey: string;
+  openaiApiKey: string;
+  visionApiKey: string;
+}
+
 interface UGCStoreState {
   // Current project
   currentProject: UGCProject | null;
+  
+  // API Configuration
+  apiConfig: UGCAPIConfig | null;
+  
+  // Processing state
+  processingStage: WorkflowStage | null;
+  progressPercent: number;
+  progressMessage: string;
   
   // UI state
   isLoading: boolean;
@@ -30,6 +45,12 @@ interface UGCStoreState {
   
   // Actions
   initializeProject: (projectName: string, userId: string) => void;
+  
+  // API Config
+  setApiConfig: (config: UGCAPIConfig) => void;
+  
+  // Progress tracking
+  setProgress: (stage: WorkflowStage | null, percent: number, message: string) => void;
   
   // Input actions
   addModelPhotos: (assets: UploadedAsset[]) => void;
@@ -77,9 +98,21 @@ interface UGCStoreState {
 export const useUGCStore = create<UGCStoreState>()(
   devtools((set, get) => ({
     currentProject: null,
+    apiConfig: null,
+    processingStage: null,
+    progressPercent: 0,
+    progressMessage: '',
     isLoading: false,
     error: null,
     successMessage: null,
+    
+    setApiConfig: (config) => set({ apiConfig: config }),
+    
+    setProgress: (stage, percent, message) => set({
+      processingStage: stage,
+      progressPercent: percent,
+      progressMessage: message
+    }),
     
     initializeProject: (projectName, userId) => {
       const newProject: UGCProject = {
@@ -96,10 +129,14 @@ export const useUGCStore = create<UGCStoreState>()(
         extractedContext: {},
         generatedContent: {
           prompts: [],
+          promptTemplates: [],
           images: [],
           videos: [],
         },
-        qaResults: {},
+        qaResults: {
+          imageQA: [],
+          overallPassRate: 0
+        },
         createdAt: Date.now(),
         updatedAt: Date.now(),
       };

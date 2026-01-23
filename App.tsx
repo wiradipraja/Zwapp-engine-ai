@@ -431,7 +431,7 @@ const App: React.FC = () => {
                 )}
                 {activeModule === 'ugc' && (
                     <div className="w-full">
-                        <UGCOrchestrationWorkspace />
+                        <UGCOrchestrationWorkspace apiKey={apiKey} />
                     </div>
                 )}
                 </div>

@@ -22,6 +22,7 @@ export interface UploadedAsset {
   size: number; // bytes
   uploadedAt: number;
   type?: 'model' | 'product' | 'moodboard';
+  base64?: string; // For API calls
 }
 
 export interface InputAssets {
@@ -37,6 +38,13 @@ export interface ModelProfile {
   poses: string[];
   expressions: string[];
   outfitStyle: string;
+  // Extended for service integration
+  lookDescription?: string;
+  skinTone?: string;
+  bodyType?: string;
+  facialFeatures?: string;
+  expressionStyle?: string;
+  referenceImageUrl?: string;
 }
 
 export interface ProductProfile {
@@ -45,6 +53,10 @@ export interface ProductProfile {
   dimensions: string;
   keyFeatures: string[];
   highlightAngles: string[];
+  // Extended for service integration
+  category?: string;
+  priceRange?: string;
+  referenceImageUrl?: string;
 }
 
 export interface NarrativeContext {
@@ -53,6 +65,10 @@ export interface NarrativeContext {
   campaignGoal: string;
   keyMessages: string[];
   competitorAnalysis?: string;
+  // Extended for service integration
+  productStory?: string;
+  culturalContext?: string;
+  emotionalTone?: string;
 }
 
 // ============ GENERATED CONTENT ============
@@ -68,12 +84,27 @@ export interface SceneBreakdown {
 }
 
 export interface GeneratedScript {
+  id?: string;
   hook: string;
   problemStatement: string;
   solution: string;
   cta: string;
   fullNarrative: string;
   sceneBreakdown: SceneBreakdown[];
+  // Extended from scriptGeneration service
+  title?: string;
+  duration?: number;
+  scenes?: Array<{
+    sceneNumber: number;
+    setting: string;
+    action: string;
+    dialogue: string;
+    productPlacement: string;
+    emotionalBeat: string;
+  }>;
+  voiceoverText?: string;
+  generatedAt?: number;
+  model?: 'gpt-4' | 'gpt-3.5-turbo';
 }
 
 export interface VisualStyleGuide {
@@ -91,22 +122,48 @@ export interface ConsistencyCheckpoint {
 }
 
 export interface PromptTemplate {
+  id?: string;
   sceneId: string;
+  sceneNumber?: number;
+  sceneDescription?: string;
   basePrompt: string;
   dynamicVariables: Record<string, string>;
   consistencyCheckpoints: ConsistencyCheckpoint[];
   generatedPrompt: string;
+  // Extended for service integration
+  visualStyle?: string;
+  productIntegration?: string;
+  negativePrompts?: string[];
+  customizations?: {
+    style?: string;
+    lighting?: string;
+    composition?: string;
+  };
 }
 
 export interface GeneratedImage {
   id: string;
   sceneId: string;
+  sceneNumber?: number;
   prompt: string;
+  promptUsed?: string;
   imageUrl: string;
   nanobananaTaskId?: string;
   qualityScore: number;
   issues?: string[];
   createdAt: number;
+  // Extended for service integration
+  supabasePath?: string;
+  generatedAt?: number;
+  model?: string;
+  consistency?: {
+    modelConsistency: number;
+    productPlacement: number;
+    styleCohesion: number;
+    overallQuality: number;
+  };
+  approved?: boolean;
+  regenerationCount?: number;
 }
 
 export interface GeneratedVideo {
@@ -116,13 +173,34 @@ export interface GeneratedVideo {
   veoTaskId?: string;
   duration?: number;
   createdAt: number;
+  // Extended for service integration
+  supabasePath?: string;
+  generatedAt?: number;
+  model?: string;
+  frameRate?: number;
+  resolution?: string;
+  status?: 'pending' | 'processing' | 'completed' | 'failed';
 }
 
 export interface QAResult {
+  id?: string;
+  imageId?: string;
+  sceneNumber?: number;
   qualityScore: number;
   issues: string[];
   recommendations: string[];
   timestamp: number;
+  // Extended for service integration
+  checks?: {
+    modelConsistency: { passed: boolean; confidence: number; notes: string };
+    productPlacement: { passed: boolean; confidence: number; notes: string };
+    styleCohesion: { passed: boolean; confidence: number; notes: string };
+    noHallucinations: { passed: boolean; confidence: number; notes: string };
+  };
+  overallStatus?: 'passed' | 'failed' | 'needs_review';
+  suggestedFixes?: string[];
+  performedAt?: number;
+  analysisModel?: string;
 }
 
 // ============ PROJECT ============
@@ -144,11 +222,16 @@ export interface UGCProject {
     script?: GeneratedScript;
     visualStyleGuide?: VisualStyleGuide;
     prompts: PromptTemplate[];
+    promptTemplates?: PromptTemplate[]; // Alias for prompts
     images: GeneratedImage[];
     videos: GeneratedVideo[];
   };
   
-  qaResults: Record<string, QAResult>;
+  qaResults: {
+    imageQA?: QAResult[];
+    overallPassRate?: number;
+    [imageId: string]: QAResult | QAResult[] | number | undefined;
+  };
   
   createdAt: number;
   updatedAt: number;
