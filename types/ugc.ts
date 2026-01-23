@@ -13,6 +13,44 @@ export type WorkflowStage =
 
 export type ProjectStatus = 'IDLE' | 'PROCESSING' | 'PAUSED' | 'COMPLETE' | 'ERROR';
 
+// Language options for narration
+export type NarrationLanguage = 'EN' | 'ID';
+
+// UGC Content Style
+export type UGCContentStyle = 'selfie' | 'cinematic' | 'professional';
+
+export interface UGCContentStyleInfo {
+  id: UGCContentStyle;
+  name: string;
+  description: string;
+  promptModifier: string; // Added to image/video prompts
+  cameraStyle: string;
+}
+
+export const UGC_CONTENT_STYLES: UGCContentStyleInfo[] = [
+  {
+    id: 'selfie',
+    name: 'Selfie Style',
+    description: 'Model holding camera, authentic UGC look',
+    promptModifier: 'selfie style, model holding smartphone camera, close-up POV shot, authentic UGC content, casual vibe',
+    cameraStyle: 'handheld POV'
+  },
+  {
+    id: 'cinematic',
+    name: 'Cinematic',
+    description: 'Professional filming with cinematic look',
+    promptModifier: 'cinematic shot, professional lighting, shallow depth of field, film grain, movie quality',
+    cameraStyle: 'cinematic camera movement'
+  },
+  {
+    id: 'professional',
+    name: 'Professional',
+    description: 'Studio quality, polished presentation',
+    promptModifier: 'professional studio shot, clean background, perfect lighting, high-end commercial quality',
+    cameraStyle: 'steady professional camera'
+  }
+];
+
 // ============ ASSETS ============
 export interface UploadedAsset {
   id: string;
@@ -210,6 +248,12 @@ export interface UGCProject {
   projectName: string;
   status: ProjectStatus;
   currentStage: WorkflowStage;
+  
+  // UGC Settings
+  settings: {
+    language: NarrationLanguage;
+    contentStyle: UGCContentStyle;
+  };
   
   inputAssets: InputAssets;
   extractedContext: {

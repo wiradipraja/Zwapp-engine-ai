@@ -64,7 +64,7 @@ const PromptEngineeringPanel: React.FC<PromptEngineeringPanelProps> = ({ onGener
                   className="w-full px-4 py-3 flex items-center justify-between hover:bg-zinc-800 transition-colors"
                 >
                   <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 bg-gradient-to-br from-orange-500 to-yellow-500 flex items-center justify-center text-black font-bold text-sm">
+                    <div className="w-8 h-8 bg-orange-600 flex items-center justify-center text-black font-bold text-sm">
                       {prompt.sceneNumber || index + 1}
                     </div>
                     <div className="text-left">

@@ -134,7 +134,7 @@ const ScriptReviewPanel: React.FC = () => {
           {scenes.map((scene: any, index: number) => (
             <div key={scene.sceneNumber || index} className="p-4 hover:bg-zinc-800/50 transition-colors">
               <div className="flex items-start gap-4">
-                <div className="flex-shrink-0 w-8 h-8 bg-gradient-to-br from-orange-500 to-yellow-500 flex items-center justify-center text-black font-bold text-sm">
+                <div className="flex-shrink-0 w-8 h-8 bg-orange-600 flex items-center justify-center text-black font-bold text-sm">
                   {scene.sceneNumber || index + 1}
                 </div>
                 <div className="flex-1 space-y-3">

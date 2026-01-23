@@ -111,9 +111,13 @@ export async function generateUGCScript(
   productProfile: ProductProfile,
   narrativeContext: NarrativeContext,
   config: UGCServiceConfig,
-  onProgress?: (message: string, percent: number) => void
+  onProgress?: (message: string, percent: number) => void,
+  options?: { language?: 'EN' | 'ID'; contentStyle?: 'selfie' | 'cinematic' | 'professional' }
 ): Promise<GeneratedScript> {
-  onProgress?.('Generating script with AI...', 20);
+  const language = options?.language || 'EN';
+  const contentStyle = options?.contentStyle || 'selfie';
+  
+  onProgress?.(`Generating script with AI (${language})...`, 20);
 
   try {
     // Create full profile objects for the service
@@ -160,6 +164,8 @@ export async function generateUGCScript(
         apiKey: config.geminiApiKey,
         model: 'gemini-1.5-flash',
         temperature: 0.7,
+        language,
+        contentStyle,
       }
     );
 
@@ -528,10 +534,12 @@ export async function generateUGCVideo(
     resolution?: '720p' | '1080p' | '1440p';
     frameRate?: 24 | 30 | 60;
     duration?: number;
+    engine?: string; // 'veo3' | 'kling' | 'runway' | 'pika'
   },
   onProgress?: (message: string, percent: number) => void
 ): Promise<GeneratedVideo> {
-  onProgress?.('Preparing images for video generation...', 10);
+  const engineName = options?.engine || 'veo3';
+  onProgress?.(`Preparing images for ${engineName.toUpperCase()}...`, 10);
 
   try {
     const approvedImages = images.filter(img => img.approved !== false);
@@ -540,7 +548,7 @@ export async function generateUGCVideo(
       throw new Error('Need at least 2 approved images for video generation');
     }
 
-    onProgress?.('Generating video with Veo 3.1...', 30);
+    onProgress?.(`Generating video with ${engineName.toUpperCase()}...`, 30);
 
     const video = await generateVideoWithVeo(
       approvedImages.map(img => ({

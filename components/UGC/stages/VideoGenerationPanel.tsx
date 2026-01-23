@@ -4,13 +4,32 @@ import React, { useState } from 'react';
 import { useUGCStore } from '../../../store/ugcStore';
 
 interface VideoGenerationPanelProps {
-  onGenerateVideo?: () => Promise<void>;
+  onGenerateVideo?: (engine: VideoEngine) => Promise<void>;
 }
+
+type VideoEngine = 'veo3' | 'kling' | 'runway' | 'pika';
+
+interface EngineInfo {
+  id: VideoEngine;
+  name: string;
+  description: string;
+  cost: string;
+  quality: string;
+  speed: string;
+}
+
+const VIDEO_ENGINES: EngineInfo[] = [
+  { id: 'veo3', name: 'Veo 3.1', description: 'KIE.AI - Best for UGC content', cost: '~$2-3', quality: '⭐⭐⭐⭐⭐', speed: 'Fast' },
+  { id: 'kling', name: 'Kling AI', description: 'High-quality realistic motion', cost: '~$3-5', quality: '⭐⭐⭐⭐⭐', speed: 'Medium' },
+  { id: 'runway', name: 'Runway Gen-3', description: 'Creative & artistic style', cost: '~$4-6', quality: '⭐⭐⭐⭐', speed: 'Medium' },
+  { id: 'pika', name: 'Pika Labs', description: 'Quick social media videos', cost: '~$1-2', quality: '⭐⭐⭐', speed: 'Fast' },
+];
 
 const VideoGenerationPanel: React.FC<VideoGenerationPanelProps> = ({ onGenerateVideo }) => {
   const store = useUGCStore();
   const [resolution, setResolution] = useState<'720p' | '1080p' | '1440p'>('1080p');
   const [frameRate, setFrameRate] = useState<24 | 30 | 60>(30);
+  const [selectedEngine, setSelectedEngine] = useState<VideoEngine>('veo3');
 
   if (!store.currentProject) return null;
 
@@ -20,12 +39,13 @@ const VideoGenerationPanel: React.FC<VideoGenerationPanelProps> = ({ onGenerateV
 
   const handleGenerateVideo = async () => {
     if (onGenerateVideo) {
-      await onGenerateVideo();
+      await onGenerateVideo(selectedEngine);
     } else {
       store.setLoading(true);
+      store.setProgress('VIDEO_GENERATION', 10, `Initializing ${VIDEO_ENGINES.find(e => e.id === selectedEngine)?.name}...`);
       setTimeout(() => {
         store.setLoading(false);
-        store.setSuccessMessage('Video generation completed');
+        store.setSuccessMessage(`Video generated with ${VIDEO_ENGINES.find(e => e.id === selectedEngine)?.name}`);
       }, 3000);
     }
   };
@@ -42,8 +62,40 @@ const VideoGenerationPanel: React.FC<VideoGenerationPanelProps> = ({ onGenerateV
           <h2 className="text-lg font-bold uppercase tracking-widest text-white">Video Generation</h2>
         </div>
         <p className="text-xs text-zinc-500 font-mono">
-          Create smooth video transitions using KIE.AI Veo 3.1
+          Create smooth image-to-video transitions using AI
         </p>
+      </div>
+
+      {/* Video Engine Selection */}
+      <div className="bg-zinc-800 border border-zinc-700 p-4">
+        <h4 className="text-xs font-mono text-orange-500 uppercase tracking-widest mb-3">Select Video Engine</h4>
+        <div className="grid grid-cols-2 gap-3">
+          {VIDEO_ENGINES.map((engine) => (
+            <button
+              key={engine.id}
+              onClick={() => setSelectedEngine(engine.id)}
+              className={`p-3 border text-left transition-all ${
+                selectedEngine === engine.id
+                  ? 'bg-orange-600/20 border-orange-500'
+                  : 'bg-zinc-900 border-zinc-700 hover:border-zinc-600'
+              }`}
+            >
+              <div className="flex items-center justify-between mb-1">
+                <span className={`text-sm font-bold ${selectedEngine === engine.id ? 'text-orange-500' : 'text-white'}`}>
+                  {engine.name}
+                </span>
+                <span className="text-[10px] text-zinc-500 font-mono">{engine.cost}</span>
+              </div>
+              <p className="text-[10px] text-zinc-400 font-mono mb-2">{engine.description}</p>
+              <div className="flex items-center justify-between text-[10px]">
+                <span className="text-zinc-500">Quality: {engine.quality}</span>
+                <span className={`px-1 py-0.5 ${
+                  engine.speed === 'Fast' ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400'
+                }`}>{engine.speed}</span>
+              </div>
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Info Card */}
@@ -162,11 +214,11 @@ const VideoGenerationPanel: React.FC<VideoGenerationPanelProps> = ({ onGenerateV
       {videos.length === 0 && !store.isLoading && (
         <div className="text-center py-8">
           <div className="text-5xl mb-4">🎥</div>
-          <p className="text-zinc-400 font-mono mb-6">Ready to create your UGC video</p>
+          <p className="text-zinc-400 font-mono mb-6">Ready to create your UGC video with {VIDEO_ENGINES.find(e => e.id === selectedEngine)?.name}</p>
           <button
             onClick={handleGenerateVideo}
             disabled={!canGenerateVideo || store.isLoading}
-            className="relative font-bold uppercase tracking-wider py-4 px-8 bg-gradient-to-r from-orange-600 to-yellow-500 text-black transition-all disabled:opacity-50 disabled:cursor-not-allowed text-lg"
+            className="relative font-bold uppercase tracking-wider py-4 px-8 bg-orange-600 hover:bg-orange-500 text-black transition-all disabled:opacity-50 disabled:cursor-not-allowed text-lg"
           >
             🎬 GENERATE VIDEO
             <div className="absolute top-0 right-0 w-2 h-2 border-t-2 border-r-2 border-current opacity-50"></div>

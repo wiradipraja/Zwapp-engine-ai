@@ -75,12 +75,19 @@ const UGCOrchestrationWorkspace: React.FC<UGCOrchestrationWorkspaceProps> = ({
       store.setProgress('SCRIPTING', 0, 'Starting script generation...');
       store.setCurrentStage('SCRIPTING');
       
+      // Get language and style settings from project
+      const projectSettings = store.currentProject?.settings;
+      
       const script = await generateUGCScript(
         modelProfile,
         productProfile,
         narrativeContext,
         { kieApiKey: localKieKey, geminiApiKey: localGeminiKey },
-        (msg, pct) => store.setProgress('SCRIPTING', pct, msg)
+        (msg, pct) => store.setProgress('SCRIPTING', pct, msg),
+        { 
+          language: projectSettings?.language || 'EN', 
+          contentStyle: projectSettings?.contentStyle || 'selfie' 
+        }
       );
 
       store.setGeneratedScript(script);
@@ -171,7 +178,7 @@ const UGCOrchestrationWorkspace: React.FC<UGCOrchestrationWorkspaceProps> = ({
     }
   };
 
-  const handleGenerateVideo = async () => {
+  const handleGenerateVideo = async (engine: string = 'veo3') => {
     if (!store.currentProject) return;
 
     if (!localKieKey) {
@@ -190,15 +197,17 @@ const UGCOrchestrationWorkspace: React.FC<UGCOrchestrationWorkspaceProps> = ({
     store.setCurrentStage('VIDEO_GENERATION');
 
     try {
+      store.setProgress('VIDEO_GENERATION', 10, `Initializing ${engine.toUpperCase()}...`);
+      
       const video = await generateUGCVideo(
         images,
         { kieApiKey: localKieKey, geminiApiKey: localGeminiKey },
-        { resolution: '1080p', frameRate: 30 },
+        { resolution: '1080p', frameRate: 30, engine },
         (msg, pct) => store.setProgress('VIDEO_GENERATION', pct, msg)
       );
 
       store.addGeneratedVideo(video);
-      store.setSuccessMessage('Video generated successfully!');
+      store.setSuccessMessage(`Video generated successfully with ${engine.toUpperCase()}!`);
       store.setLoading(false);
     } catch (error) {
       console.error('Video generation error:', error);
@@ -227,9 +236,9 @@ const UGCOrchestrationWorkspace: React.FC<UGCOrchestrationWorkspaceProps> = ({
   if (!store.currentProject) {
     return (
       <div className="bg-zinc-900/80 border border-zinc-800 relative">
-        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-orange-600 via-yellow-500 to-orange-600"></div>
+        <div className="absolute top-0 left-0 w-full h-1 bg-orange-600"></div>
         <div className="p-8 text-center">
-          <div className="w-16 h-16 mx-auto mb-4 bg-gradient-to-br from-orange-500 to-yellow-500 flex items-center justify-center">
+          <div className="w-16 h-16 mx-auto mb-4 bg-orange-600 flex items-center justify-center">
             <span className="text-3xl">🎬</span>
           </div>
           <h1 className="text-2xl font-bold uppercase tracking-widest text-white mb-2">UGC AI Orchestration</h1>
@@ -260,13 +269,13 @@ const UGCOrchestrationWorkspace: React.FC<UGCOrchestrationWorkspaceProps> = ({
 
   return (
     <div className="bg-zinc-900/80 border border-zinc-800 relative">
-      <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-orange-600 via-yellow-500 to-orange-600"></div>
+      <div className="absolute top-0 left-0 w-full h-1 bg-orange-600"></div>
 
       {/* API Key Modal */}
       {showApiKeyModal && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
           <div className="bg-zinc-900 border border-zinc-700 p-6 max-w-md w-full mx-4 relative">
-            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-orange-600 via-yellow-500 to-orange-600"></div>
+            <div className="absolute top-0 left-0 w-full h-1 bg-orange-600"></div>
             <div className="flex items-center gap-2 mb-6">
               <div className="w-3 h-3 bg-orange-500 animate-pulse"></div>
               <h3 className="text-lg font-bold uppercase tracking-widest text-white">API Configuration</h3>
@@ -315,7 +324,7 @@ const UGCOrchestrationWorkspace: React.FC<UGCOrchestrationWorkspaceProps> = ({
         {/* Progress Bar */}
         <div className="space-y-2">
           <div className="w-full bg-zinc-800 h-1">
-            <div className="bg-gradient-to-r from-orange-600 to-yellow-500 h-1 transition-all duration-300" style={{ width: `${progressPercent}%` }} />
+            <div className="bg-orange-600 h-1 transition-all duration-300" style={{ width: `${progressPercent}%` }} />
           </div>
           <div className="flex justify-between">
             {stageOrder.map((stage, index) => (

@@ -17,6 +17,8 @@ import {
   ModelProfile,
   ProductProfile,
   NarrativeContext,
+  NarrationLanguage,
+  UGCContentStyle,
 } from '../types/ugc';
 
 // API Configuration for UGC services
@@ -51,6 +53,10 @@ interface UGCStoreState {
   
   // Progress tracking
   setProgress: (stage: WorkflowStage | null, percent: number, message: string) => void;
+  
+  // Settings actions
+  setLanguage: (language: NarrationLanguage) => void;
+  setContentStyle: (style: UGCContentStyle) => void;
   
   // Input actions
   addModelPhotos: (assets: UploadedAsset[]) => void;
@@ -121,6 +127,10 @@ export const useUGCStore = create<UGCStoreState>()(
         projectName,
         status: 'IDLE',
         currentStage: 'INPUT',
+        settings: {
+          language: 'EN',
+          contentStyle: 'selfie',
+        },
         inputAssets: {
           modelPhotos: [],
           productPhotos: [],
@@ -143,6 +153,36 @@ export const useUGCStore = create<UGCStoreState>()(
       
       set({ currentProject: newProject });
     },
+    
+    setLanguage: (language) =>
+      set((state) => {
+        if (!state.currentProject) return {};
+        return {
+          currentProject: {
+            ...state.currentProject,
+            settings: {
+              ...state.currentProject.settings,
+              language,
+            },
+            updatedAt: Date.now(),
+          },
+        };
+      }),
+    
+    setContentStyle: (style) =>
+      set((state) => {
+        if (!state.currentProject) return {};
+        return {
+          currentProject: {
+            ...state.currentProject,
+            settings: {
+              ...state.currentProject.settings,
+              contentStyle: style,
+            },
+            updatedAt: Date.now(),
+          },
+        };
+      }),
     
     addModelPhotos: (assets) =>
       set((state) => {

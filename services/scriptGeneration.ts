@@ -7,6 +7,9 @@ import {
   NarrativeContext,
   GeneratedScript,
   SceneBreakdown,
+  NarrationLanguage,
+  UGCContentStyle,
+  UGC_CONTENT_STYLES,
 } from '../types/ugc';
 
 export interface ScriptGenerationConfig {
@@ -14,6 +17,8 @@ export interface ScriptGenerationConfig {
   model?: string;
   temperature?: number;
   maxTokens?: number;
+  language?: NarrationLanguage;
+  contentStyle?: UGCContentStyle;
 }
 
 /**
@@ -31,10 +36,29 @@ export async function generateScriptWithGemini(
     model = 'gemini-1.5-flash', // Free tier model
     temperature = 0.7,
     maxTokens = 2048,
+    language = 'EN',
+    contentStyle = 'selfie',
   } = config;
+
+  // Get content style info
+  const styleInfo = UGC_CONTENT_STYLES.find(s => s.id === contentStyle) || UGC_CONTENT_STYLES[0];
+  
+  // Language instruction
+  const languageInstruction = language === 'ID' 
+    ? 'IMPORTANT: All dialogue must be written in Bahasa Indonesia (Indonesian language). The model will speak in Indonesian.'
+    : 'IMPORTANT: All dialogue must be written in English.';
+  
+  // Style instruction
+  const styleInstruction = `CONTENT STYLE: ${styleInfo.name}
+- Camera Style: ${styleInfo.cameraStyle}
+- Visual Approach: ${styleInfo.promptModifier}`;
 
   // Build detailed prompt for script generation
   const prompt = `You are an expert UGC content writer. Generate authentic, engaging UGC scripts for social media (TikTok, Instagram Reels, YouTube Shorts).
+
+${languageInstruction}
+
+${styleInstruction}
 
 The script should:
 - Feel natural and authentic (not overly polished)
@@ -43,6 +67,7 @@ The script should:
 - Be optimized for 15-30 second videos
 - Include 3 scenes with clear transitions
 - Have specific actions and dialogue for the model
+- Match the ${styleInfo.name} visual style
 
 Create a UGC script with these details:
 

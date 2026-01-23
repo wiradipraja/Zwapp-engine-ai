@@ -403,8 +403,8 @@ const App: React.FC = () => {
                         onClick={() => setActiveModule('ugc')}
                         className={`w-full py-2 text-xs font-bold uppercase tracking-wider transition-all text-center ${
                             activeModule === 'ugc' 
-                            ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white border border-purple-500 shadow-lg' 
-                            : 'text-zinc-500 hover:text-zinc-300'
+                            ? 'bg-orange-600 text-black border border-orange-500 shadow-lg' 
+                            : 'bg-zinc-800 text-zinc-500 hover:text-white hover:bg-orange-600/20 border border-zinc-700'
                         }`}
                     >
                         🎬 UGC AI Studio

@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { useUGCStore } from '../../../store/ugcStore';
-import { UploadedAsset } from '../../../types/ugc';
+import { UploadedAsset, UGC_CONTENT_STYLES, NarrationLanguage, UGCContentStyle } from '../../../types/ugc';
 
 interface InputModuleProps {
   onStartGeneration?: () => Promise<void>;
@@ -74,9 +74,74 @@ const InputModule: React.FC<InputModuleProps> = ({ onStartGeneration }) => {
 
   const labelClass = "block text-xs font-mono text-orange-500 mb-1 tracking-widest uppercase";
   const inputClass = "w-full bg-zinc-950 border border-zinc-700 text-zinc-300 p-3 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 transition-colors font-mono text-sm";
+  const selectClass = "w-full bg-zinc-950 border border-zinc-700 text-zinc-300 p-3 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 transition-colors font-mono text-sm appearance-none cursor-pointer";
 
   return (
     <div className="space-y-6">
+      {/* UGC Settings Section */}
+      <div className="bg-zinc-800 border border-zinc-700 p-4">
+        <div className="flex items-center gap-2 mb-4">
+          <div className="w-3 h-3 bg-orange-500"></div>
+          <h3 className="text-sm font-bold uppercase tracking-widest text-white">UGC Settings</h3>
+        </div>
+        
+        <div className="grid grid-cols-2 gap-4">
+          {/* Language Selection */}
+          <div>
+            <label className={labelClass}>Narration Language</label>
+            <p className="text-[10px] text-zinc-600 font-mono mb-2">
+              Language for model dialogue in script
+            </p>
+            <div className="relative">
+              <select
+                value={store.currentProject.settings.language}
+                onChange={(e) => store.setLanguage(e.target.value as NarrationLanguage)}
+                className={selectClass}
+              >
+                <option value="EN">🇺🇸 English (EN)</option>
+                <option value="ID">🇮🇩 Bahasa Indonesia (ID)</option>
+              </select>
+              <div className="absolute right-3 top-3 pointer-events-none text-orange-500 text-xs">▼</div>
+            </div>
+          </div>
+          
+          {/* Content Style Selection */}
+          <div>
+            <label className={labelClass}>Content Style</label>
+            <p className="text-[10px] text-zinc-600 font-mono mb-2">
+              Visual style for images & video
+            </p>
+            <div className="relative">
+              <select
+                value={store.currentProject.settings.contentStyle}
+                onChange={(e) => store.setContentStyle(e.target.value as UGCContentStyle)}
+                className={selectClass}
+              >
+                {UGC_CONTENT_STYLES.map((style) => (
+                  <option key={style.id} value={style.id}>
+                    {style.name}
+                  </option>
+                ))}
+              </select>
+              <div className="absolute right-3 top-3 pointer-events-none text-orange-500 text-xs">▼</div>
+            </div>
+          </div>
+        </div>
+        
+        {/* Style Preview */}
+        <div className="mt-4 p-3 bg-zinc-900 border border-zinc-700">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-mono text-zinc-500 uppercase">Selected Style:</span>
+            <span className="text-xs font-bold text-orange-500">
+              {UGC_CONTENT_STYLES.find(s => s.id === store.currentProject?.settings.contentStyle)?.name}
+            </span>
+          </div>
+          <p className="text-[10px] text-zinc-400 font-mono mt-1">
+            {UGC_CONTENT_STYLES.find(s => s.id === store.currentProject?.settings.contentStyle)?.description}
+          </p>
+        </div>
+      </div>
+
       {/* Model Photos */}
       <div>
         <div className="flex items-center gap-2 mb-3">
@@ -114,15 +179,21 @@ const InputModule: React.FC<InputModuleProps> = ({ onStartGeneration }) => {
         </div>
 
         {store.currentProject.inputAssets.modelPhotos.length > 0 && (
-          <div className="mt-3 grid grid-cols-4 gap-2">
+          <div className="mt-3 grid grid-cols-4 gap-3">
             {store.currentProject.inputAssets.modelPhotos.map((asset) => (
-              <div key={asset.id} className="relative group">
-                <img src={asset.supabaseUrl} alt={asset.fileName} className="w-full h-16 object-cover border border-zinc-700" />
+              <div key={asset.id} className="relative group bg-zinc-800 border border-zinc-700 p-1">
+                <div className="aspect-square w-full bg-zinc-900 flex items-center justify-center overflow-hidden">
+                  <img 
+                    src={asset.supabaseUrl} 
+                    alt={asset.fileName} 
+                    className="max-w-full max-h-full object-contain" 
+                  />
+                </div>
                 <button
                   onClick={() => store.removeModelPhoto(asset.id)}
-                  className="absolute top-0 right-0 w-5 h-5 bg-red-600 text-white text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                  className="absolute -top-2 -right-2 w-5 h-5 bg-red-600 text-white text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
                 >✕</button>
-                <p className="text-[10px] text-zinc-500 font-mono truncate mt-1">{asset.fileName}</p>
+                <p className="text-[10px] text-zinc-500 font-mono truncate mt-1 text-center">{asset.fileName}</p>
               </div>
             ))}
           </div>
@@ -166,15 +237,21 @@ const InputModule: React.FC<InputModuleProps> = ({ onStartGeneration }) => {
         </div>
 
         {store.currentProject.inputAssets.productPhotos.length > 0 && (
-          <div className="mt-3 grid grid-cols-4 gap-2">
+          <div className="mt-3 grid grid-cols-4 gap-3">
             {store.currentProject.inputAssets.productPhotos.map((asset) => (
-              <div key={asset.id} className="relative group">
-                <img src={asset.supabaseUrl} alt={asset.fileName} className="w-full h-16 object-cover border border-zinc-700" />
+              <div key={asset.id} className="relative group bg-zinc-800 border border-zinc-700 p-1">
+                <div className="aspect-square w-full bg-zinc-900 flex items-center justify-center overflow-hidden">
+                  <img 
+                    src={asset.supabaseUrl} 
+                    alt={asset.fileName} 
+                    className="max-w-full max-h-full object-contain" 
+                  />
+                </div>
                 <button
                   onClick={() => store.removeProductPhoto(asset.id)}
-                  className="absolute top-0 right-0 w-5 h-5 bg-red-600 text-white text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                  className="absolute -top-2 -right-2 w-5 h-5 bg-red-600 text-white text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
                 >✕</button>
-                <p className="text-[10px] text-zinc-500 font-mono truncate mt-1">{asset.fileName}</p>
+                <p className="text-[10px] text-zinc-500 font-mono truncate mt-1 text-center">{asset.fileName}</p>
               </div>
             ))}
           </div>
@@ -243,6 +320,23 @@ const InputModule: React.FC<InputModuleProps> = ({ onStartGeneration }) => {
               {store.currentProject.inputAssets.narrativeLinks.length > 0 ? '✓' : '○'}
             </span>
             <span className="text-xs font-mono text-zinc-400">Narrative Link</span>
+          </div>
+        </div>
+      </div>
+
+      {/* API Info */}
+      <div className="bg-zinc-900 border border-zinc-700 p-3">
+        <div className="text-[10px] font-mono text-zinc-600 uppercase tracking-widest mb-2">API Usage Info</div>
+        <div className="space-y-1 text-[10px] font-mono">
+          <div className="flex items-center gap-2">
+            <span className="text-orange-500">●</span>
+            <span className="text-zinc-400">Narration, Prompts, Images:</span>
+            <span className="text-white">Gemini API (FREE)</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-orange-500">●</span>
+            <span className="text-zinc-400">Image to Video:</span>
+            <span className="text-white">KIE.AI API</span>
           </div>
         </div>
       </div>
