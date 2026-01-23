@@ -104,7 +104,7 @@ export interface GeneratedScript {
   }>;
   voiceoverText?: string;
   generatedAt?: number;
-  model?: 'gpt-4' | 'gpt-3.5-turbo';
+  model?: string; // Support any model (gemini-1.5-flash, gpt-4, etc.)
 }
 
 export interface VisualStyleGuide {

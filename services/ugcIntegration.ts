@@ -1,7 +1,7 @@
 // services/ugcIntegration.ts
 // Integration service untuk menghubungkan UGC components dengan backend services
 
-import { generateScriptWithOpenAI } from './scriptGeneration';
+import { generateScriptWithGemini } from './scriptGeneration';
 import { generateImageWithNanoBanana, generateImageVariations } from './imageGeneration';
 import { analyzeImageQuality } from './qualityAssurance';
 import { generateVideoWithVeo } from './videoGeneration';
@@ -20,7 +20,7 @@ import {
 
 export interface UGCServiceConfig {
   kieApiKey: string;
-  openaiApiKey: string;
+  geminiApiKey: string;
   visionApiKey?: string;
 }
 
@@ -104,7 +104,7 @@ export async function analyzeInputAssets(
 }
 
 /**
- * Generate UGC script using OpenAI
+ * Generate UGC script using Google Gemini (FREE)
  */
 export async function generateUGCScript(
   modelProfile: ModelProfile,
@@ -152,13 +152,13 @@ export async function generateUGCScript(
       emotionalTone: narrativeContext.emotionalTone || 'positive',
     };
 
-    const script = await generateScriptWithOpenAI(
+    const script = await generateScriptWithGemini(
       fullModelProfile,
       fullProductProfile,
       fullNarrativeContext,
       {
-        apiKey: config.openaiApiKey,
-        model: 'gpt-3.5-turbo',
+        apiKey: config.geminiApiKey,
+        model: 'gemini-1.5-flash',
         temperature: 0.7,
       }
     );

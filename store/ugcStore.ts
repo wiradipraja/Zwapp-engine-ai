@@ -22,7 +22,7 @@ import {
 // API Configuration for UGC services
 export interface UGCAPIConfig {
   kieApiKey: string;
-  openaiApiKey: string;
+  geminiApiKey: string;
   visionApiKey: string;
 }
 

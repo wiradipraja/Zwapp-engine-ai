@@ -21,40 +21,40 @@ import VideoGenerationPanel from './stages/VideoGenerationPanel';
 
 interface UGCOrchestrationWorkspaceProps {
   apiKey?: string;
-  openaiApiKey?: string;
+  geminiApiKey?: string;
 }
 
 const UGCOrchestrationWorkspace: React.FC<UGCOrchestrationWorkspaceProps> = ({
   apiKey,
-  openaiApiKey,
+  geminiApiKey,
 }) => {
   const store = useUGCStore();
   const [showApiKeyModal, setShowApiKeyModal] = useState(false);
-  const [localOpenAIKey, setLocalOpenAIKey] = useState(openaiApiKey || '');
+  const [localGeminiKey, setLocalGeminiKey] = useState(geminiApiKey || '');
   const [localKieKey, setLocalKieKey] = useState(apiKey || '');
 
   useEffect(() => {
-    const storedOpenAIKey = localStorage.getItem('openai_api_key') || openaiApiKey || '';
+    const storedGeminiKey = localStorage.getItem('gemini_api_key') || geminiApiKey || '';
     const storedKieKey = localStorage.getItem('kie_api_key') || apiKey || '';
     
-    setLocalOpenAIKey(storedOpenAIKey);
+    setLocalGeminiKey(storedGeminiKey);
     setLocalKieKey(storedKieKey);
     
-    if (storedOpenAIKey || storedKieKey) {
+    if (storedGeminiKey || storedKieKey) {
       store.setApiConfig({
-        openaiApiKey: storedOpenAIKey,
+        geminiApiKey: storedGeminiKey,
         kieApiKey: storedKieKey,
         visionApiKey: '',
       });
     }
-  }, [apiKey, openaiApiKey]);
+  }, [apiKey, geminiApiKey]);
 
   const handleAnalyzeAndGenerate = async () => {
     if (!store.currentProject) return;
     
-    if (!localOpenAIKey) {
+    if (!localGeminiKey) {
       setShowApiKeyModal(true);
-      store.setError('OpenAI API Key diperlukan untuk generate script');
+      store.setError('Gemini API Key diperlukan untuk generate script');
       return;
     }
 
@@ -67,7 +67,7 @@ const UGCOrchestrationWorkspace: React.FC<UGCOrchestrationWorkspaceProps> = ({
       
       const { modelProfile, productProfile, narrativeContext } = await analyzeInputAssets(
         store.currentProject,
-        { kieApiKey: localKieKey, openaiApiKey: localOpenAIKey },
+        { kieApiKey: localKieKey, geminiApiKey: localGeminiKey },
         (msg, pct) => store.setProgress('ANALYSIS', pct, msg)
       );
 
@@ -79,7 +79,7 @@ const UGCOrchestrationWorkspace: React.FC<UGCOrchestrationWorkspaceProps> = ({
         modelProfile,
         productProfile,
         narrativeContext,
-        { kieApiKey: localKieKey, openaiApiKey: localOpenAIKey },
+        { kieApiKey: localKieKey, geminiApiKey: localGeminiKey },
         (msg, pct) => store.setProgress('SCRIPTING', pct, msg)
       );
 
@@ -122,7 +122,7 @@ const UGCOrchestrationWorkspace: React.FC<UGCOrchestrationWorkspaceProps> = ({
 
       const images = await generateUGCImages(
         prompts, modelPhoto, productPhoto,
-        { kieApiKey: localKieKey, openaiApiKey: localOpenAIKey },
+        { kieApiKey: localKieKey, geminiApiKey: localGeminiKey },
         (msg, pct) => store.setProgress('GENERATING', pct, msg)
       );
 
@@ -153,7 +153,7 @@ const UGCOrchestrationWorkspace: React.FC<UGCOrchestrationWorkspaceProps> = ({
         images,
         store.currentProject.extractedContext.modelProfile!,
         store.currentProject.extractedContext.productProfile!,
-        { kieApiKey: localKieKey, openaiApiKey: localOpenAIKey },
+        { kieApiKey: localKieKey, geminiApiKey: localGeminiKey },
         (msg, pct) => store.setProgress('QA', pct, msg)
       );
 
@@ -192,7 +192,7 @@ const UGCOrchestrationWorkspace: React.FC<UGCOrchestrationWorkspaceProps> = ({
     try {
       const video = await generateUGCVideo(
         images,
-        { kieApiKey: localKieKey, openaiApiKey: localOpenAIKey },
+        { kieApiKey: localKieKey, geminiApiKey: localGeminiKey },
         { resolution: '1080p', frameRate: 30 },
         (msg, pct) => store.setProgress('VIDEO_GENERATION', pct, msg)
       );
@@ -208,9 +208,9 @@ const UGCOrchestrationWorkspace: React.FC<UGCOrchestrationWorkspaceProps> = ({
   };
 
   const handleSaveApiKeys = () => {
-    localStorage.setItem('openai_api_key', localOpenAIKey);
+    localStorage.setItem('gemini_api_key', localGeminiKey);
     localStorage.setItem('kie_api_key', localKieKey);
-    store.setApiConfig({ openaiApiKey: localOpenAIKey, kieApiKey: localKieKey, visionApiKey: '' });
+    store.setApiConfig({ geminiApiKey: localGeminiKey, kieApiKey: localKieKey, visionApiKey: '' });
     setShowApiKeyModal(false);
     store.setSuccessMessage('API Keys saved successfully!');
   };
@@ -274,9 +274,10 @@ const UGCOrchestrationWorkspace: React.FC<UGCOrchestrationWorkspaceProps> = ({
             <p className="text-sm text-zinc-500 font-mono mb-4">Enter your API keys to enable AI features</p>
             <div className="space-y-4">
               <div>
-                <label className="block text-xs font-mono text-orange-500 mb-1 tracking-widest uppercase">OpenAI API Key</label>
-                <input type="password" value={localOpenAIKey} onChange={(e) => setLocalOpenAIKey(e.target.value)} placeholder="sk-..."
+                <label className="block text-xs font-mono text-orange-500 mb-1 tracking-widest uppercase">Google Gemini API Key (FREE)</label>
+                <input type="password" value={localGeminiKey} onChange={(e) => setLocalGeminiKey(e.target.value)} placeholder="AIza..."
                   className="w-full bg-zinc-950 border border-zinc-700 text-zinc-300 p-3 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 transition-colors font-mono text-sm" />
+                <p className="text-xs text-zinc-600 mt-1 font-mono">Get free API key at: aistudio.google.com</p>
               </div>
               <div>
                 <label className="block text-xs font-mono text-orange-500 mb-1 tracking-widest uppercase">KIE.AI API Key</label>
