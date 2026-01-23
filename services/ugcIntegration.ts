@@ -199,18 +199,20 @@ export async function generateUGCScript(
   } catch (error) {
     console.error('Script generation error:', error);
     
-    // Return mock script if API fails
+    // Return mock script if API fails - respect language setting
     onProgress?.('Using fallback script template...', 100);
+    
+    const isIndonesian = language === 'ID';
     
     return {
       id: crypto.randomUUID(),
-      title: 'UGC Campaign Script',
+      title: isIndonesian ? 'Script Kampanye UGC' : 'UGC Campaign Script',
       duration: 24,
-      hook: 'Hey, have you tried this yet?',
-      problemStatement: 'I used to struggle with finding the right product...',
-      solution: 'But then I discovered this amazing product!',
-      cta: 'Link in bio to get yours!',
-      fullNarrative: 'Authentic UGC narrative for your product',
+      hook: isIndonesian ? 'Guys, akhirnya gue nemu produk yang cocok!' : 'Hey, have you tried this yet?',
+      problemStatement: isIndonesian ? 'Dulu gue sering banget struggle nyari produk yang beneran works...' : 'I used to struggle with finding the right product...',
+      solution: isIndonesian ? 'Tapi pas gue cobain ini, langsung cocok banget sih!' : 'But then I discovered this amazing product!',
+      cta: isIndonesian ? 'Link di bio ya, buruan sebelum kehabisan!' : 'Link in bio to get yours!',
+      fullNarrative: isIndonesian ? 'Narasi UGC autentik untuk produk kamu' : 'Authentic UGC narrative for your product',
       sceneBreakdown: [
         {
           sceneNumber: 1,
@@ -248,7 +250,7 @@ export async function generateUGCScript(
           sceneNumber: 1,
           setting: 'Lifestyle setting',
           action: 'Model introduces themselves',
-          dialogue: 'Hey! Let me show you something amazing',
+          dialogue: isIndonesian ? 'Hai guys! Gue mau share sesuatu yang keren banget nih!' : 'Hey! Let me show you something amazing',
           productPlacement: 'Background',
           emotionalBeat: 'Excitement',
         },
@@ -256,7 +258,7 @@ export async function generateUGCScript(
           sceneNumber: 2,
           setting: 'Problem scenario',
           action: 'Model relates to audience',
-          dialogue: 'I know how frustrating it can be...',
+          dialogue: isIndonesian ? 'Pasti kalian pernah ngerasain kan betapa frustasinya...' : 'I know how frustrating it can be...',
           productPlacement: 'Subtle introduction',
           emotionalBeat: 'Empathy',
         },
@@ -264,13 +266,13 @@ export async function generateUGCScript(
           sceneNumber: 3,
           setting: 'Solution scene',
           action: 'Model showcases product',
-          dialogue: 'This is exactly what I needed!',
+          dialogue: isIndonesian ? 'Ini sih yang gue butuhin banget!' : 'This is exactly what I needed!',
           productPlacement: 'Hero shot',
           emotionalBeat: 'Satisfaction',
         },
       ],
       generatedAt: Date.now(),
-      model: 'gpt-3.5-turbo',
+      model: 'gemini-1.5-flash',
     };
   }
 }
@@ -299,12 +301,16 @@ export function generatePromptsFromScript(
     emotionalBeat: s.modelExpression,
   }));
 
+  // SOP Prefixes for consistent prompt generation
+  const MODEL_SOP = "Use the first provided reference image for the main character.";
+  const PRODUCT_SOP = "Ensure high fidelity to the product provided in the reference image. The product MUST appear in the generated image.";
+
   return scenes.map((scene, index) => ({
     id: crypto.randomUUID(),
     sceneId: `scene-${scene.sceneNumber}`,
     sceneNumber: scene.sceneNumber,
     sceneDescription: `${scene.setting}. ${scene.action}. Model showing ${scene.emotionalBeat} expression.`,
-    basePrompt: `UGC style photo: ${modelProfile.lookDescription || modelProfile.appearance} model ${scene.action} in ${scene.setting}. Product placement: ${scene.productPlacement}. Expression: ${scene.emotionalBeat}. High quality, authentic, social media style.`,
+    basePrompt: `${MODEL_SOP} ${PRODUCT_SOP} UGC style photo: ${modelProfile.lookDescription || modelProfile.appearance} model ${scene.action} in ${scene.setting}. Product (${productProfile.name}) placement: ${scene.productPlacement}. Expression: ${scene.emotionalBeat}. High quality, authentic, social media style.`,
     dynamicVariables: {
       modelLook: modelProfile.lookDescription || modelProfile.appearance,
       productName: productProfile.name,
@@ -315,18 +321,18 @@ export function generatePromptsFromScript(
       {
         aspect: 'model_face' as const,
         baseline: modelProfile.facialFeatures || 'consistent',
-        requirement: 'Match reference model face',
+        requirement: 'Match reference model face from first reference image',
       },
       {
         aspect: 'product_accuracy' as const,
         baseline: productProfile.name,
-        requirement: 'Product must be accurately depicted',
+        requirement: 'Product must match reference image exactly',
       },
     ],
-    generatedPrompt: `Professional UGC content: ${modelProfile.lookDescription || modelProfile.appearance} model in ${scene.setting}, ${scene.action}. Product (${productProfile.name}) ${scene.productPlacement}. Style: authentic social media content, natural lighting, lifestyle photography. Expression: ${scene.emotionalBeat}.`,
+    generatedPrompt: `${MODEL_SOP} ${PRODUCT_SOP} Professional UGC content: ${modelProfile.lookDescription || modelProfile.appearance} model in ${scene.setting}, ${scene.action}. Product (${productProfile.name}) ${scene.productPlacement}. Style: authentic social media content, natural lighting, lifestyle photography. Expression: ${scene.emotionalBeat}.`,
     visualStyle: visualStyleGuide?.cameraSpecs || 'natural UGC photography style',
     productIntegration: scene.productPlacement,
-    negativePrompts: ['blurry', 'distorted', 'watermark', 'low quality', 'artificial', 'stock photo'],
+    negativePrompts: ['blurry', 'distorted', 'watermark', 'low quality', 'artificial', 'stock photo', 'wrong product', 'different person'],
     customizations: {
       style: 'authentic UGC',
       lighting: visualStyleGuide?.lighting || 'natural soft lighting',

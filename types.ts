@@ -50,9 +50,18 @@ export interface ZImageInput {
   aspect_ratio: '1:1' | '4:3' | '3:4' | '16:9' | '9:16';
 }
 
+// Flex Image API Types
+export interface FlexImageInput {
+  prompt: string;
+  image_urls: string[]; // Reference images (up to 4, Supabase URLs)
+  aspect_ratio: '1:1' | '4:3' | '3:4' | '16:9' | '9:16' | '21:9' | '9:21';
+  output_format: 'png' | 'jpeg';
+  safety_tolerance: 1 | 2 | 3 | 4 | 5 | 6; // 1=strict, 6=permissive
+}
+
 export interface CreateTaskRequest {
   model: string; 
-  input: MotionControlInput | NanoBananaInput | ImageEditInput | ZImageInput;
+  input: MotionControlInput | NanoBananaInput | ImageEditInput | ZImageInput | FlexImageInput;
   callBackUrl?: string;
 }
 

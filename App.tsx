@@ -1,20 +1,21 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createTask, queryTask } from './services/api';
 import { supabase, signOut } from './services/supabase';
-import { MotionControlInput, NanoBananaInput, ImageEditInput, ZImageInput, LocalTask } from './types';
+import { MotionControlInput, NanoBananaInput, ImageEditInput, ZImageInput, FlexImageInput, LocalTask } from './types';
 import { TaskForm } from './components/TaskForm';
 import { NanoBananaGenForm } from './components/NanoBananaGenForm';
 import { NanoBananaEditForm } from './components/NanoBananaEditForm';
 import { NanoBananaProForm } from './components/NanoBananaProForm';
 import { ImageEditForm } from './components/ImageEditForm';
 import { ZImageForm } from './components/ZImageForm';
+import { FlexImageForm } from './components/FlexImageForm';
 import { StatusTerminal } from './components/StatusTerminal';
 import { QueueList } from './components/QueueList';
 import { AuthForm } from './components/AuthForm';
 import { SettingsModal } from './components/SettingsModal';
 import UGCOrchestrationWorkspace from './components/UGC/UGCOrchestrationWorkspace';
 
-type ModuleType = 'motion-control' | 'nano-banana-gen' | 'nano-banana-edit' | 'nano-banana-pro' | 'image-edit' | 'z-image' | 'ugc';
+type ModuleType = 'motion-control' | 'nano-banana-gen' | 'nano-banana-edit' | 'nano-banana-pro' | 'image-edit' | 'z-image' | 'flex-image' | 'ugc';
 type NanoBananaType = 'gen' | 'edit' | 'pro';
 
 const App: React.FC = () => {
@@ -24,6 +25,7 @@ const App: React.FC = () => {
 
   // App State
   const [apiKey, setApiKey] = useState('');
+  const [geminiApiKey, setGeminiApiKey] = useState('');
   const [tasks, setTasks] = useState<LocalTask[]>([]);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [logs, setLogs] = useState<string[]>([]);
@@ -52,10 +54,14 @@ const App: React.FC = () => {
       setSession(session);
     });
 
-    // Load API Key from LocalStorage
+    // Load API Keys from LocalStorage
     const storedKey = localStorage.getItem('kie_api_key');
     if (storedKey) {
         setApiKey(storedKey);
+    }
+    const storedGeminiKey = localStorage.getItem('gemini_api_key');
+    if (storedGeminiKey) {
+        setGeminiApiKey(storedGeminiKey);
     }
 
     return () => subscription.unsubscribe();
@@ -65,10 +71,14 @@ const App: React.FC = () => {
     setLogs(prev => [`> ${msg}`, ...prev].slice(0, 50));
   };
 
-  const handleSaveApiKey = (key: string) => {
-      setApiKey(key);
-      localStorage.setItem('kie_api_key', key);
-      addLog('System Configuration Updated: API Key Saved.');
+  const handleSaveApiKey = (kieKey: string, geminiKey: string) => {
+      setApiKey(kieKey);
+      localStorage.setItem('kie_api_key', kieKey);
+      if (geminiKey) {
+        setGeminiApiKey(geminiKey);
+        localStorage.setItem('gemini_api_key', geminiKey);
+      }
+      addLog('System Configuration Updated: API Keys Saved.');
   };
 
   const handleLogout = async () => {
@@ -77,7 +87,7 @@ const App: React.FC = () => {
       setSession(null);
   };
 
-  const handleCreateTask = async (input: MotionControlInput | NanoBananaInput | ImageEditInput | ZImageInput) => {
+  const handleCreateTask = async (input: MotionControlInput | NanoBananaInput | ImageEditInput | ZImageInput | FlexImageInput) => {
     if (!apiKey) {
         setIsSettingsOpen(true);
         addLog('ERROR: API Key missing. Please configure in Settings.');
@@ -93,6 +103,7 @@ const App: React.FC = () => {
     else if (activeModule === 'nano-banana-pro') modelName = 'nano-banana-pro';
     else if (activeModule === 'image-edit') modelName = 'qwen/image-to-image';
     else if (activeModule === 'z-image') modelName = 'z-image';
+    else if (activeModule === 'flex-image') modelName = 'flux-kontext/flex-image';
 
     addLog(`Initiating generation sequence [${modelName}]...`);
     
@@ -134,7 +145,8 @@ const App: React.FC = () => {
           setTasks(prevTasks => {
             const pendingTasks = prevTasks.filter(t => t.state === 'waiting');
             return prevTasks.map(task => {
-               if (task.state === 'waiting') {
+               // Only simulate progress for tasks that are still waiting
+               if (task.state === 'waiting' && task.progress < 90) {
                  // Slow down progress as it gets closer to 90%
                  const increment = Math.max(0.1, (90 - task.progress) / 20);
                  return { 
@@ -143,63 +155,69 @@ const App: React.FC = () => {
                    queuePosition: pendingTasks.findIndex(pt => pt.taskId === task.taskId) + 1
                  };
                }
+               // For success/fail states, ensure progress is 100%
+               if ((task.state === 'success' || task.state === 'fail') && task.progress < 100) {
+                 return { ...task, progress: 100 };
+               }
                return task;
             });
           });
         }, 1000);
     }
 
-    // Actual API Polling
+    // Actual API Polling - polls all waiting tasks
     const apiPollId = window.setInterval(async () => {
-        // Fetch current state
+        // Get current tasks that need polling
+        let tasksToPoll: LocalTask[] = [];
         setTasks(prevTasks => {
-            const tasksToPoll = prevTasks.filter(t => t.state === 'waiting');
-            if (tasksToPoll.length === 0) return prevTasks;
-
-            // Start async polling
-            (async () => {
-                const updates = await Promise.all(tasksToPoll.map(async (task) => {
-                    try {
-                        const res = await queryTask(apiKey, task.taskId);
-                        if (res.code === 200) {
-                            return { taskId: task.taskId, data: res.data };
-                        }
-                    } catch (e: any) {
-                        // Log error only once per few seconds to avoid spamming
-                        if (Math.random() > 0.8) {
-                           console.error(`Polling error for ${task.taskId}:`, e.message);
-                        }
-                    }
-                    return null;
-                }));
-
-                // Update State with fetched data
-                setTasks(prev => prev.map(t => {
-                    const update = updates.find(u => u && u.taskId === t.taskId);
-                    
-                    if (update && update.data) {
-                        const newState = update.data.state;
-                        // If success/fail, jump to 100%. If waiting, keep simulated progress.
-                        const newProgress = (newState === 'success' || newState === 'fail') ? 100 : t.progress;
-                        
-                        if (newState !== t.state) {
-                            addLog(`Task ${t.taskId.slice(-4)} updated: ${t.state} -> ${newState}`);
-                        }
-
-                        return {
-                            ...t,
-                            ...update.data,
-                            state: newState,
-                            progress: newProgress,
-                            resultJson: update.data.resultJson || t.resultJson,
-                        };
-                    }
-                    return t;
-                }));
-            })();
-
+            tasksToPoll = prevTasks.filter(t => t.state === 'waiting');
             return prevTasks;
         });
+
+        if (tasksToPoll.length === 0) return;
+
+        // Poll all waiting tasks
+        const updates = await Promise.all(tasksToPoll.map(async (task) => {
+            try {
+                const res = await queryTask(apiKey, task.taskId);
+                if (res.code === 200) {
+                    return { taskId: task.taskId, data: res.data };
+                }
+            } catch (e: any) {
+                // Log error only once per few seconds to avoid spamming
+                if (Math.random() > 0.8) {
+                   console.error(`Polling error for ${task.taskId}:`, e.message);
+                }
+            }
+            return null;
+        }));
+
+        // Update State with fetched data
+        setTasks(prev => prev.map(t => {
+            const update = updates.find(u => u && u.taskId === t.taskId);
+            
+            if (update && update.data) {
+                const newState = update.data.state;
+                // If success or fail, set progress to 100% immediately
+                const newProgress = (newState === 'success' || newState === 'fail') ? 100 : t.progress;
+                
+                if (newState !== t.state) {
+                    const stateEmoji = newState === 'success' ? '✓' : newState === 'fail' ? '✗' : '⏳';
+                    addLog(`${stateEmoji} Task ${t.taskId.slice(-4)}: ${t.state} → ${newState}${update.data.failMsg ? ` (${update.data.failMsg})` : ''}`);
+                }
+
+                return {
+                    ...t,
+                    ...update.data,
+                    state: newState,
+                    progress: newProgress,
+                    resultJson: update.data.resultJson || t.resultJson,
+                    failCode: update.data.failCode,
+                    failMsg: update.data.failMsg,
+                };
+            }
+            return t;
+        }));
     }, 3000); // Check every 3 seconds
 
     return () => {
@@ -227,6 +245,7 @@ const App: React.FC = () => {
             onClose={() => setIsSettingsOpen(false)} 
             onSave={handleSaveApiKey}
             currentKey={apiKey}
+            currentGeminiKey={geminiApiKey}
         />
 
         {/* Header */}
@@ -395,6 +414,18 @@ const App: React.FC = () => {
                             >
                                 Z-Image
                             </button>
+                            <button
+                                onClick={() => {
+                                    setActiveModule('flex-image');
+                                }}
+                                className={`flex-1 py-2 text-xs font-bold uppercase tracking-wider transition-all ${
+                                    activeModule === 'flex-image' 
+                                    ? 'bg-cyan-700 text-white border border-cyan-600 shadow-inner' 
+                                    : 'text-zinc-600 hover:text-zinc-400 border border-transparent'
+                                }`}
+                            >
+                                Flex
+                            </button>
                         </div>
                     )}
 
@@ -428,6 +459,9 @@ const App: React.FC = () => {
                 )}
                 {activeModule === 'z-image' && (
                     <ZImageForm onSubmit={handleCreateTask} isLoading={isSubmitting} apiKey={apiKey} />
+                )}
+                {activeModule === 'flex-image' && (
+                    <FlexImageForm onSubmit={handleCreateTask} isLoading={isSubmitting} apiKey={apiKey} />
                 )}
                 {activeModule === 'ugc' && (
                     <div className="w-full">

@@ -19,8 +19,8 @@ export const ImageEditForm: React.FC<ImageEditFormProps> = ({ onSubmit, isLoadin
     image_size: 'landscape_4_3',
     output_format: 'png',
     acceleration: 'none',
-    num_inference_steps: 25,
-    guidance_scale: 4,
+    num_inference_steps: 30, // API default: 30, range: 2-250
+    guidance_scale: 2.5, // API default: 2.5, range: 0-20
     seed: -1, 
     enable_safety_checker: true,
     num_images: '1'
@@ -231,17 +231,17 @@ export const ImageEditForm: React.FC<ImageEditFormProps> = ({ onSubmit, isLoadin
                 </div>
 
                 <div>
-                    <label className={labelClass}>Inference Steps (2-49)</label>
+                    <label className={labelClass}>Inference Steps (2-250)</label>
                     <div className="flex items-center gap-3">
                         <input 
                             type="range" 
                             min="2" 
-                            max="49" 
+                            max="250" 
                             value={formData.num_inference_steps} 
                             onChange={(e) => handleChange('num_inference_steps', parseInt(e.target.value))}
                             className="w-full accent-orange-500 h-1 bg-zinc-700 rounded-lg appearance-none cursor-pointer"
                         />
-                        <span className="text-orange-500 font-mono text-sm w-8">{formData.num_inference_steps}</span>
+                        <span className="text-orange-500 font-mono text-sm w-10">{formData.num_inference_steps}</span>
                     </div>
                 </div>
 

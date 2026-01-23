@@ -176,28 +176,32 @@ const InputModule: React.FC<InputModuleProps> = ({ onStartGeneration }) => {
             <p className="text-zinc-400 text-sm font-mono">Drag files here or click to select</p>
             <p className="text-zinc-600 text-xs mt-1">JPG, PNG, WEBP • Max 30MB</p>
           </label>
-        </div>
 
-        {store.currentProject.inputAssets.modelPhotos.length > 0 && (
-          <div className="mt-3 grid grid-cols-4 gap-3">
-            {store.currentProject.inputAssets.modelPhotos.map((asset) => (
-              <div key={asset.id} className="relative group bg-zinc-800 border border-zinc-700 p-1">
-                <div className="aspect-square w-full bg-zinc-900 flex items-center justify-center overflow-hidden">
-                  <img 
-                    src={asset.supabaseUrl} 
-                    alt={asset.fileName} 
-                    className="max-w-full max-h-full object-contain" 
-                  />
-                </div>
-                <button
-                  onClick={() => store.removeModelPhoto(asset.id)}
-                  className="absolute -top-2 -right-2 w-5 h-5 bg-red-600 text-white text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                >✕</button>
-                <p className="text-[10px] text-zinc-500 font-mono truncate mt-1 text-center">{asset.fileName}</p>
+          {/* Uploaded Model Photos - Inside the frame */}
+          {store.currentProject.inputAssets.modelPhotos.length > 0 && (
+            <div className="mt-4 pt-4 border-t border-zinc-700">
+              <p className="text-[10px] text-zinc-500 font-mono uppercase mb-2">Uploaded ({store.currentProject.inputAssets.modelPhotos.length})</p>
+              <div className="grid grid-cols-4 gap-2">
+                {store.currentProject.inputAssets.modelPhotos.map((asset) => (
+                  <div key={asset.id} className="relative group bg-zinc-900 border border-zinc-600 p-1">
+                    <div className="aspect-square w-full bg-zinc-950 flex items-center justify-center overflow-hidden">
+                      <img 
+                        src={asset.supabaseUrl} 
+                        alt={asset.fileName} 
+                        className="max-w-full max-h-full object-contain" 
+                      />
+                    </div>
+                    <button
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); store.removeModelPhoto(asset.id); }}
+                      className="absolute -top-2 -right-2 w-5 h-5 bg-red-600 text-white text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                    >✕</button>
+                    <p className="text-[10px] text-zinc-500 font-mono truncate mt-1 text-center">{asset.fileName}</p>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-        )}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Product Photos */}
@@ -234,28 +238,32 @@ const InputModule: React.FC<InputModuleProps> = ({ onStartGeneration }) => {
             <p className="text-zinc-400 text-sm font-mono">Drag files here or click to select</p>
             <p className="text-zinc-600 text-xs mt-1">JPG, PNG, WEBP • Max 30MB</p>
           </label>
-        </div>
 
-        {store.currentProject.inputAssets.productPhotos.length > 0 && (
-          <div className="mt-3 grid grid-cols-4 gap-3">
-            {store.currentProject.inputAssets.productPhotos.map((asset) => (
-              <div key={asset.id} className="relative group bg-zinc-800 border border-zinc-700 p-1">
-                <div className="aspect-square w-full bg-zinc-900 flex items-center justify-center overflow-hidden">
-                  <img 
-                    src={asset.supabaseUrl} 
-                    alt={asset.fileName} 
-                    className="max-w-full max-h-full object-contain" 
-                  />
-                </div>
-                <button
-                  onClick={() => store.removeProductPhoto(asset.id)}
-                  className="absolute -top-2 -right-2 w-5 h-5 bg-red-600 text-white text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                >✕</button>
-                <p className="text-[10px] text-zinc-500 font-mono truncate mt-1 text-center">{asset.fileName}</p>
+          {/* Uploaded Product Photos - Inside the frame */}
+          {store.currentProject.inputAssets.productPhotos.length > 0 && (
+            <div className="mt-4 pt-4 border-t border-zinc-700">
+              <p className="text-[10px] text-zinc-500 font-mono uppercase mb-2">Uploaded ({store.currentProject.inputAssets.productPhotos.length})</p>
+              <div className="grid grid-cols-4 gap-2">
+                {store.currentProject.inputAssets.productPhotos.map((asset) => (
+                  <div key={asset.id} className="relative group bg-zinc-900 border border-zinc-600 p-1">
+                    <div className="aspect-square w-full bg-zinc-950 flex items-center justify-center overflow-hidden">
+                      <img 
+                        src={asset.supabaseUrl} 
+                        alt={asset.fileName} 
+                        className="max-w-full max-h-full object-contain" 
+                      />
+                    </div>
+                    <button
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); store.removeProductPhoto(asset.id); }}
+                      className="absolute -top-2 -right-2 w-5 h-5 bg-red-600 text-white text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                    >✕</button>
+                    <p className="text-[10px] text-zinc-500 font-mono truncate mt-1 text-center">{asset.fileName}</p>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-        )}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Narrative Links */}

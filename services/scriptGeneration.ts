@@ -43,33 +43,50 @@ export async function generateScriptWithGemini(
   // Get content style info
   const styleInfo = UGC_CONTENT_STYLES.find(s => s.id === contentStyle) || UGC_CONTENT_STYLES[0];
   
-  // Language instruction
+  // Language instruction - CRITICAL for dialogue output
   const languageInstruction = language === 'ID' 
-    ? 'IMPORTANT: All dialogue must be written in Bahasa Indonesia (Indonesian language). The model will speak in Indonesian.'
-    : 'IMPORTANT: All dialogue must be written in English.';
+    ? `BAHASA WAJIB: Semua dialogue/dialog model HARUS dalam Bahasa Indonesia yang KASUAL dan GAUL.
+Contoh style bahasa:
+- "Akhirnya gue nemu yang cocok!"
+- "Guys, ini sih beneran worth it!"
+- "Kalian wajib cobain deh!"
+JANGAN gunakan bahasa Inggris untuk dialogue. Visual description tetap dalam English.`
+    : 'LANGUAGE: All dialogue must be written in English. Use casual, relatable tone.';
   
   // Style instruction
   const styleInstruction = `CONTENT STYLE: ${styleInfo.name}
 - Camera Style: ${styleInfo.cameraStyle}
 - Visual Approach: ${styleInfo.promptModifier}`;
 
+  // Hook templates for powerful FYP-breaking hooks
+  const hookTemplates = language === 'ID' 
+    ? `HOOK TEMPLATES (pilih dan kembangkan salah satu):
+a. "Akhirnya gue nemu [PRODUK] yang gak gampang [MASALAH]!"
+b. "[PRODUK] ini bisa bikin [BENEFIT] banget sih!"
+c. "Ini [PRODUK] tapi [FUNGSI GANDA]! Gila ga sih?"
+
+Hook HARUS powerful untuk menembus FYP dan mendapatkan GMV!`
+    : `HOOK TEMPLATES (choose and develop one):
+a. "Finally found [PRODUCT] that doesn't [PROBLEM]!"
+b. "This [PRODUCT] can actually [BENEFIT]!"
+c. "This is [PRODUCT] but also [DUAL FUNCTION]!"`;
+
   // Build detailed prompt for script generation
-  const prompt = `You are an expert UGC content writer. Generate authentic, engaging UGC scripts for social media (TikTok, Instagram Reels, YouTube Shorts).
+  const prompt = `Kamu adalah CREATIVE DIRECTOR untuk agensi pemasaran terkemuka.
+Buatlah cerita visual berkesinambungan untuk iklan produk UGC (User Generated Content) untuk social media (TikTok, Instagram Reels, YouTube Shorts).
 
 ${languageInstruction}
 
 ${styleInstruction}
 
-The script should:
-- Feel natural and authentic (not overly polished)
-- Include the model naturally throughout
-- Showcase the product organically
-- Be optimized for 15-30 second videos
-- Include 3 scenes with clear transitions
-- Have specific actions and dialogue for the model
-- Match the ${styleInfo.name} visual style
+${hookTemplates}
 
-Create a UGC script with these details:
+IMPORTANT RULES:
+1. Visual Description (setting, action, productPlacement) = ALWAYS in English (untuk akurasi image generator)
+2. Dialogue/Dialog Model = WAJIB sesuai bahasa yang dipilih (${language === 'ID' ? 'Bahasa Indonesia KASUAL & GAUL' : 'English'})
+3. Marketing Copy Style = KASUAL, santai, gaul, dan menarik (sesuai target audiens)
+4. Durasi optimal: 15-30 detik
+5. Include 3 scenes dengan transisi yang jelas
 
 MODEL PROFILE:
 - Look: ${modelProfile.lookDescription || modelProfile.appearance}
@@ -89,28 +106,28 @@ BRAND NARRATIVE:
 - Voice: ${narrativeContext.brandVoice}
 - Target Audience: ${narrativeContext.targetAudience}
 - Product Story: ${narrativeContext.productStory || 'Quality product for everyday use'}
-- Cultural Context: ${narrativeContext.culturalContext || 'Universal appeal'}
+- Cultural Context: ${narrativeContext.culturalContext || 'contemporary urban lifestyle'}
 - Emotional Tone: ${narrativeContext.emotionalTone || 'positive and engaging'}
 
 Generate a 3-scene UGC script. Return ONLY valid JSON (no markdown, no code blocks, no explanation) with this exact structure:
 {
   "title": "Script title",
   "duration": 24,
-  "hook": "The opening attention grabber",
-  "problemStatement": "The problem being addressed",
-  "solution": "How the product solves it",
-  "cta": "Call to action",
+  "hook": "The powerful opening hook (${language === 'ID' ? 'dalam Bahasa Indonesia gaul' : 'in English'})",
+  "problemStatement": "The problem being addressed (${language === 'ID' ? 'Bahasa Indonesia' : 'English'})",
+  "solution": "How the product solves it (${language === 'ID' ? 'Bahasa Indonesia' : 'English'})",
+  "cta": "Call to action (${language === 'ID' ? 'Bahasa Indonesia' : 'English'})",
   "scenes": [
     {
       "sceneNumber": 1,
-      "setting": "Description of setting",
-      "action": "What the model does",
-      "dialogue": "What the model says",
-      "productPlacement": "How product is shown",
-      "emotionalBeat": "The emotional moment"
+      "setting": "Description of setting (ALWAYS IN ENGLISH)",
+      "action": "What the model does (ALWAYS IN ENGLISH)",
+      "dialogue": "What the model SAYS - MUST BE IN ${language === 'ID' ? 'BAHASA INDONESIA KASUAL & GAUL' : 'ENGLISH'}",
+      "productPlacement": "How product is shown (ALWAYS IN ENGLISH)",
+      "emotionalBeat": "The emotional moment (ALWAYS IN ENGLISH)"
     }
   ],
-  "voiceoverText": "Optional narration"
+  "voiceoverText": "Optional narration (${language === 'ID' ? 'Bahasa Indonesia' : 'English'})"
 }`;
 
   try {
