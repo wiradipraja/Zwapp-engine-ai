@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { createTask, queryTask } from './services/api';
 import { supabase, signOut } from './services/supabase';
-import { MotionControlInput, NanoBananaInput, ImageEditInput, ZImageInput, Flux2Input, Flux2ProTextInput, Flux2ProImageInput, Flux2FlexTextInput, Flux2FlexImageInput, QwenTextToImageInput, Sora2CharactersInput, Sora2TextToVideoInput, Sora2ImageToVideoInput, Sora2ProTextToVideoInput, Sora2ProImageToVideoInput, LocalTask } from './types';
+import { generateVeo3Video } from './services/veo3Generation';
+import { MotionControlInput, NanoBananaInput, ImageEditInput, ZImageInput, Flux2Input, Flux2ProTextInput, Flux2ProImageInput, Flux2FlexTextInput, Flux2FlexImageInput, QwenTextToImageInput, Sora2CharactersInput, Sora2TextToVideoInput, Sora2ImageToVideoInput, Sora2ProTextToVideoInput, Sora2ProImageToVideoInput, Veo3TextToVideoInput, Veo3ImageToVideoInput, Veo3ReferenceToVideoInput, Veo3Input, LocalTask } from './types';
 import { TaskForm } from './components/TaskForm';
 import { NanoBananaGenForm } from './components/NanoBananaGenForm';
 import { NanoBananaEditForm } from './components/NanoBananaEditForm';
@@ -18,6 +19,9 @@ import { Sora2TextToVideoForm } from './components/Sora2TextToVideoForm';
 import { Sora2ImageToVideoForm } from './components/Sora2ImageToVideoForm';
 import { Sora2ProTextToVideoForm } from './components/Sora2ProTextToVideoForm';
 import { Sora2ProImageToVideoForm } from './components/Sora2ProImageToVideoForm';
+import { Veo3TextToVideoForm } from './components/Veo3TextToVideoForm';
+import { Veo3ImageToVideoForm } from './components/Veo3ImageToVideoForm';
+import { Veo3ReferenceToVideoForm } from './components/Veo3ReferenceToVideoForm';
 import { StatusTerminal } from './components/StatusTerminal';
 import { QueueList } from './components/QueueList';
 import { AuthForm } from './components/AuthForm';
@@ -124,7 +128,7 @@ const AppContent: React.FC = () => {
       setSession(null);
   };
 
-  const handleCreateTask = async (input: MotionControlInput | NanoBananaInput | ImageEditInput | ZImageInput | Flux2Input | QwenTextToImageInput | Sora2CharactersInput | Sora2TextToVideoInput | Sora2ImageToVideoInput | Sora2ProTextToVideoInput | Sora2ProImageToVideoInput) => {
+  const handleCreateTask = async (input: MotionControlInput | NanoBananaInput | ImageEditInput | ZImageInput | Flux2Input | QwenTextToImageInput | Sora2CharactersInput | Sora2TextToVideoInput | Sora2ImageToVideoInput | Sora2ProTextToVideoInput | Sora2ProImageToVideoInput | Veo3Input) => {
     if (!apiKey) {
         setIsSettingsOpen(true);
         addLog('ERROR: API Key missing. Please configure in Settings.', true);
@@ -132,6 +136,9 @@ const AppContent: React.FC = () => {
     }
 
     setIsSubmitting(true);
+    
+    // Check if this is a Veo 3.1 task (uses different API endpoint)
+    const isVeo3Task = activeModule.startsWith('veo3-');
     
     let modelName = '';
     if (activeModule === 'motion-control') modelName = 'kling-2.6/motion-control';
@@ -150,11 +157,23 @@ const AppContent: React.FC = () => {
     else if (activeModule === 'sora2-image-to-video') modelName = 'sora-2-image-to-video';
     else if (activeModule === 'sora2-pro-text-to-video') modelName = 'sora-2-pro-text-to-video';
     else if (activeModule === 'sora2-pro-image-to-video') modelName = 'sora-2-pro-image-to-video';
+    else if (activeModule === 'veo3-text-to-video') modelName = 'veo3/text-to-video';
+    else if (activeModule === 'veo3-image-to-video') modelName = 'veo3/image-to-video';
+    else if (activeModule === 'veo3-reference-to-video') modelName = 'veo3/reference-to-video';
 
     addLog(`Initiating generation sequence [${modelName}]...`);
     
     try {
-      const response = await createTask(apiKey, modelName, input);
+      let response;
+      
+      if (isVeo3Task) {
+        // Use Veo 3.1 specific API endpoint
+        response = await generateVeo3Video(input as Veo3Input);
+      } else {
+        // Use standard KIE.AI API endpoint
+        response = await createTask(apiKey, modelName, input);
+      }
+      
       if (response.code === 200) {
         addLog(`Task created successfully. ID: ${response.data.taskId}`);
         
@@ -304,6 +323,8 @@ const AppContent: React.FC = () => {
       setExpandedSection('flux');
     } else if (['sora2-characters', 'sora2-text-to-video', 'sora2-image-to-video', 'sora2-pro-text-to-video', 'sora2-pro-image-to-video'].includes(module)) {
       setExpandedSection('sora2');
+    } else if (['veo3-text-to-video', 'veo3-image-to-video', 'veo3-reference-to-video'].includes(module)) {
+      setExpandedSection('veo3');
     }
   };
 
@@ -342,6 +363,12 @@ const AppContent: React.FC = () => {
         return <Sora2ProTextToVideoForm onSubmit={handleCreateTask} isLoading={isSubmitting} apiKey={apiKey} />;
       case 'sora2-pro-image-to-video':
         return <Sora2ProImageToVideoForm onSubmit={handleCreateTask} isLoading={isSubmitting} apiKey={apiKey} />;
+      case 'veo3-text-to-video':
+        return <Veo3TextToVideoForm onSubmit={handleCreateTask} isLoading={isSubmitting} />;
+      case 'veo3-image-to-video':
+        return <Veo3ImageToVideoForm onSubmit={handleCreateTask} isLoading={isSubmitting} />;
+      case 'veo3-reference-to-video':
+        return <Veo3ReferenceToVideoForm onSubmit={handleCreateTask} isLoading={isSubmitting} />;
       case 'ugc':
         return null; // UGC has its own workspace in the right panel
       default:
@@ -372,6 +399,9 @@ const AppContent: React.FC = () => {
       'sora2-image-to-video': 'Sora 2 Image→Video',
       'sora2-pro-text-to-video': 'Sora 2 Pro Text→Video',
       'sora2-pro-image-to-video': 'Sora 2 Pro Image→Video',
+      'veo3-text-to-video': 'Veo 3.1 Text→Video',
+      'veo3-image-to-video': 'Veo 3.1 Image→Video',
+      'veo3-reference-to-video': 'Veo 3.1 Reference→Video',
       'ugc': 'UGC AI Studio',
       'landing': 'Home',
     };

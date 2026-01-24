@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
 
-export type MenuSection = 'home' | 'video' | 'nano-banana' | 'qwen' | 'flux' | 'sora2' | 'ugc' | 'settings';
+export type MenuSection = 'home' | 'video' | 'nano-banana' | 'qwen' | 'flux' | 'sora2' | 'veo3' | 'ugc' | 'settings';
 export type ModuleType = 
   | 'landing'
   | 'motion-control' 
@@ -21,6 +21,9 @@ export type ModuleType =
   | 'sora2-image-to-video'
   | 'sora2-pro-text-to-video'
   | 'sora2-pro-image-to-video'
+  | 'veo3-text-to-video'
+  | 'veo3-image-to-video'
+  | 'veo3-reference-to-video'
   | 'ugc';
 
 interface SubMenuItem {
@@ -145,6 +148,21 @@ const Sidebar: React.FC<SidebarProps> = ({
       ],
     },
     {
+      id: 'veo3-text-to-video',
+      label: 'VEO 3.1',
+      section: 'veo3',
+      icon: (
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+        </svg>
+      ),
+      subItems: [
+        { id: 'veo3-text-to-video', label: 'Text→Video' },
+        { id: 'veo3-image-to-video', label: 'Image→Video' },
+        { id: 'veo3-reference-to-video', label: 'Reference→Video' },
+      ],
+    },
+    {
       id: 'ugc',
       label: 'UGC',
       icon: (
@@ -168,6 +186,8 @@ const Sidebar: React.FC<SidebarProps> = ({
         return ['flux2-pro-text', 'flux2-pro-image', 'flux2-flex-text', 'flux2-flex-image'].includes(module);
       case 'sora2':
         return ['sora2-characters', 'sora2-text-to-video', 'sora2-image-to-video', 'sora2-pro-text-to-video', 'sora2-pro-image-to-video'].includes(module);
+      case 'veo3':
+        return ['veo3-text-to-video', 'veo3-image-to-video', 'veo3-reference-to-video'].includes(module);
       default:
         return false;
     }

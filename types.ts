@@ -157,6 +157,54 @@ export interface Sora2ProImageToVideoInput {
 
 export type Sora2Input = Sora2CharactersInput | Sora2TextToVideoInput | Sora2ImageToVideoInput | Sora2ProTextToVideoInput | Sora2ProImageToVideoInput;
 
+// ==================== VEO 3.1 API Types ====================
+// According to KIE.AI API Documentation
+// Endpoint: POST https://api.kie.ai/api/v1/veo/generate
+
+export type Veo3Model = 'veo3' | 'veo3_fast';
+export type Veo3GenerationType = 'TEXT_2_VIDEO' | 'FIRST_AND_LAST_FRAMES_2_VIDEO' | 'REFERENCE_2_VIDEO';
+export type Veo3AspectRatio = '16:9' | '9:16' | 'Auto';
+
+// Veo 3.1 Text To Video
+export interface Veo3TextToVideoInput {
+  prompt: string;
+  model?: Veo3Model; // default: veo3_fast
+  generationType?: 'TEXT_2_VIDEO';
+  aspect_ratio?: Veo3AspectRatio; // default: 16:9
+  seeds?: number; // 10000-99999
+  enableTranslation?: boolean; // default: true
+  watermark?: string;
+  callBackUrl?: string;
+}
+
+// Veo 3.1 Image To Video (1-2 images)
+export interface Veo3ImageToVideoInput {
+  prompt: string;
+  imageUrls: string[]; // 1-2 images
+  model?: Veo3Model;
+  generationType?: 'FIRST_AND_LAST_FRAMES_2_VIDEO';
+  aspect_ratio?: Veo3AspectRatio;
+  seeds?: number;
+  enableTranslation?: boolean;
+  watermark?: string;
+  callBackUrl?: string;
+}
+
+// Veo 3.1 Reference To Video (1-3 images, Fast model only, 16:9 & 9:16 only)
+export interface Veo3ReferenceToVideoInput {
+  prompt: string;
+  imageUrls: string[]; // 1-3 images
+  model?: 'veo3_fast'; // Only fast model supported
+  generationType?: 'REFERENCE_2_VIDEO';
+  aspect_ratio?: '16:9' | '9:16'; // Auto not supported
+  seeds?: number;
+  enableTranslation?: boolean;
+  watermark?: string;
+  callBackUrl?: string;
+}
+
+export type Veo3Input = Veo3TextToVideoInput | Veo3ImageToVideoInput | Veo3ReferenceToVideoInput;
+
 export interface CreateTaskRequest {
   model: string; 
   input: MotionControlInput | NanoBananaInput | ImageEditInput | ZImageInput | FlexImageInput | Flux2Input;
