@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
 
-export type MenuSection = 'home' | 'video' | 'nano-banana' | 'qwen' | 'flux' | 'ugc' | 'settings';
+export type MenuSection = 'home' | 'video' | 'nano-banana' | 'qwen' | 'flux' | 'sora2' | 'ugc' | 'settings';
 export type ModuleType = 
   | 'landing'
   | 'motion-control' 
@@ -16,6 +16,11 @@ export type ModuleType =
   | 'flux2-pro-image' 
   | 'flux2-flex-text' 
   | 'flux2-flex-image' 
+  | 'sora2-characters'
+  | 'sora2-text-to-video'
+  | 'sora2-image-to-video'
+  | 'sora2-pro-text-to-video'
+  | 'sora2-pro-image-to-video'
   | 'ugc';
 
 interface SubMenuItem {
@@ -123,6 +128,23 @@ const Sidebar: React.FC<SidebarProps> = ({
       ],
     },
     {
+      id: 'sora2-text-to-video',
+      label: 'SORA 2',
+      section: 'sora2',
+      icon: (
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M7 4v16M17 4v16M3 8h4m10 0h4M3 12h18M3 16h4m10 0h4M4 20h16a1 1 0 001-1V5a1 1 0 00-1-1H4a1 1 0 00-1 1v14a1 1 0 001 1z" />
+        </svg>
+      ),
+      subItems: [
+        { id: 'sora2-characters', label: 'Characters' },
+        { id: 'sora2-text-to-video', label: 'Text→Video' },
+        { id: 'sora2-image-to-video', label: 'Image→Video' },
+        { id: 'sora2-pro-text-to-video', label: 'Pro Text→Video', group: 'SORA 2 PRO' },
+        { id: 'sora2-pro-image-to-video', label: 'Pro Image→Video', group: 'SORA 2 PRO' },
+      ],
+    },
+    {
       id: 'ugc',
       label: 'UGC',
       icon: (
@@ -144,6 +166,8 @@ const Sidebar: React.FC<SidebarProps> = ({
         return ['qwen-text-to-image', 'qwen-image-to-image', 'z-image'].includes(module);
       case 'flux':
         return ['flux2-pro-text', 'flux2-pro-image', 'flux2-flex-text', 'flux2-flex-image'].includes(module);
+      case 'sora2':
+        return ['sora2-characters', 'sora2-text-to-video', 'sora2-image-to-video', 'sora2-pro-text-to-video', 'sora2-pro-image-to-video'].includes(module);
       default:
         return false;
     }

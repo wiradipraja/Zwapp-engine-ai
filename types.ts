@@ -110,6 +110,53 @@ export interface Flux2FlexImageInput {
 
 export type Flux2Input = Flux2ProTextInput | Flux2ProImageInput | Flux2FlexTextInput | Flux2FlexImageInput;
 
+// ==================== SORA 2 API Types ====================
+// According to KIE.AI API Documentation
+
+// Sora 2 Characters (sora-2-characters)
+export interface Sora2CharactersInput {
+  character_prompt?: string; // Max 5000 characters
+  safety_instruction?: string; // Max 5000 characters
+}
+
+// Sora 2 Text To Video (sora-2-text-to-video)
+export interface Sora2TextToVideoInput {
+  prompt: string; // Max 10000 characters
+  aspect_ratio?: 'portrait' | 'landscape';
+  n_frames?: '10' | '15'; // 10s or 15s
+  remove_watermark?: boolean;
+}
+
+// Sora 2 Image To Video (sora-2-image-to-video)
+export interface Sora2ImageToVideoInput {
+  prompt: string; // Max 10000 characters
+  image_urls: string[]; // jpeg/png/webp, max 10MB
+  aspect_ratio?: 'portrait' | 'landscape';
+  n_frames?: '10' | '15';
+  remove_watermark?: boolean;
+}
+
+// Sora 2 Pro Text To Video (sora-2-pro-text-to-video)
+export interface Sora2ProTextToVideoInput {
+  prompt: string; // Max 10000 characters
+  aspect_ratio?: 'portrait' | 'landscape';
+  n_frames?: '10' | '15';
+  size?: 'standard' | 'high';
+  remove_watermark?: boolean;
+}
+
+// Sora 2 Pro Image To Video (sora-2-pro-image-to-video)
+export interface Sora2ProImageToVideoInput {
+  prompt: string; // Max 10000 characters
+  image_urls: string[]; // jpeg/png/webp, max 10MB
+  aspect_ratio?: 'portrait' | 'landscape';
+  n_frames?: '10' | '15';
+  size?: 'standard' | 'high';
+  remove_watermark?: boolean;
+}
+
+export type Sora2Input = Sora2CharactersInput | Sora2TextToVideoInput | Sora2ImageToVideoInput | Sora2ProTextToVideoInput | Sora2ProImageToVideoInput;
+
 export interface CreateTaskRequest {
   model: string; 
   input: MotionControlInput | NanoBananaInput | ImageEditInput | ZImageInput | FlexImageInput | Flux2Input;

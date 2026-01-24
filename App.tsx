@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { createTask, queryTask } from './services/api';
 import { supabase, signOut } from './services/supabase';
-import { MotionControlInput, NanoBananaInput, ImageEditInput, ZImageInput, Flux2Input, Flux2ProTextInput, Flux2ProImageInput, Flux2FlexTextInput, Flux2FlexImageInput, QwenTextToImageInput, LocalTask } from './types';
+import { MotionControlInput, NanoBananaInput, ImageEditInput, ZImageInput, Flux2Input, Flux2ProTextInput, Flux2ProImageInput, Flux2FlexTextInput, Flux2FlexImageInput, QwenTextToImageInput, Sora2CharactersInput, Sora2TextToVideoInput, Sora2ImageToVideoInput, Sora2ProTextToVideoInput, Sora2ProImageToVideoInput, LocalTask } from './types';
 import { TaskForm } from './components/TaskForm';
 import { NanoBananaGenForm } from './components/NanoBananaGenForm';
 import { NanoBananaEditForm } from './components/NanoBananaEditForm';
@@ -13,6 +13,11 @@ import { Flux2ProTextForm } from './components/Flux2ProTextForm';
 import { Flux2ProImageForm } from './components/Flux2ProImageForm';
 import { Flux2FlexTextForm } from './components/Flux2FlexTextForm';
 import { Flux2FlexImageForm } from './components/Flux2FlexImageForm';
+import { Sora2CharactersForm } from './components/Sora2CharactersForm';
+import { Sora2TextToVideoForm } from './components/Sora2TextToVideoForm';
+import { Sora2ImageToVideoForm } from './components/Sora2ImageToVideoForm';
+import { Sora2ProTextToVideoForm } from './components/Sora2ProTextToVideoForm';
+import { Sora2ProImageToVideoForm } from './components/Sora2ProImageToVideoForm';
 import { StatusTerminal } from './components/StatusTerminal';
 import { QueueList } from './components/QueueList';
 import { AuthForm } from './components/AuthForm';
@@ -119,7 +124,7 @@ const AppContent: React.FC = () => {
       setSession(null);
   };
 
-  const handleCreateTask = async (input: MotionControlInput | NanoBananaInput | ImageEditInput | ZImageInput | Flux2Input | QwenTextToImageInput) => {
+  const handleCreateTask = async (input: MotionControlInput | NanoBananaInput | ImageEditInput | ZImageInput | Flux2Input | QwenTextToImageInput | Sora2CharactersInput | Sora2TextToVideoInput | Sora2ImageToVideoInput | Sora2ProTextToVideoInput | Sora2ProImageToVideoInput) => {
     if (!apiKey) {
         setIsSettingsOpen(true);
         addLog('ERROR: API Key missing. Please configure in Settings.', true);
@@ -140,6 +145,11 @@ const AppContent: React.FC = () => {
     else if (activeModule === 'flux2-pro-image') modelName = 'flux/pro/image-to-image';
     else if (activeModule === 'flux2-flex-text') modelName = 'flux/flex/text-to-image';
     else if (activeModule === 'flux2-flex-image') modelName = 'flux/flex/image-to-image';
+    else if (activeModule === 'sora2-characters') modelName = 'sora-2-characters';
+    else if (activeModule === 'sora2-text-to-video') modelName = 'sora-2-text-to-video';
+    else if (activeModule === 'sora2-image-to-video') modelName = 'sora-2-image-to-video';
+    else if (activeModule === 'sora2-pro-text-to-video') modelName = 'sora-2-pro-text-to-video';
+    else if (activeModule === 'sora2-pro-image-to-video') modelName = 'sora-2-pro-image-to-video';
 
     addLog(`Initiating generation sequence [${modelName}]...`);
     
@@ -292,6 +302,8 @@ const AppContent: React.FC = () => {
       setExpandedSection('qwen');
     } else if (['flux2-pro-text', 'flux2-pro-image', 'flux2-flex-text', 'flux2-flex-image'].includes(module)) {
       setExpandedSection('flux');
+    } else if (['sora2-characters', 'sora2-text-to-video', 'sora2-image-to-video', 'sora2-pro-text-to-video', 'sora2-pro-image-to-video'].includes(module)) {
+      setExpandedSection('sora2');
     }
   };
 
@@ -320,6 +332,16 @@ const AppContent: React.FC = () => {
         return <Flux2FlexTextForm onSubmit={handleCreateTask} isLoading={isSubmitting} apiKey={apiKey} />;
       case 'flux2-flex-image':
         return <Flux2FlexImageForm onSubmit={handleCreateTask} isLoading={isSubmitting} apiKey={apiKey} />;
+      case 'sora2-characters':
+        return <Sora2CharactersForm onSubmit={handleCreateTask} isLoading={isSubmitting} apiKey={apiKey} />;
+      case 'sora2-text-to-video':
+        return <Sora2TextToVideoForm onSubmit={handleCreateTask} isLoading={isSubmitting} apiKey={apiKey} />;
+      case 'sora2-image-to-video':
+        return <Sora2ImageToVideoForm onSubmit={handleCreateTask} isLoading={isSubmitting} apiKey={apiKey} />;
+      case 'sora2-pro-text-to-video':
+        return <Sora2ProTextToVideoForm onSubmit={handleCreateTask} isLoading={isSubmitting} apiKey={apiKey} />;
+      case 'sora2-pro-image-to-video':
+        return <Sora2ProImageToVideoForm onSubmit={handleCreateTask} isLoading={isSubmitting} apiKey={apiKey} />;
       case 'ugc':
         return null; // UGC has its own workspace in the right panel
       default:
@@ -345,6 +367,11 @@ const AppContent: React.FC = () => {
       'flux2-pro-image': 'Flux 2 Pro Image→Image',
       'flux2-flex-text': 'Flux 2 Flex Text→Image',
       'flux2-flex-image': 'Flux 2 Flex Image→Image',
+      'sora2-characters': 'Sora 2 Characters',
+      'sora2-text-to-video': 'Sora 2 Text→Video',
+      'sora2-image-to-video': 'Sora 2 Image→Video',
+      'sora2-pro-text-to-video': 'Sora 2 Pro Text→Video',
+      'sora2-pro-image-to-video': 'Sora 2 Pro Image→Video',
       'ugc': 'UGC AI Studio',
       'landing': 'Home',
     };
