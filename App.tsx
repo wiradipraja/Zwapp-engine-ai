@@ -1,14 +1,14 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { createTask, queryTask } from './services/api';
 import { supabase, signOut } from './services/supabase';
-import { MotionControlInput, NanoBananaInput, ImageEditInput, ZImageInput, FlexImageInput, Flux2Input, Flux2ProTextInput, Flux2ProImageInput, Flux2FlexTextInput, Flux2FlexImageInput, LocalTask } from './types';
+import { MotionControlInput, NanoBananaInput, ImageEditInput, ZImageInput, Flux2Input, Flux2ProTextInput, Flux2ProImageInput, Flux2FlexTextInput, Flux2FlexImageInput, QwenTextToImageInput, LocalTask } from './types';
 import { TaskForm } from './components/TaskForm';
 import { NanoBananaGenForm } from './components/NanoBananaGenForm';
 import { NanoBananaEditForm } from './components/NanoBananaEditForm';
 import { NanoBananaProForm } from './components/NanoBananaProForm';
 import { ImageEditForm } from './components/ImageEditForm';
+import { QwenTextToImageForm } from './components/QwenTextToImageForm';
 import { ZImageForm } from './components/ZImageForm';
-import { FlexImageForm } from './components/FlexImageForm';
 import { Flux2ProTextForm } from './components/Flux2ProTextForm';
 import { Flux2ProImageForm } from './components/Flux2ProImageForm';
 import { Flux2FlexTextForm } from './components/Flux2FlexTextForm';
@@ -18,12 +18,22 @@ import { QueueList } from './components/QueueList';
 import { AuthForm } from './components/AuthForm';
 import { SettingsModal } from './components/SettingsModal';
 import UGCOrchestrationWorkspace from './components/UGC/UGCOrchestrationWorkspace';
+import Sidebar, { MenuSection, ModuleType } from './components/layout/Sidebar';
+import PublicLanding from './components/layout/PublicLanding';
+import Toast, { useToast, ToastMessage } from './components/ui/Toast';
+import { ThemeProvider, useTheme } from './contexts/ThemeContext';
 
-type ModuleType = 'motion-control' | 'nano-banana-gen' | 'nano-banana-edit' | 'nano-banana-pro' | 'image-edit' | 'z-image' | 'flex-image' | 'flux2-pro-text' | 'flux2-pro-image' | 'flux2-flex-text' | 'flux2-flex-image' | 'ugc';
 type NanoBananaType = 'gen' | 'edit' | 'pro';
 type Flux2Type = 'pro-text' | 'pro-image' | 'flex-text' | 'flex-image';
+type AppView = 'landing' | 'auth' | 'app';
 
-const App: React.FC = () => {
+const AppContent: React.FC = () => {
+  const { theme } = useTheme();
+  const isDark = theme === 'dark';
+
+  // View State - Landing, Auth, or Main App
+  const [currentView, setCurrentView] = useState<AppView>('landing');
+  
   // Auth State
   const [session, setSession] = useState<any>(null);
   const [authLoading, setAuthLoading] = useState(true);
@@ -36,16 +46,16 @@ const App: React.FC = () => {
   const [logs, setLogs] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [activeModule, setActiveModule] = useState<ModuleType>('motion-control');
-  const [expandImageGen, setExpandImageGen] = useState(false);
-  const [expandNano, setExpandNano] = useState(false);
-  const [expandFlux2, setExpandFlux2] = useState(false);
-  const [expandFlux2Pro, setExpandFlux2Pro] = useState(false);
-  const [expandFlux2Flex, setExpandFlux2Flex] = useState(false);
+  const [expandedSection, setExpandedSection] = useState<MenuSection | null>(null);
   const [nanoBananaType, setNanoBananaType] = useState<NanoBananaType>('gen');
   const [flux2Type, setFlux2Type] = useState<Flux2Type>('pro-text');
   
   // UI State
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+
+  // Toast notifications
+  const toast = useToast();
 
   // Polling Interval Ref
   const pollIntervalRef = useRef<number | null>(null);
@@ -55,12 +65,19 @@ const App: React.FC = () => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setAuthLoading(false);
+      // If already logged in, go to app
+      if (session) {
+        setCurrentView('app');
+      }
     });
 
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
+      if (session) {
+        setCurrentView('app');
+      }
     });
 
     // Load API Keys from LocalStorage
@@ -76,8 +93,14 @@ const App: React.FC = () => {
     return () => subscription.unsubscribe();
   }, []);
 
-  const addLog = (msg: string) => {
+  const addLog = (msg: string, isError: boolean = false) => {
     setLogs(prev => [`> ${msg}`, ...prev].slice(0, 50));
+    // Show toast notification for important messages
+    if (isError || msg.includes('ERROR') || msg.includes('Critical') || msg.includes('✗')) {
+      toast.error(msg);
+    } else if (msg.includes('success') || msg.includes('Success') || msg.includes('✓')) {
+      toast.success(msg);
+    }
   };
 
   const handleSaveApiKey = (kieKey: string, geminiKey: string) => {
@@ -96,10 +119,10 @@ const App: React.FC = () => {
       setSession(null);
   };
 
-  const handleCreateTask = async (input: MotionControlInput | NanoBananaInput | ImageEditInput | ZImageInput | FlexImageInput | Flux2Input) => {
+  const handleCreateTask = async (input: MotionControlInput | NanoBananaInput | ImageEditInput | ZImageInput | Flux2Input | QwenTextToImageInput) => {
     if (!apiKey) {
         setIsSettingsOpen(true);
-        addLog('ERROR: API Key missing. Please configure in Settings.');
+        addLog('ERROR: API Key missing. Please configure in Settings.', true);
         return;
     }
 
@@ -110,9 +133,9 @@ const App: React.FC = () => {
     else if (activeModule === 'nano-banana-gen') modelName = 'google/nano-banana';
     else if (activeModule === 'nano-banana-edit') modelName = 'google/nano-banana-edit';
     else if (activeModule === 'nano-banana-pro') modelName = 'nano-banana-pro';
-    else if (activeModule === 'image-edit') modelName = 'qwen/image-to-image';
+    else if (activeModule === 'qwen-text-to-image') modelName = 'qwen/text-to-image';
+    else if (activeModule === 'qwen-image-to-image') modelName = 'qwen/image-to-image';
     else if (activeModule === 'z-image') modelName = 'z-image';
-    else if (activeModule === 'flex-image') modelName = 'flux-kontext/flex-image';
     else if (activeModule === 'flux2-pro-text') modelName = 'flux/pro/text-to-image';
     else if (activeModule === 'flux2-pro-image') modelName = 'flux/pro/image-to-image';
     else if (activeModule === 'flux2-flex-text') modelName = 'flux/flex/text-to-image';
@@ -139,10 +162,10 @@ const App: React.FC = () => {
         setTasks(prev => [newTask, ...prev]);
         setSelectedTaskId(response.data.taskId); 
       } else {
-        addLog(`Error: ${response.msg}`);
+        addLog(`Error: ${response.msg}`, true);
       }
     } catch (error: any) {
-      addLog(`Critical Failure: ${error.message}`);
+      addLog(`Critical Failure: ${error.message}`, true);
     } finally {
       setIsSubmitting(false);
     }
@@ -242,370 +265,237 @@ const App: React.FC = () => {
   const activeTask = tasks.find(t => t.taskId === selectedTaskId) || tasks[0] || null;
 
   if (authLoading) {
-      return <div className="min-h-screen bg-black flex items-center justify-center text-orange-500 font-mono animate-pulse">INITIALIZING SYSTEM...</div>;
+      return (
+        <div className="min-h-screen bg-zinc-950 flex items-center justify-center">
+          <div className="flex flex-col items-center gap-4">
+            <div className="w-12 h-12 border-4 border-violet-500/30 border-t-violet-500 rounded-full animate-spin"></div>
+            <p className="text-violet-400 font-mono animate-pulse">INITIALIZING ZWAPP ENGINE...</p>
+          </div>
+        </div>
+      );
   }
 
+  // Handle section toggle for sidebar
+  const handleSectionToggle = (section: MenuSection) => {
+    setExpandedSection(prev => prev === section ? null : section);
+  };
+
+  // Handle module change from sidebar
+  const handleModuleChange = (module: ModuleType) => {
+    setActiveModule(module);
+    // Auto-expand section based on module
+    if (module === 'motion-control') {
+      setExpandedSection('video');
+    } else if (['nano-banana-gen', 'nano-banana-edit', 'nano-banana-pro'].includes(module)) {
+      setExpandedSection('nano-banana');
+    } else if (['qwen-text-to-image', 'qwen-image-to-image', 'z-image'].includes(module)) {
+      setExpandedSection('qwen');
+    } else if (['flux2-pro-text', 'flux2-pro-image', 'flux2-flex-text', 'flux2-flex-image'].includes(module)) {
+      setExpandedSection('flux');
+    }
+  };
+
+  // Render active form
+  const renderActiveForm = () => {
+    switch (activeModule) {
+      case 'motion-control':
+        return <TaskForm onSubmit={handleCreateTask} isLoading={isSubmitting} apiKey={apiKey} />;
+      case 'nano-banana-gen':
+        return <NanoBananaGenForm onSubmit={handleCreateTask} isLoading={isSubmitting} apiKey={apiKey} />;
+      case 'nano-banana-edit':
+        return <NanoBananaEditForm onSubmit={handleCreateTask} isLoading={isSubmitting} apiKey={apiKey} />;
+      case 'nano-banana-pro':
+        return <NanoBananaProForm onSubmit={handleCreateTask} isLoading={isSubmitting} apiKey={apiKey} />;
+      case 'qwen-text-to-image':
+        return <QwenTextToImageForm onSubmit={handleCreateTask} isLoading={isSubmitting} apiKey={apiKey} />;
+      case 'qwen-image-to-image':
+        return <ImageEditForm onSubmit={handleCreateTask} isLoading={isSubmitting} apiKey={apiKey} />;
+      case 'z-image':
+        return <ZImageForm onSubmit={handleCreateTask} isLoading={isSubmitting} apiKey={apiKey} />;
+      case 'flux2-pro-text':
+        return <Flux2ProTextForm onSubmit={handleCreateTask} isLoading={isSubmitting} apiKey={apiKey} />;
+      case 'flux2-pro-image':
+        return <Flux2ProImageForm onSubmit={handleCreateTask} isLoading={isSubmitting} apiKey={apiKey} />;
+      case 'flux2-flex-text':
+        return <Flux2FlexTextForm onSubmit={handleCreateTask} isLoading={isSubmitting} apiKey={apiKey} />;
+      case 'flux2-flex-image':
+        return <Flux2FlexImageForm onSubmit={handleCreateTask} isLoading={isSubmitting} apiKey={apiKey} />;
+      case 'ugc':
+        return null; // UGC has its own workspace in the right panel
+      default:
+        return (
+          <div className="text-center text-zinc-500 py-8">
+            <p className="text-sm font-mono">Select a module from the sidebar</p>
+          </div>
+        );
+    }
+  };
+
+  // Get module title for display
+  const getModuleTitle = () => {
+    const titles: Record<string, string> = {
+      'motion-control': 'Kling Motion Control',
+      'nano-banana-gen': 'Nano Banana Generate',
+      'nano-banana-edit': 'Nano Banana Edit',
+      'nano-banana-pro': 'Nano Banana Pro',
+      'qwen-text-to-image': 'Qwen Text→Image',
+      'qwen-image-to-image': 'Qwen Image→Image',
+      'z-image': 'Z-Image Generation',
+      'flux2-pro-text': 'Flux 2 Pro Text→Image',
+      'flux2-pro-image': 'Flux 2 Pro Image→Image',
+      'flux2-flex-text': 'Flux 2 Flex Text→Image',
+      'flux2-flex-image': 'Flux 2 Flex Image→Image',
+      'ugc': 'UGC AI Studio',
+      'landing': 'Home',
+    };
+    return titles[activeModule] || 'Workspace';
+  };
+
+  // Loading state
+  if (authLoading) {
+    return (
+      <div className={`min-h-screen flex items-center justify-center transition-colors duration-500 ${isDark ? 'bg-zinc-950' : 'bg-zinc-100'}`}>
+        <div className="flex flex-col items-center gap-4">
+          <div className={`w-12 h-12 border-4 ${isDark ? 'border-orange-500/30 border-t-orange-500' : 'border-orange-300 border-t-orange-500'} rounded-full animate-spin`}></div>
+          <p className={`font-mono animate-pulse ${isDark ? 'text-orange-500' : 'text-orange-600'}`}>INITIALIZING ENGINE...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // View: Public Landing Page (before login)
+  if (currentView === 'landing') {
+    return (
+      <PublicLanding
+        onSignIn={() => setCurrentView('auth')}
+        onLaunchEngine={() => {
+          if (session) {
+            setCurrentView('app');
+          } else {
+            setCurrentView('auth');
+          }
+        }}
+      />
+    );
+  }
+
+  // View: Auth/Login Page
+  if (currentView === 'auth' && !session) {
+    return (
+      <AuthForm 
+        onAuthSuccess={() => {
+          addLog('User Authenticated. Loading Preferences...');
+          setCurrentView('app');
+        }}
+        onBackToHome={() => setCurrentView('landing')}
+      />
+    );
+  }
+
+  // View: Main Application (after login)
   return (
-    <div className="min-h-screen bg-zinc-950 bg-grid text-zinc-300 font-sans selection:bg-orange-500 selection:text-black">
+    <div className={`min-h-screen font-sans transition-colors duration-500 ${isDark ? 'bg-zinc-950 text-zinc-300' : 'bg-zinc-100 text-zinc-800'}`}>
+      {/* Toast Notifications */}
+      <Toast toasts={toast.toasts} onRemove={toast.removeToast} />
       
-      {/* AUTH SCREEN OR MAIN APP */}
-      {!session ? (
-        <AuthForm onAuthSuccess={() => addLog('User Authenticated. Loading Preferences...')} />
-      ) : (
-        <>
-        <SettingsModal 
-            isOpen={isSettingsOpen} 
-            onClose={() => setIsSettingsOpen(false)} 
-            onSave={handleSaveApiKey}
-            currentKey={apiKey}
-            currentGeminiKey={geminiApiKey}
-        />
+      <SettingsModal 
+        isOpen={isSettingsOpen} 
+        onClose={() => setIsSettingsOpen(false)} 
+        onSave={handleSaveApiKey}
+        currentKey={apiKey}
+        currentGeminiKey={geminiApiKey}
+      />
 
-        {/* Header */}
-        <header className="border-b border-zinc-800 bg-zinc-900/90 backdrop-blur-sm sticky top-0 z-50">
-            <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-                <div className="w-8 h-8 bg-gradient-to-br from-orange-500 to-red-600 flex items-center justify-center font-bold text-black text-xl clip-path-polygon">
-                K
-                </div>
-                <div>
-                <h1 className="text-lg font-bold tracking-widest uppercase text-white leading-none">Kie.ai</h1>
-                <span className="text-[10px] text-orange-500 font-mono tracking-wider">CORE INTERFACE v2.2</span>
-                </div>
-            </div>
-            
-            <div className="flex items-center gap-4">
-                {/* API Status */}
-                <div className="hidden md:flex items-center gap-2 border-r border-zinc-800 pr-4">
-                    <div className={`w-2 h-2 rounded-full ${apiKey ? 'bg-green-500 shadow-[0_0_10px_rgba(34,197,94,0.5)]' : 'bg-red-500 animate-pulse'}`}></div>
-                    <span className="text-xs font-mono text-zinc-500">{apiKey ? 'API LINKED' : 'API DISCONNECTED'}</span>
-                </div>
+      {/* Sidebar - Narrow icon-based */}
+      <Sidebar
+        activeModule={activeModule}
+        expandedSection={expandedSection}
+        onModuleChange={handleModuleChange}
+        onSectionToggle={handleSectionToggle}
+        onSettingsClick={() => setIsSettingsOpen(true)}
+        onLogout={handleLogout}
+        userEmail={session?.user?.email}
+        apiConnected={!!apiKey}
+      />
 
-                {/* User Status */}
-                <div className="text-right hidden md:block">
-                    <div className="text-xs text-white font-bold">{session.user.email}</div>
-                    <div className="text-[10px] text-zinc-600 font-mono uppercase">OPERATOR LEVEL 1</div>
-                </div>
-                
-                {/* Controls */}
-                <div className="flex gap-1">
-                    <button 
-                        onClick={() => setIsSettingsOpen(true)}
-                        className="p-2 text-zinc-400 hover:text-white hover:bg-zinc-800 border border-transparent hover:border-zinc-700 transition-all"
-                        title="Settings"
-                    >
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
-                    </button>
-                    <button 
-                        onClick={handleLogout}
-                        className="p-2 text-zinc-400 hover:text-red-500 hover:bg-zinc-800 border border-transparent hover:border-red-900 transition-all"
-                        title="Logout"
-                    >
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
-                    </button>
-                </div>
+      {/* Main Content Area - Fixed margin for collapsed sidebar, sidebar expands over content on hover */}
+      <div className="ml-16 min-h-screen transition-all duration-300">
+        {/* Header Bar */}
+        <header className={`h-16 flex items-center justify-between px-6 border-b ${isDark ? 'bg-zinc-950/80 border-zinc-800' : 'bg-white/80 border-zinc-200'} backdrop-blur-sm sticky top-0 z-40`}>
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <svg className={`w-5 h-5 ${isDark ? 'text-zinc-600' : 'text-zinc-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+              </svg>
+              <span className={`font-bold tracking-wider ${isDark ? 'text-white' : 'text-zinc-900'}`}>{getModuleTitle()}</span>
             </div>
+            <div className="flex items-center gap-2">
+              <div className={`w-2 h-2 rounded-full ${apiKey ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`}></div>
+              <span className={`text-xs font-mono ${apiKey ? (isDark ? 'text-green-500' : 'text-green-600') : (isDark ? 'text-red-500' : 'text-red-600')}`}>
+                {apiKey ? 'API CONNECTED' : 'API DISCONNECTED'}
+              </span>
             </div>
-            {/* Decorative stripe */}
-            <div className="h-1 bg-stripes opacity-20 w-full"></div>
+          </div>
+          
+          {/* Credits Display */}
+          <div className="flex items-center gap-4">
+            <div className={`px-4 py-2 border ${isDark ? 'border-zinc-700 bg-zinc-900' : 'border-zinc-200 bg-zinc-50'}`}>
+              <span className={`text-xs font-mono ${isDark ? 'text-zinc-500' : 'text-zinc-600'}`}>CREDITS: </span>
+              <span className="text-xs font-mono text-orange-500">∞</span>
+            </div>
+          </div>
         </header>
 
-        <main className="max-w-7xl mx-auto px-4 py-8">
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-                {/* Left Col: Controls */}
-                <div className="lg:col-span-5 flex flex-col gap-4">
-                
-                {/* Module Navigation - Two Row Layout */}
-                <div className="flex flex-col gap-1 bg-zinc-900 border border-zinc-800 p-1">
-                    {/* First Row: Motion */}
-                    <button
-                        onClick={() => setActiveModule('motion-control')}
-                        className={`w-full py-2 text-xs font-bold uppercase tracking-wider transition-all text-center ${
-                            activeModule === 'motion-control' 
-                            ? 'bg-zinc-800 text-orange-500 border border-zinc-700 shadow-inner' 
-                            : 'text-zinc-500 hover:text-zinc-300'
-                        }`}
-                    >
-                        Motion Control
-                    </button>
+        {/* Content */}
+        <div className="flex">
+          {/* Left Panel - Dynamic Form */}
+          <div className={`w-96 min-h-[calc(100vh-4rem)] border-r overflow-y-auto ${isDark ? 'bg-zinc-950 border-zinc-800' : 'bg-white border-zinc-200'}`}>
+            <div className="p-4">
+              {/* Dynamic Form Based on Module */}
+              {renderActiveForm()}
+            </div>
+          </div>
 
-                    {/* Second Row: Nano Banana Parent + Submenu */}
-                    <button
-                        onClick={() => setExpandNano(!expandNano)}
-                        className={`w-full py-2 text-xs font-bold uppercase tracking-wider transition-all text-center flex items-center justify-between px-3 ${
-                            expandNano 
-                            ? 'bg-zinc-800 text-orange-500 border border-zinc-700' 
-                            : 'text-zinc-500 hover:text-zinc-300'
-                        }`}
-                    >
-                        <span>Nano Banana</span>
-                        <span className="text-[10px]">{expandNano ? '▼' : '▶'}</span>
-                    </button>
-
-                    {/* Submenu - Nano Banana Children */}
-                    {expandNano && (
-                        <div className="flex gap-1 p-1 border-t border-zinc-700 bg-zinc-950">
-                            <button
-                                onClick={() => {
-                                    setActiveModule('nano-banana-gen');
-                                    setNanoBananaType('gen');
-                                }}
-                                className={`flex-1 py-2 text-xs font-bold uppercase tracking-wider transition-all ${
-                                    activeModule === 'nano-banana-gen' 
-                                    ? 'bg-green-700 text-white border border-green-600 shadow-inner' 
-                                    : 'text-zinc-600 hover:text-zinc-400 border border-transparent'
-                                }`}
-                            >
-                                Gen
-                            </button>
-                            <button
-                                onClick={() => {
-                                    setActiveModule('nano-banana-edit');
-                                    setNanoBananaType('edit');
-                                }}
-                                className={`flex-1 py-2 text-xs font-bold uppercase tracking-wider transition-all ${
-                                    activeModule === 'nano-banana-edit' 
-                                    ? 'bg-blue-700 text-white border border-blue-600 shadow-inner' 
-                                    : 'text-zinc-600 hover:text-zinc-400 border border-transparent'
-                                }`}
-                            >
-                                Edit
-                            </button>
-                            <button
-                                onClick={() => {
-                                    setActiveModule('nano-banana-pro');
-                                    setNanoBananaType('pro');
-                                }}
-                                className={`flex-1 py-2 text-xs font-bold uppercase tracking-wider transition-all ${
-                                    activeModule === 'nano-banana-pro' 
-                                    ? 'bg-purple-700 text-white border border-purple-600 shadow-inner' 
-                                    : 'text-zinc-600 hover:text-zinc-400 border border-transparent'
-                                }`}
-                            >
-                                Pro
-                            </button>
-                        </div>
-                    )}
-
-                    {/* Third Row: Image Generation Parent + Submenu */}
-                    <button
-                        onClick={() => setExpandImageGen(!expandImageGen)}
-                        className={`w-full py-2 text-xs font-bold uppercase tracking-wider transition-all text-center flex items-center justify-between px-3 ${
-                            expandImageGen 
-                            ? 'bg-zinc-800 text-orange-500 border border-zinc-700' 
-                            : 'text-zinc-500 hover:text-zinc-300'
-                        }`}
-                    >
-                        <span>Image Generation</span>
-                        <span className="text-[10px]">{expandImageGen ? '▼' : '▶'}</span>
-                    </button>
-
-                    {/* Submenu - Image Generation Children */}
-                    {expandImageGen && (
-                        <div className="flex gap-1 p-1 border-t border-zinc-700 bg-zinc-950">
-                            <button
-                                onClick={() => {
-                                    setActiveModule('image-edit');
-                                }}
-                                className={`flex-1 py-2 text-xs font-bold uppercase tracking-wider transition-all ${
-                                    activeModule === 'image-edit' 
-                                    ? 'bg-zinc-700 text-orange-500 border border-zinc-600 shadow-inner' 
-                                    : 'text-zinc-600 hover:text-zinc-400 border border-transparent'
-                                }`}
-                            >
-                                Qwen Edit
-                            </button>
-                            <button
-                                onClick={() => {
-                                    setActiveModule('z-image');
-                                }}
-                                className={`flex-1 py-2 text-xs font-bold uppercase tracking-wider transition-all ${
-                                    activeModule === 'z-image' 
-                                    ? 'bg-zinc-700 text-orange-500 border border-zinc-600 shadow-inner' 
-                                    : 'text-zinc-600 hover:text-zinc-400 border border-transparent'
-                                }`}
-                            >
-                                Z-Image
-                            </button>
-                        </div>
-                    )}
-
-                    {/* Flux 2 Parent Menu */}
-                    <button
-                        onClick={() => setExpandFlux2(!expandFlux2)}
-                        className={`w-full py-2 text-xs font-bold uppercase tracking-wider transition-all text-center flex items-center justify-between px-3 ${
-                            expandFlux2 
-                            ? 'bg-gradient-to-r from-purple-900 to-cyan-900 text-white border border-purple-700' 
-                            : 'text-zinc-500 hover:text-zinc-300'
-                        }`}
-                    >
-                        <span>⚡ Flux 2</span>
-                        <span className="text-[10px]">{expandFlux2 ? '▼' : '▶'}</span>
-                    </button>
-
-                    {/* Flux 2 Submenu */}
-                    {expandFlux2 && (
-                        <div className="p-1 border-t border-zinc-700 bg-zinc-950 space-y-1">
-                            {/* Flux 2 Pro Section */}
-                            <button
-                                onClick={() => setExpandFlux2Pro(!expandFlux2Pro)}
-                                className={`w-full py-2 text-xs font-bold uppercase tracking-wider transition-all flex items-center justify-between px-3 ${
-                                    expandFlux2Pro 
-                                    ? 'bg-purple-800/50 text-purple-300 border border-purple-700' 
-                                    : 'text-zinc-500 hover:text-purple-400'
-                                }`}
-                            >
-                                <span>🔮 Flux 2 Pro</span>
-                                <span className="text-[10px]">{expandFlux2Pro ? '▼' : '▶'}</span>
-                            </button>
-                            
-                            {expandFlux2Pro && (
-                                <div className="flex gap-1 p-1 ml-2 border-l-2 border-purple-700">
-                                    <button
-                                        onClick={() => {
-                                            setActiveModule('flux2-pro-text');
-                                            setFlux2Type('pro-text');
-                                        }}
-                                        className={`flex-1 py-2 text-xs font-bold uppercase tracking-wider transition-all ${
-                                            activeModule === 'flux2-pro-text' 
-                                            ? 'bg-purple-700 text-white border border-purple-600 shadow-inner' 
-                                            : 'text-zinc-600 hover:text-purple-400 border border-transparent'
-                                        }`}
-                                    >
-                                        Text→Image
-                                    </button>
-                                    <button
-                                        onClick={() => {
-                                            setActiveModule('flux2-pro-image');
-                                            setFlux2Type('pro-image');
-                                        }}
-                                        className={`flex-1 py-2 text-xs font-bold uppercase tracking-wider transition-all ${
-                                            activeModule === 'flux2-pro-image' 
-                                            ? 'bg-pink-700 text-white border border-pink-600 shadow-inner' 
-                                            : 'text-zinc-600 hover:text-pink-400 border border-transparent'
-                                        }`}
-                                    >
-                                        Img→Image
-                                    </button>
-                                </div>
-                            )}
-
-                            {/* Flux 2 Flex Section */}
-                            <button
-                                onClick={() => setExpandFlux2Flex(!expandFlux2Flex)}
-                                className={`w-full py-2 text-xs font-bold uppercase tracking-wider transition-all flex items-center justify-between px-3 ${
-                                    expandFlux2Flex 
-                                    ? 'bg-cyan-800/50 text-cyan-300 border border-cyan-700' 
-                                    : 'text-zinc-500 hover:text-cyan-400'
-                                }`}
-                            >
-                                <span>🌊 Flux 2 Flex</span>
-                                <span className="text-[10px]">{expandFlux2Flex ? '▼' : '▶'}</span>
-                            </button>
-                            
-                            {expandFlux2Flex && (
-                                <div className="flex gap-1 p-1 ml-2 border-l-2 border-cyan-700">
-                                    <button
-                                        onClick={() => {
-                                            setActiveModule('flux2-flex-text');
-                                            setFlux2Type('flex-text');
-                                        }}
-                                        className={`flex-1 py-2 text-xs font-bold uppercase tracking-wider transition-all ${
-                                            activeModule === 'flux2-flex-text' 
-                                            ? 'bg-cyan-700 text-white border border-cyan-600 shadow-inner' 
-                                            : 'text-zinc-600 hover:text-cyan-400 border border-transparent'
-                                        }`}
-                                    >
-                                        Text→Image
-                                    </button>
-                                    <button
-                                        onClick={() => {
-                                            setActiveModule('flux2-flex-image');
-                                            setFlux2Type('flex-image');
-                                        }}
-                                        className={`flex-1 py-2 text-xs font-bold uppercase tracking-wider transition-all ${
-                                            activeModule === 'flux2-flex-image' 
-                                            ? 'bg-teal-700 text-white border border-teal-600 shadow-inner' 
-                                            : 'text-zinc-600 hover:text-teal-400 border border-transparent'
-                                        }`}
-                                    >
-                                        Img→Image
-                                    </button>
-                                </div>
-                            )}
-                        </div>
-                    )}
-
-                    {/* UGC AI Studio - New Menu Option */}
-                    <button
-                        onClick={() => setActiveModule('ugc')}
-                        className={`w-full py-2 text-xs font-bold uppercase tracking-wider transition-all text-center ${
-                            activeModule === 'ugc' 
-                            ? 'bg-orange-600 text-black border border-orange-500 shadow-lg' 
-                            : 'bg-zinc-800 text-zinc-500 hover:text-white hover:bg-orange-600/20 border border-zinc-700'
-                        }`}
-                    >
-                        🎬 UGC AI Studio
-                    </button>
+          {/* Right Panel - Output */}
+          <div className="flex-1 p-6">
+            {/* Show UGC Studio */}
+            {activeModule === 'ugc' ? (
+              <UGCOrchestrationWorkspace apiKey={apiKey} />
+            ) : (
+              <div className="flex flex-col items-center justify-center h-[calc(100vh-8rem)]">
+                {/* System Ready State */}
+                <div className={`w-24 h-24 border-2 ${isDark ? 'border-zinc-800' : 'border-zinc-300'} flex items-center justify-center mb-6`}>
+                  <svg className={`w-12 h-12 ${isDark ? 'text-zinc-700' : 'text-zinc-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
+                  </svg>
                 </div>
+                <h3 className={`text-xl font-mono tracking-widest mb-2 ${isDark ? 'text-zinc-500' : 'text-zinc-600'}`}>SYSTEM READY</h3>
+                <p className={`text-sm font-mono ${isDark ? 'text-zinc-700' : 'text-zinc-400'}`}>Awaiting Input Parameters...</p>
 
-                {activeModule === 'motion-control' && (
-                    <TaskForm onSubmit={handleCreateTask} isLoading={isSubmitting} apiKey={apiKey} />
-                )}
-                {activeModule === 'nano-banana-gen' && (
-                    <NanoBananaGenForm onSubmit={handleCreateTask} isLoading={isSubmitting} apiKey={apiKey} />
-                )}
-                {activeModule === 'nano-banana-edit' && (
-                    <NanoBananaEditForm onSubmit={handleCreateTask} isLoading={isSubmitting} apiKey={apiKey} />
-                )}
-                {activeModule === 'nano-banana-pro' && (
-                    <NanoBananaProForm onSubmit={handleCreateTask} isLoading={isSubmitting} apiKey={apiKey} />
-                )}
-                {activeModule === 'image-edit' && (
-                    <ImageEditForm onSubmit={handleCreateTask} isLoading={isSubmitting} apiKey={apiKey} />
-                )}
-                {activeModule === 'z-image' && (
-                    <ZImageForm onSubmit={handleCreateTask} isLoading={isSubmitting} apiKey={apiKey} />
-                )}
-                {activeModule === 'flex-image' && (
-                    <FlexImageForm onSubmit={handleCreateTask} isLoading={isSubmitting} apiKey={apiKey} />
-                )}
-                {activeModule === 'flux2-pro-text' && (
-                    <Flux2ProTextForm onSubmit={handleCreateTask} isLoading={isSubmitting} apiKey={apiKey} />
-                )}
-                {activeModule === 'flux2-pro-image' && (
-                    <Flux2ProImageForm onSubmit={handleCreateTask} isLoading={isSubmitting} apiKey={apiKey} />
-                )}
-                {activeModule === 'flux2-flex-text' && (
-                    <Flux2FlexTextForm onSubmit={handleCreateTask} isLoading={isSubmitting} apiKey={apiKey} />
-                )}
-                {activeModule === 'flux2-flex-image' && (
-                    <Flux2FlexImageForm onSubmit={handleCreateTask} isLoading={isSubmitting} apiKey={apiKey} />
-                )}
-                {activeModule === 'ugc' && (
-                    <div className="w-full">
-                        <UGCOrchestrationWorkspace apiKey={apiKey} />
-                    </div>
-                )}
-                </div>
-
-                {/* Right Col: Output & Queue */}
-                <div className="lg:col-span-7 flex flex-col gap-4">
-                {/* Task Queue List - MOVED TO TOP */}
-                <QueueList 
+                {/* Queue & Terminal Below */}
+                <div className="w-full max-w-2xl mt-12 space-y-4">
+                  <QueueList 
                     tasks={tasks} 
                     onSelectTask={setSelectedTaskId} 
                     selectedTaskId={selectedTaskId} 
-                />
-                
-                {/* Active Task Detail & Output - MOVED TO BOTTOM */}
-                <StatusTerminal task={activeTask} logs={logs} />
+                  />
+                  <StatusTerminal task={activeTask} logs={logs} />
                 </div>
-            </div>
-        </main>
-        </>
-      )}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
     </div>
+  );
+};
+
+// Wrap with ThemeProvider
+const App: React.FC = () => {
+  return (
+    <ThemeProvider>
+      <AppContent />
+    </ThemeProvider>
   );
 };
 

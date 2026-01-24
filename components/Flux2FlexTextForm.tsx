@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { Flux2FlexTextInput } from '../types';
 import { Button } from './ui/Button';
-import { uploadImageToKieAI } from '../services/kieFileUpload';
 
 interface Flux2FlexTextFormProps {
   onSubmit: (input: Flux2FlexTextInput) => void;
@@ -9,77 +8,15 @@ interface Flux2FlexTextFormProps {
   apiKey?: string;
 }
 
-export const Flux2FlexTextForm: React.FC<Flux2FlexTextFormProps> = ({ onSubmit, isLoading, apiKey = '' }) => {
+export const Flux2FlexTextForm: React.FC<Flux2FlexTextFormProps> = ({ onSubmit, isLoading }) => {
   const [formData, setFormData] = useState<Flux2FlexTextInput>({
     prompt: '',
-    image_urls: [],
     aspect_ratio: '1:1',
-    num_images: 1,
-    enable_safety_checker: true,
-    safety_tolerance: 2,
-    output_format: 'png',
-    sync_mode: false,
+    resolution: '2K',
   });
-
-  const [uploadingIndex, setUploadingIndex] = useState<number | null>(null);
-  const [dragOver, setDragOver] = useState<number | null>(null);
-  const [uploadedFiles, setUploadedFiles] = useState<{ name: string; url: string }[]>([]);
 
   const handleChange = (field: keyof Flux2FlexTextInput, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));
-  };
-
-  const handleFileUpload = async (file: File, index: number) => {
-    if (!apiKey) {
-      alert('API Key required for upload');
-      return;
-    }
-
-    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
-    if (!allowedTypes.includes(file.type)) {
-      alert('Only JPG, PNG, WEBP files are allowed');
-      return;
-    }
-
-    if (file.size > 10 * 1024 * 1024) {
-      alert('File size must be less than 10MB');
-      return;
-    }
-
-    setUploadingIndex(index);
-    try {
-      const supabaseUrl = await uploadImageToKieAI(file, apiKey);
-      
-      const newUrls = [...formData.image_urls];
-      newUrls[index] = supabaseUrl;
-      handleChange('image_urls', newUrls.filter(url => url));
-
-      const newFiles = [...uploadedFiles];
-      newFiles[index] = { name: file.name, url: supabaseUrl };
-      setUploadedFiles(newFiles.filter(f => f));
-
-    } catch (error: any) {
-      console.error('Upload failed:', error);
-      alert(`Upload failed: ${error.message}`);
-    } finally {
-      setUploadingIndex(null);
-    }
-  };
-
-  const handleDrop = (e: React.DragEvent<HTMLDivElement>, index: number) => {
-    e.preventDefault();
-    setDragOver(null);
-    const file = e.dataTransfer.files[0];
-    if (file && file.type.startsWith('image/')) {
-      handleFileUpload(file, index);
-    }
-  };
-
-  const handleRemoveImage = (index: number) => {
-    const newUrls = formData.image_urls.filter((_, i) => i !== index);
-    handleChange('image_urls', newUrls);
-    const newFiles = uploadedFiles.filter((_, i) => i !== index);
-    setUploadedFiles(newFiles);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -88,8 +25,12 @@ export const Flux2FlexTextForm: React.FC<Flux2FlexTextFormProps> = ({ onSubmit, 
       alert('Prompt is required');
       return;
     }
-    if (formData.image_urls.length === 0) {
-      alert('At least one reference image is required');
+    if (formData.prompt.length < 3) {
+      alert('Prompt must be at least 3 characters');
+      return;
+    }
+    if (formData.prompt.length > 5000) {
+      alert('Prompt must be less than 5000 characters');
       return;
     }
     onSubmit(formData);
@@ -97,9 +38,21 @@ export const Flux2FlexTextForm: React.FC<Flux2FlexTextFormProps> = ({ onSubmit, 
 
   const labelClass = "block text-xs font-mono text-cyan-500 mb-1 tracking-widest uppercase";
   const inputClass = "w-full bg-zinc-950 border border-zinc-700 text-zinc-300 p-3 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500 transition-colors font-mono text-sm";
-  const selectClass = "w-full bg-zinc-950 border border-zinc-700 text-zinc-300 p-3 focus:border-cyan-500 focus:outline-none font-mono text-sm appearance-none";
 
-  const aspectRatioOptions = ['1:1', '4:3', '3:4', '16:9', '9:16', '21:9', '9:21'] as const;
+  const aspectRatioOptions = [
+    { value: '1:1', label: '1:1 (Square)' },
+    { value: '4:3', label: '4:3 (Landscape)' },
+    { value: '3:4', label: '3:4 (Portrait)' },
+    { value: '16:9', label: '16:9 (Widescreen)' },
+    { value: '9:16', label: '9:16 (Vertical)' },
+    { value: '3:2', label: '3:2 (Classic)' },
+    { value: '2:3', label: '2:3 (Classic Portrait)' },
+  ];
+
+  const resolutionOptions = [
+    { value: '1K', label: '1K (Fast)' },
+    { value: '2K', label: '2K (High Quality)' },
+  ];
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6 bg-zinc-900/80 p-6 border border-zinc-800 relative">
@@ -108,97 +61,17 @@ export const Flux2FlexTextForm: React.FC<Flux2FlexTextFormProps> = ({ onSubmit, 
       <div className="flex items-center gap-2 mb-6">
         <div className="w-3 h-3 bg-cyan-500 animate-pulse"></div>
         <h2 className="text-xl font-bold uppercase tracking-widest text-white">Flux 2 Flex</h2>
-        <span className="text-xs text-zinc-500 font-mono ml-auto">Text to Image</span>
+        <span className="text-xs text-zinc-500 font-mono ml-auto">TEXT → IMAGE</span>
       </div>
 
       <div className="bg-zinc-800/50 border border-zinc-700 p-3 text-xs text-zinc-400 font-mono">
         <div className="flex items-center gap-2 mb-1">
           <span className="text-cyan-500">●</span>
-          <span>Generate images with reference guidance using Flux 2 Flex</span>
+          <span>Fast text-to-image generation with Flux 2 Flex</span>
         </div>
         <div className="text-[10px] text-zinc-500">
-          Upload up to 4 reference images • Reference-based generation
+          Model: flux-2/flex-text-to-image • Up to 2K resolution
         </div>
-      </div>
-
-      {/* Reference Images Upload Section */}
-      <div>
-        <label className={labelClass}>Reference Images (Max 4) *</label>
-        <p className="text-[10px] text-zinc-600 font-mono mb-3">
-          Upload reference images to guide the generation.
-        </p>
-        
-        <div className="grid grid-cols-2 gap-3">
-          {[0, 1, 2, 3].map((index) => (
-            <div
-              key={index}
-              onDragOver={(e) => { e.preventDefault(); setDragOver(index); }}
-              onDragLeave={() => setDragOver(null)}
-              onDrop={(e) => handleDrop(e, index)}
-              className={`border-2 border-dashed p-3 text-center cursor-pointer transition-all min-h-[120px] flex flex-col items-center justify-center ${
-                dragOver === index 
-                  ? 'border-cyan-500 bg-cyan-500/10' 
-                  : formData.image_urls[index] 
-                    ? 'border-green-600 bg-green-900/20' 
-                    : 'border-zinc-700 hover:border-zinc-600'
-              }`}
-            >
-              {uploadingIndex === index ? (
-                <div className="flex flex-col items-center gap-2">
-                  <svg className="animate-spin h-6 w-6 text-cyan-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                  <span className="text-xs text-cyan-400 font-mono">Uploading...</span>
-                </div>
-              ) : formData.image_urls[index] ? (
-                <div className="relative w-full h-full">
-                  <img 
-                    src={formData.image_urls[index]} 
-                    alt={`Reference ${index + 1}`}
-                    className="w-full h-20 object-contain rounded"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => handleRemoveImage(index)}
-                    className="absolute -top-2 -right-2 w-5 h-5 bg-red-600 text-white text-xs flex items-center justify-center hover:bg-red-500 transition-colors"
-                  >
-                    ✕
-                  </button>
-                  <p className="text-[9px] text-green-400 font-mono mt-1 truncate">
-                    {uploadedFiles[index]?.name || 'Uploaded'}
-                  </p>
-                </div>
-              ) : (
-                <>
-                  <input
-                    type="file"
-                    accept="image/jpeg,image/png,image/webp"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (file) handleFileUpload(file, index);
-                    }}
-                    className="hidden"
-                    id={`flux2flex-text-upload-${index}`}
-                  />
-                  <label htmlFor={`flux2flex-text-upload-${index}`} className="cursor-pointer w-full h-full flex flex-col items-center justify-center">
-                    <div className="text-2xl mb-1">{index === 0 ? '🖼️' : '➕'}</div>
-                    <p className="text-zinc-500 text-[10px] font-mono">
-                      {index === 0 ? 'Primary Ref' : `Ref ${index + 1}`}
-                    </p>
-                    <p className="text-zinc-600 text-[9px] font-mono">Drop or click</p>
-                  </label>
-                </>
-              )}
-            </div>
-          ))}
-        </div>
-
-        {formData.image_urls.length > 0 && (
-          <div className="mt-2 text-xs text-green-500 font-mono">
-            ✓ {formData.image_urls.length} image(s) uploaded
-          </div>
-        )}
       </div>
 
       {/* Prompt */}
@@ -207,105 +80,97 @@ export const Flux2FlexTextForm: React.FC<Flux2FlexTextFormProps> = ({ onSubmit, 
         <textarea
           value={formData.prompt}
           onChange={(e) => handleChange('prompt', e.target.value)}
-          maxLength={20000}
-          className={`${inputClass} h-24 resize-none`}
-          placeholder="Describe the image you want to generate based on references..."
+          maxLength={5000}
+          className={`${inputClass} h-32 resize-none`}
+          placeholder="Describe the image you want to generate (3-5000 characters)..."
           required
         />
-        <div className="text-right text-xs text-zinc-600 mt-1 font-mono">{formData.prompt.length}/20000</div>
+        <div className="flex justify-between text-xs text-zinc-600 mt-1 font-mono">
+          <span>Min: 3 characters</span>
+          <span>{formData.prompt.length}/5000</span>
+        </div>
       </div>
 
       {/* Settings Grid */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 gap-4">
         {/* Aspect Ratio */}
         <div>
-          <label className={labelClass}>Aspect Ratio</label>
+          <label className={labelClass}>Aspect Ratio *</label>
           <div className="relative">
             <select 
               value={formData.aspect_ratio}
               onChange={(e) => handleChange('aspect_ratio', e.target.value)}
-              className={selectClass}
+              className={`${inputClass} appearance-none cursor-pointer`}
             >
-              {aspectRatioOptions.map(ratio => (
-                <option key={ratio} value={ratio}>{ratio}</option>
+              {aspectRatioOptions.map(opt => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
               ))}
             </select>
             <div className="absolute right-3 top-3 pointer-events-none text-cyan-500">▼</div>
           </div>
         </div>
 
-        {/* Output Format */}
+        {/* Resolution */}
         <div>
-          <label className={labelClass}>Format</label>
+          <label className={labelClass}>Resolution *</label>
           <div className="flex gap-2 mt-1">
-            {['png', 'jpeg'].map((fmt) => (
-              <label key={fmt} className={`flex-1 cursor-pointer border p-2 text-center transition-all ${formData.output_format === fmt ? 'border-cyan-500 bg-cyan-500/10 text-white' : 'border-zinc-700 text-zinc-500 hover:border-zinc-500'}`}>
+            {resolutionOptions.map((opt) => (
+              <label 
+                key={opt.value} 
+                className={`flex-1 cursor-pointer border p-3 text-center transition-all ${
+                  formData.resolution === opt.value 
+                    ? 'border-cyan-500 bg-cyan-500/10 text-white' 
+                    : 'border-zinc-700 text-zinc-500 hover:border-zinc-500'
+                }`}
+              >
                 <input
                   type="radio"
-                  name="output_format_flex_text"
+                  name="resolution_flex_text"
                   className="hidden"
-                  checked={formData.output_format === fmt}
-                  onChange={() => handleChange('output_format', fmt)}
+                  checked={formData.resolution === opt.value}
+                  onChange={() => handleChange('resolution', opt.value)}
                 />
-                <span className="text-xs font-bold font-mono uppercase">{fmt}</span>
+                <span className="text-xs font-bold font-mono uppercase">{opt.label}</span>
               </label>
             ))}
           </div>
         </div>
+      </div>
 
-        {/* Safety Tolerance */}
-        <div>
-          <label className={labelClass}>Safety Level</label>
-          <div className="relative">
-            <select 
-              value={formData.safety_tolerance}
-              onChange={(e) => handleChange('safety_tolerance', parseInt(e.target.value))}
-              className={selectClass}
-            >
-              <option value={1}>1 - Strict</option>
-              <option value={2}>2 - Safe</option>
-              <option value={3}>3 - Moderate</option>
-              <option value={4}>4 - Relaxed</option>
-              <option value={5}>5 - Lenient</option>
-              <option value={6}>6 - Permissive</option>
-            </select>
-            <div className="absolute right-3 top-3 pointer-events-none text-cyan-500">▼</div>
+      {/* Aspect Ratio Visual Preview */}
+      <div className="border border-zinc-800 p-4">
+        <label className={labelClass}>Preview Ratio</label>
+        <div className="flex items-center justify-center mt-2">
+          <div 
+            className={`border-2 border-cyan-500/50 bg-cyan-500/5 transition-all flex items-center justify-center ${
+              formData.aspect_ratio === '1:1' ? 'w-24 h-24' :
+              formData.aspect_ratio === '4:3' ? 'w-32 h-24' :
+              formData.aspect_ratio === '3:4' ? 'w-24 h-32' :
+              formData.aspect_ratio === '16:9' ? 'w-36 h-20' :
+              formData.aspect_ratio === '9:16' ? 'w-20 h-36' :
+              formData.aspect_ratio === '3:2' ? 'w-30 h-20' :
+              formData.aspect_ratio === '2:3' ? 'w-20 h-30' :
+              'w-24 h-24'
+            }`}
+          >
+            <span className="text-cyan-500/50 text-xs font-mono">{formData.aspect_ratio}</span>
           </div>
         </div>
       </div>
 
-      {/* Num Images */}
-      <div>
-        <label className={labelClass}>Number of Images</label>
-        <div className="flex gap-2 mt-1">
-          {[1, 2, 3, 4].map((num) => (
-            <label key={num} className={`flex-1 cursor-pointer border p-2 text-center transition-all ${formData.num_images === num ? 'border-cyan-500 bg-cyan-500/10 text-white' : 'border-zinc-700 text-zinc-500 hover:border-zinc-500'}`}>
-              <input
-                type="radio"
-                name="num_images_flex_text"
-                className="hidden"
-                checked={formData.num_images === num}
-                onChange={() => handleChange('num_images', num)}
-              />
-              <span className="text-xs font-bold font-mono">{num}</span>
-            </label>
-          ))}
-        </div>
-      </div>
+      {/* Submit */}
+      <Button 
+        type="submit" 
+        variant="primary" 
+        isLoading={isLoading}
+        className="w-full"
+      >
+        ⚡ GENERATE IMAGE
+      </Button>
 
-      {/* Submit Button */}
-      <div className="pt-4 border-t border-zinc-800">
-        <Button 
-          type="submit" 
-          className="w-full bg-cyan-600 hover:bg-cyan-500" 
-          isLoading={isLoading}
-          disabled={formData.image_urls.length === 0}
-        >
-          {formData.image_urls.length === 0 
-            ? 'UPLOAD REFERENCE IMAGE FIRST' 
-            : `GENERATE WITH ${formData.image_urls.length} REFERENCE${formData.image_urls.length > 1 ? 'S' : ''}`
-          }
-        </Button>
+      {/* API Info */}
+      <div className="text-[10px] text-zinc-600 font-mono text-center border-t border-zinc-800 pt-4">
+        API: POST /api/v1/jobs/createTask • Model: flux-2/flex-text-to-image
       </div>
     </form>
   );

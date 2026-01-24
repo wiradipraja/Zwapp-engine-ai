@@ -2,7 +2,7 @@
 // Integration service untuk menghubungkan UGC components dengan backend services
 
 import { generateScriptWithGemini } from './scriptGeneration';
-import { generateImageWithNanoBanana, generateImageVariations } from './imageGeneration';
+import { generateAllUGCImages } from './ugcImageService';
 import { analyzeImageQuality } from './qualityAssurance';
 import { generateVideoWithVeo } from './videoGeneration';
 import {
@@ -342,7 +342,7 @@ export function generatePromptsFromScript(
 }
 
 /**
- * Generate images using Nano Banana
+ * Generate images using KIE.AI Flux API
  */
 export async function generateUGCImages(
   prompts: PromptTemplate[],
@@ -351,85 +351,37 @@ export async function generateUGCImages(
   config: UGCServiceConfig,
   onProgress?: (message: string, percent: number, imageUrl?: string) => void
 ): Promise<GeneratedImage[]> {
-  const images: GeneratedImage[] = [];
-  const totalPrompts = prompts.length;
+  console.log('[UGC Integration] Starting image generation with', prompts.length, 'prompts');
+  console.log('[UGC Integration] Model photo URL:', modelPhoto?.supabaseUrl?.substring(0, 50) + '...');
+  console.log('[UGC Integration] Product photo URL:', productPhoto?.supabaseUrl?.substring(0, 50) + '...');
 
-  for (let i = 0; i < prompts.length; i++) {
-    const prompt = prompts[i];
-    const progressPercent = Math.round(((i + 1) / totalPrompts) * 100);
-    
-    onProgress?.(`Generating image ${i + 1}/${totalPrompts}...`, progressPercent);
-
-    try {
-      // Call the actual image generation service
-      // Ensure prompt has all required fields for PromptTemplate
-      const fullPrompt: PromptTemplate = {
-        sceneId: prompt.sceneId || `scene-${i + 1}`,
-        sceneNumber: prompt.sceneNumber || i + 1,
-        sceneDescription: prompt.sceneDescription || prompt.basePrompt,
-        basePrompt: prompt.basePrompt,
-        dynamicVariables: prompt.dynamicVariables || {},
-        consistencyCheckpoints: prompt.consistencyCheckpoints || [],
-        generatedPrompt: prompt.generatedPrompt,
-        visualStyle: prompt.visualStyle || 'UGC photography',
-        productIntegration: prompt.productIntegration || 'prominent',
-        negativePrompts: prompt.negativePrompts || [],
-        customizations: prompt.customizations,
-      };
-      
-      const image = await generateImageWithNanoBanana(
-        prompt.sceneNumber || i + 1,
-        fullPrompt,
-        {
-          apiKey: config.kieApiKey,
-          modelPhoto: modelPhoto.supabaseUrl,
-          productPhoto: productPhoto.supabaseUrl,
-          steps: 30,
-          guidance: 7.5,
-        }
-      );
-
-      images.push({
-        ...image,
-        sceneId: prompt.sceneId,
-        prompt: prompt.generatedPrompt,
-        qualityScore: image.consistency?.overallQuality || 85,
-      });
-
-      onProgress?.(
-        `Image ${i + 1} generated successfully!`,
-        progressPercent,
-        image.imageUrl
-      );
-    } catch (error) {
-      console.error(`Error generating image for scene ${i + 1}:`, error);
-      
-      // Create placeholder image on error
-      images.push({
-        id: crypto.randomUUID(),
-        sceneId: prompt.sceneId,
-        sceneNumber: prompt.sceneNumber || i + 1,
-        prompt: prompt.generatedPrompt,
-        promptUsed: prompt.sceneDescription,
-        imageUrl: `https://placehold.co/512x512/1a1a2e/eee?text=Scene+${i + 1}`,
-        qualityScore: 0,
-        issues: ['Generation failed - using placeholder'],
-        createdAt: Date.now(),
-        generatedAt: Date.now(),
-        model: 'nano-banana',
-        consistency: {
-          modelConsistency: 0,
-          productPlacement: 0,
-          styleCohesion: 0,
-          overallQuality: 0,
-        },
-        approved: false,
-        regenerationCount: 0,
-      });
-    }
+  if (!config.kieApiKey) {
+    throw new Error('KIE API Key is required for image generation');
   }
 
-  return images;
+  if (!modelPhoto?.supabaseUrl && !productPhoto?.supabaseUrl) {
+    throw new Error('At least one reference image (model or product photo) is required');
+  }
+
+  try {
+    const images = await generateAllUGCImages(
+      prompts,
+      {
+        apiKey: config.kieApiKey,
+        modelPhotoUrl: modelPhoto?.supabaseUrl || '',
+        productPhotoUrl: productPhoto?.supabaseUrl || '',
+      },
+      (msg, pct, img) => {
+        onProgress?.(msg, pct, img?.imageUrl);
+      }
+    );
+
+    console.log('[UGC Integration] Successfully generated', images.length, 'images');
+    return images;
+  } catch (error) {
+    console.error('[UGC Integration] Image generation error:', error);
+    throw error;
+  }
 }
 
 /**
