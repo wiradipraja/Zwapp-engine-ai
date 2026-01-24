@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createTask, queryTask } from './services/api';
 import { supabase, signOut } from './services/supabase';
-import { MotionControlInput, NanoBananaInput, ImageEditInput, ZImageInput, FlexImageInput, LocalTask } from './types';
+import { MotionControlInput, NanoBananaInput, ImageEditInput, ZImageInput, FlexImageInput, Flux2Input, Flux2ProTextInput, Flux2ProImageInput, Flux2FlexTextInput, Flux2FlexImageInput, LocalTask } from './types';
 import { TaskForm } from './components/TaskForm';
 import { NanoBananaGenForm } from './components/NanoBananaGenForm';
 import { NanoBananaEditForm } from './components/NanoBananaEditForm';
@@ -9,14 +9,19 @@ import { NanoBananaProForm } from './components/NanoBananaProForm';
 import { ImageEditForm } from './components/ImageEditForm';
 import { ZImageForm } from './components/ZImageForm';
 import { FlexImageForm } from './components/FlexImageForm';
+import { Flux2ProTextForm } from './components/Flux2ProTextForm';
+import { Flux2ProImageForm } from './components/Flux2ProImageForm';
+import { Flux2FlexTextForm } from './components/Flux2FlexTextForm';
+import { Flux2FlexImageForm } from './components/Flux2FlexImageForm';
 import { StatusTerminal } from './components/StatusTerminal';
 import { QueueList } from './components/QueueList';
 import { AuthForm } from './components/AuthForm';
 import { SettingsModal } from './components/SettingsModal';
 import UGCOrchestrationWorkspace from './components/UGC/UGCOrchestrationWorkspace';
 
-type ModuleType = 'motion-control' | 'nano-banana-gen' | 'nano-banana-edit' | 'nano-banana-pro' | 'image-edit' | 'z-image' | 'flex-image' | 'ugc';
+type ModuleType = 'motion-control' | 'nano-banana-gen' | 'nano-banana-edit' | 'nano-banana-pro' | 'image-edit' | 'z-image' | 'flex-image' | 'flux2-pro-text' | 'flux2-pro-image' | 'flux2-flex-text' | 'flux2-flex-image' | 'ugc';
 type NanoBananaType = 'gen' | 'edit' | 'pro';
+type Flux2Type = 'pro-text' | 'pro-image' | 'flex-text' | 'flex-image';
 
 const App: React.FC = () => {
   // Auth State
@@ -33,7 +38,11 @@ const App: React.FC = () => {
   const [activeModule, setActiveModule] = useState<ModuleType>('motion-control');
   const [expandImageGen, setExpandImageGen] = useState(false);
   const [expandNano, setExpandNano] = useState(false);
+  const [expandFlux2, setExpandFlux2] = useState(false);
+  const [expandFlux2Pro, setExpandFlux2Pro] = useState(false);
+  const [expandFlux2Flex, setExpandFlux2Flex] = useState(false);
   const [nanoBananaType, setNanoBananaType] = useState<NanoBananaType>('gen');
+  const [flux2Type, setFlux2Type] = useState<Flux2Type>('pro-text');
   
   // UI State
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -87,7 +96,7 @@ const App: React.FC = () => {
       setSession(null);
   };
 
-  const handleCreateTask = async (input: MotionControlInput | NanoBananaInput | ImageEditInput | ZImageInput | FlexImageInput) => {
+  const handleCreateTask = async (input: MotionControlInput | NanoBananaInput | ImageEditInput | ZImageInput | FlexImageInput | Flux2Input) => {
     if (!apiKey) {
         setIsSettingsOpen(true);
         addLog('ERROR: API Key missing. Please configure in Settings.');
@@ -104,6 +113,10 @@ const App: React.FC = () => {
     else if (activeModule === 'image-edit') modelName = 'qwen/image-to-image';
     else if (activeModule === 'z-image') modelName = 'z-image';
     else if (activeModule === 'flex-image') modelName = 'flux-kontext/flex-image';
+    else if (activeModule === 'flux2-pro-text') modelName = 'flux/pro/text-to-image';
+    else if (activeModule === 'flux2-pro-image') modelName = 'flux/pro/image-to-image';
+    else if (activeModule === 'flux2-flex-text') modelName = 'flux/flex/text-to-image';
+    else if (activeModule === 'flux2-flex-image') modelName = 'flux/flex/image-to-image';
 
     addLog(`Initiating generation sequence [${modelName}]...`);
     
@@ -414,18 +427,112 @@ const App: React.FC = () => {
                             >
                                 Z-Image
                             </button>
+                        </div>
+                    )}
+
+                    {/* Flux 2 Parent Menu */}
+                    <button
+                        onClick={() => setExpandFlux2(!expandFlux2)}
+                        className={`w-full py-2 text-xs font-bold uppercase tracking-wider transition-all text-center flex items-center justify-between px-3 ${
+                            expandFlux2 
+                            ? 'bg-gradient-to-r from-purple-900 to-cyan-900 text-white border border-purple-700' 
+                            : 'text-zinc-500 hover:text-zinc-300'
+                        }`}
+                    >
+                        <span>⚡ Flux 2</span>
+                        <span className="text-[10px]">{expandFlux2 ? '▼' : '▶'}</span>
+                    </button>
+
+                    {/* Flux 2 Submenu */}
+                    {expandFlux2 && (
+                        <div className="p-1 border-t border-zinc-700 bg-zinc-950 space-y-1">
+                            {/* Flux 2 Pro Section */}
                             <button
-                                onClick={() => {
-                                    setActiveModule('flex-image');
-                                }}
-                                className={`flex-1 py-2 text-xs font-bold uppercase tracking-wider transition-all ${
-                                    activeModule === 'flex-image' 
-                                    ? 'bg-cyan-700 text-white border border-cyan-600 shadow-inner' 
-                                    : 'text-zinc-600 hover:text-zinc-400 border border-transparent'
+                                onClick={() => setExpandFlux2Pro(!expandFlux2Pro)}
+                                className={`w-full py-2 text-xs font-bold uppercase tracking-wider transition-all flex items-center justify-between px-3 ${
+                                    expandFlux2Pro 
+                                    ? 'bg-purple-800/50 text-purple-300 border border-purple-700' 
+                                    : 'text-zinc-500 hover:text-purple-400'
                                 }`}
                             >
-                                Flex
+                                <span>🔮 Flux 2 Pro</span>
+                                <span className="text-[10px]">{expandFlux2Pro ? '▼' : '▶'}</span>
                             </button>
+                            
+                            {expandFlux2Pro && (
+                                <div className="flex gap-1 p-1 ml-2 border-l-2 border-purple-700">
+                                    <button
+                                        onClick={() => {
+                                            setActiveModule('flux2-pro-text');
+                                            setFlux2Type('pro-text');
+                                        }}
+                                        className={`flex-1 py-2 text-xs font-bold uppercase tracking-wider transition-all ${
+                                            activeModule === 'flux2-pro-text' 
+                                            ? 'bg-purple-700 text-white border border-purple-600 shadow-inner' 
+                                            : 'text-zinc-600 hover:text-purple-400 border border-transparent'
+                                        }`}
+                                    >
+                                        Text→Image
+                                    </button>
+                                    <button
+                                        onClick={() => {
+                                            setActiveModule('flux2-pro-image');
+                                            setFlux2Type('pro-image');
+                                        }}
+                                        className={`flex-1 py-2 text-xs font-bold uppercase tracking-wider transition-all ${
+                                            activeModule === 'flux2-pro-image' 
+                                            ? 'bg-pink-700 text-white border border-pink-600 shadow-inner' 
+                                            : 'text-zinc-600 hover:text-pink-400 border border-transparent'
+                                        }`}
+                                    >
+                                        Img→Image
+                                    </button>
+                                </div>
+                            )}
+
+                            {/* Flux 2 Flex Section */}
+                            <button
+                                onClick={() => setExpandFlux2Flex(!expandFlux2Flex)}
+                                className={`w-full py-2 text-xs font-bold uppercase tracking-wider transition-all flex items-center justify-between px-3 ${
+                                    expandFlux2Flex 
+                                    ? 'bg-cyan-800/50 text-cyan-300 border border-cyan-700' 
+                                    : 'text-zinc-500 hover:text-cyan-400'
+                                }`}
+                            >
+                                <span>🌊 Flux 2 Flex</span>
+                                <span className="text-[10px]">{expandFlux2Flex ? '▼' : '▶'}</span>
+                            </button>
+                            
+                            {expandFlux2Flex && (
+                                <div className="flex gap-1 p-1 ml-2 border-l-2 border-cyan-700">
+                                    <button
+                                        onClick={() => {
+                                            setActiveModule('flux2-flex-text');
+                                            setFlux2Type('flex-text');
+                                        }}
+                                        className={`flex-1 py-2 text-xs font-bold uppercase tracking-wider transition-all ${
+                                            activeModule === 'flux2-flex-text' 
+                                            ? 'bg-cyan-700 text-white border border-cyan-600 shadow-inner' 
+                                            : 'text-zinc-600 hover:text-cyan-400 border border-transparent'
+                                        }`}
+                                    >
+                                        Text→Image
+                                    </button>
+                                    <button
+                                        onClick={() => {
+                                            setActiveModule('flux2-flex-image');
+                                            setFlux2Type('flex-image');
+                                        }}
+                                        className={`flex-1 py-2 text-xs font-bold uppercase tracking-wider transition-all ${
+                                            activeModule === 'flux2-flex-image' 
+                                            ? 'bg-teal-700 text-white border border-teal-600 shadow-inner' 
+                                            : 'text-zinc-600 hover:text-teal-400 border border-transparent'
+                                        }`}
+                                    >
+                                        Img→Image
+                                    </button>
+                                </div>
+                            )}
                         </div>
                     )}
 
@@ -462,6 +569,18 @@ const App: React.FC = () => {
                 )}
                 {activeModule === 'flex-image' && (
                     <FlexImageForm onSubmit={handleCreateTask} isLoading={isSubmitting} apiKey={apiKey} />
+                )}
+                {activeModule === 'flux2-pro-text' && (
+                    <Flux2ProTextForm onSubmit={handleCreateTask} isLoading={isSubmitting} apiKey={apiKey} />
+                )}
+                {activeModule === 'flux2-pro-image' && (
+                    <Flux2ProImageForm onSubmit={handleCreateTask} isLoading={isSubmitting} apiKey={apiKey} />
+                )}
+                {activeModule === 'flux2-flex-text' && (
+                    <Flux2FlexTextForm onSubmit={handleCreateTask} isLoading={isSubmitting} apiKey={apiKey} />
+                )}
+                {activeModule === 'flux2-flex-image' && (
+                    <Flux2FlexImageForm onSubmit={handleCreateTask} isLoading={isSubmitting} apiKey={apiKey} />
                 )}
                 {activeModule === 'ugc' && (
                     <div className="w-full">
