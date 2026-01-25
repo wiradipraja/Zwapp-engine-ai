@@ -411,16 +411,12 @@ async function repairJsonWithModel(
           },
           {
             role: 'user',
-            content: [
-              { type: 'text', text: repairInstruction },
-              { type: 'text', text: raw },
-            ],
+            content: [{ type: 'text', text: `${repairInstruction}\n\n${raw}` }],
           },
         ],
         stream: false,
         include_thoughts: false,
         reasoning_effort: 'low',
-        temperature: 0,
       }),
     });
 
@@ -455,10 +451,6 @@ async function repairJsonWithModel(
         'Authorization': `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        config: {
-          model: 'gemini-3-flash',
-          stream: false,
-        },
         messages: [
           {
             role: 'system',
@@ -470,7 +462,8 @@ async function repairJsonWithModel(
           },
         ],
         stream: false,
-        temperature: 0,
+        include_thoughts: false,
+        reasoning_effort: 'low',
       }),
     }
   );
@@ -779,13 +772,6 @@ IMPORTANT JSON RULES:
             Authorization: `Bearer ${apiKey}`,
           },
           body: JSON.stringify({
-            config: {
-              model: 'gemini-3-flash',
-              brand_lock: true,
-              stream: false,
-              include_thoughts: false,
-              reasoning_effort: 'high',
-            },
             messages: [
               {
                 role: 'system',
@@ -958,11 +944,6 @@ Please refine the script based on the feedback. Return ONLY valid JSON (no markd
           'Authorization': `Bearer ${apiKey}`,
         },
         body: JSON.stringify({
-          config: {
-            model: 'gemini-3-flash',
-            brand_lock: true,
-            stream: false,
-          },
           messages: [
             {
               role: 'user',
@@ -970,6 +951,8 @@ Please refine the script based on the feedback. Return ONLY valid JSON (no markd
             },
           ],
           stream: false,
+          include_thoughts: false,
+          reasoning_effort: 'high',
         }),
       }
     );

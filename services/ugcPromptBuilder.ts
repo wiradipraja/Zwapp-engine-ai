@@ -235,13 +235,10 @@ export function renderTemplate(scene_type: SceneType, vars: Record<string, strin
 
 /**
  * Build Kie.ai Gemini chat payload (multimodal)
+ * Uses OpenAI-compatible format for KIE AI endpoint
  */
 export function buildKieGeminiUGCPayload(input: BuildUGCPayloadInput) {
   assertRequired(input);
-
-  const stream = input.stream ?? true;
-  const include_thoughts = input.include_thoughts ?? false;
-  const reasoning_effort = input.reasoning_effort ?? "high";
 
   const rendered_scene_prompt = renderTemplate(input.scene_type, {
     product_desc: input.product_desc,
@@ -266,14 +263,8 @@ export function buildKieGeminiUGCPayload(input: BuildUGCPayloadInput) {
     }
   }
 
+  // KIE AI format - content must be array, stream must be false
   const payload: any = {
-    config: {
-      model: "gemini-3-flash",
-      brand_lock: true,
-      stream,
-      include_thoughts,
-      reasoning_effort,
-    },
     messages: [
       {
         role: "system",
@@ -284,9 +275,9 @@ export function buildKieGeminiUGCPayload(input: BuildUGCPayloadInput) {
         content: userContent,
       },
     ],
-    stream,
-    include_thoughts,
-    reasoning_effort,
+    stream: false,
+    include_thoughts: false,
+    reasoning_effort: "high",
   };
 
   // optional tools passthrough

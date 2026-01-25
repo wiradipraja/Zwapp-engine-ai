@@ -272,13 +272,6 @@ Generate 5 scenes following the structure above. All dialogue MUST be in Bahasa 
           'Authorization': `Bearer ${apiKey}`,
         },
         body: JSON.stringify({
-          config: {
-            model: 'gemini-3-flash',
-            brand_lock: true,
-            stream: false,
-            include_thoughts: false,
-            reasoning_effort: 'high',
-          },
           messages: [
             {
               role: 'user',
@@ -410,10 +403,6 @@ Generate a single paragraph visual prompt in ENGLISH that describes exactly what
         'Authorization': `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        config: {
-          model: 'gemini-3-flash',
-          stream: false,
-        },
         messages: [
           {
             role: 'user',
@@ -421,6 +410,8 @@ Generate a single paragraph visual prompt in ENGLISH that describes exactly what
           },
         ],
         stream: false,
+        include_thoughts: false,
+        reasoning_effort: 'low',
       }),
     }
   );
