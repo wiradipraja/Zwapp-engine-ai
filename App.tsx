@@ -184,10 +184,10 @@ const AppContent: React.FC = () => {
     else if (activeModule === 'qwen-text-to-image') modelName = 'qwen/text-to-image';
     else if (activeModule === 'qwen-image-to-image') modelName = 'qwen/image-to-image';
     else if (activeModule === 'z-image') modelName = 'z-image';
-    else if (activeModule === 'flux2-pro-text') modelName = 'flux/pro/text-to-image';
-    else if (activeModule === 'flux2-pro-image') modelName = 'flux/pro/image-to-image';
-    else if (activeModule === 'flux2-flex-text') modelName = 'flux/flex/text-to-image';
-    else if (activeModule === 'flux2-flex-image') modelName = 'flux/flex/image-to-image';
+    else if (activeModule === 'flux2-pro-text') modelName = 'flux-2/pro-text-to-image';
+    else if (activeModule === 'flux2-pro-image') modelName = 'flux-2/pro-image-to-image';
+    else if (activeModule === 'flux2-flex-text') modelName = 'flux-2/flex-text-to-image';
+    else if (activeModule === 'flux2-flex-image') modelName = 'flux-2/flex-image-to-image';
     else if (activeModule === 'sora2-characters') modelName = 'sora-2-characters';
     else if (activeModule === 'sora2-text-to-video') modelName = 'sora-2-text-to-video';
     else if (activeModule === 'sora2-image-to-video') modelName = 'sora-2-image-to-video';
