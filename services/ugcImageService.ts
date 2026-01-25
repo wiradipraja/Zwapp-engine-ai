@@ -1,5 +1,7 @@
 // services/ugcImageService.ts
-// Dedicated image generation service for UGC using KIE.AI Flux API
+// @deprecated - This file is replaced by ugcKieService.ts
+// All UGC image generation should now use ugcKieService.ts instead
+// This file will be removed in the next cleanup
 
 import { PromptTemplate, GeneratedImage } from '../types/ugc';
 

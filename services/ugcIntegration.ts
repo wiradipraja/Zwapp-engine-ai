@@ -1,8 +1,10 @@
 // services/ugcIntegration.ts
 // Integration service untuk menghubungkan UGC components dengan backend services
+// UPDATED: Gemini for scripts, KIE.AI for images/videos
 
 import { generateScriptWithGemini } from './scriptGeneration';
-import { generateAllUGCImages, generateUGCImage } from './ugcImageService';
+import { generateUGCPlan, generateSceneVisualPrompt, type UGCPlanResult } from './ugcGeminiService';
+import { generateAllUGCImages, generateUGCImage as kieGenerateImage, generateUGCVideo as kieGenerateVideo, type KieConfig } from './ugcKieService';
 import { analyzeImageQuality } from './qualityAssurance';
 import { generateVideoWithVeo } from './videoGeneration';
 import {
@@ -24,6 +26,13 @@ export interface UGCServiceConfig {
   geminiApiKey: string;
   visionApiKey?: string;
 }
+
+/**
+ * Re-export key types and functions for easier access
+ */
+export { generateUGCPlan } from './ugcGeminiService';
+export type { UGCPlanResult, VisualAnchor, UGCScene, UGCSceneFrame } from './ugcGeminiService';
+export { generateUGCVideo as generateKieVideo, renderUGCSceneFrame } from './ugcKieService';
 
 /**
  * Convert file to base64 for API calls
@@ -365,7 +374,8 @@ export function generatePromptsFromScript(
 }
 
 /**
- * Generate images using KIE.AI Flux API
+ * Generate images using KIE.AI Nano Banana API
+ * UPDATED: Uses new ugcKieService
  */
 export async function generateUGCImages(
   prompts: PromptTemplate[],
@@ -382,18 +392,21 @@ export async function generateUGCImages(
     throw new Error('KIE API Key is required for image generation');
   }
 
-  if (!modelPhoto?.supabaseUrl && !productPhoto?.supabaseUrl) {
-    throw new Error('At least one reference image (model or product photo) is required');
+  const modelUrl = modelPhoto?.supabaseUrl || '';
+  const productUrl = productPhoto?.supabaseUrl || '';
+
+  if (!modelUrl && !productUrl) {
+    throw new Error('At least one reference image (model or product photo) is required. Images must be uploaded to Supabase first.');
   }
+
+  const kieConfig: KieConfig = { apiKey: config.kieApiKey };
 
   try {
     const images = await generateAllUGCImages(
       prompts,
-      {
-        apiKey: config.kieApiKey,
-        modelPhotoUrl: modelPhoto?.supabaseUrl || '',
-        productPhotoUrl: productPhoto?.supabaseUrl || '',
-      },
+      modelUrl,
+      productUrl,
+      kieConfig,
       (msg, pct, img) => {
         onProgress?.(msg, pct, img?.imageUrl);
       }
@@ -409,6 +422,7 @@ export async function generateUGCImages(
 
 /**
  * Generate SINGLE image for a specific scene (Manual 1-by-1 generation)
+ * UPDATED: Uses new ugcKieService
  */
 export async function generateSingleUGCImage(
   prompt: PromptTemplate,
@@ -423,21 +437,23 @@ export async function generateSingleUGCImage(
     throw new Error('KIE API Key is required for image generation');
   }
 
-  if (!modelPhoto?.supabaseUrl && !productPhoto?.supabaseUrl) {
-    throw new Error('At least one reference image (model or product photo) is required');
+  const modelUrl = modelPhoto?.supabaseUrl || '';
+  const productUrl = productPhoto?.supabaseUrl || '';
+
+  if (!modelUrl && !productUrl) {
+    throw new Error('At least one reference image (model or product photo) is required. Images must be uploaded to Supabase first.');
   }
 
   onProgress?.(`Preparing scene ${prompt.sceneNumber}...`, 10);
 
+  const kieConfig: KieConfig = { apiKey: config.kieApiKey };
+
   try {
-    const image = await generateUGCImage(
-      prompt.sceneNumber || 1,
+    const image = await kieGenerateImage(
       prompt,
-      {
-        apiKey: config.kieApiKey,
-        modelPhotoUrl: modelPhoto?.supabaseUrl || '',
-        productPhotoUrl: productPhoto?.supabaseUrl || '',
-      },
+      modelUrl,
+      productUrl,
+      kieConfig,
       (msg) => onProgress?.(msg, 50)
     );
 
