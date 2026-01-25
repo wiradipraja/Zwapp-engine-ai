@@ -75,8 +75,7 @@ const PromptEngineeringPanel: React.FC<PromptEngineeringPanelProps> = ({
       action_desc: actionDesc,
       props_desc: propsDesc,
       stream: false,
-      include_thoughts: false,
-      reasoning_effort: 'high',
+      // Note: omit include_thoughts and reasoning_effort for gemini-3-flash
     });
   };
 

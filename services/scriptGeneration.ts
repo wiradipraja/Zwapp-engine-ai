@@ -396,6 +396,9 @@ async function repairJsonWithModel(
     'Fix the JSON below. Return ONLY valid JSON (no markdown, no explanations). ' +
     'Preserve all fields and values. Escape newlines inside strings and add missing commas if needed.';
 
+  // Combine system instruction with user prompt
+  const combinedPrompt = `You are a strict JSON repair tool.\n\n${repairInstruction}\n\n${raw}`;
+
   if (provider === 'kie') {
     const response = await fetch('https://api.kie.ai/gemini-3-flash/v1/chat/completions', {
       method: 'POST',
@@ -406,15 +409,10 @@ async function repairJsonWithModel(
       body: JSON.stringify({
         messages: [
           {
-            role: 'system',
-            content: [{ type: 'text', text: 'You are a strict JSON repair tool.' }],
-          },
-          {
             role: 'user',
-            content: [{ type: 'text', text: `${repairInstruction}\n\n${raw}` }],
+            content: [{ type: 'text', text: combinedPrompt }], // Array format per KIE AI docs
           },
         ],
-        stream: false,
         include_thoughts: false,
         reasoning_effort: 'low',
       }),
@@ -453,15 +451,10 @@ async function repairJsonWithModel(
       body: JSON.stringify({
         messages: [
           {
-            role: 'system',
-            content: [{ type: 'text', text: 'You are a strict JSON repair tool.' }],
-          },
-          {
             role: 'user',
-            content: [{ type: 'text', text: `${repairInstruction}\n\n${raw}` }],
+            content: [{ type: 'text', text: combinedPrompt }], // Array format per KIE AI docs
           },
         ],
-        stream: false,
         include_thoughts: false,
         reasoning_effort: 'low',
       }),
@@ -743,10 +736,14 @@ IMPORTANT JSON RULES:
 
     if (detectedProvider === 'kie') {
       console.log('[UGC Script] Using KIE Gemini Chat Completions');
+      
+      // Combine system prompt with user prompt for simpler request format
+      const combinedPrompt = `${NANO_BANANA_UGC_CONFIG.system_prompt}\n\n---\n\n${prompt}`;
+      
       const userContent: any[] = [
         {
           type: 'text',
-          text: prompt,
+          text: combinedPrompt,
         },
       ];
 
@@ -763,6 +760,20 @@ IMPORTANT JSON RULES:
         });
       }
 
+      // KIE AI format: content MUST be array [{type: "text", text: "..."}]
+      const requestBody = {
+        messages: [
+          {
+            role: 'user',
+            content: userContent, // Always array format per KIE AI docs
+          },
+        ],
+        include_thoughts: false,
+        reasoning_effort: 'high',
+      };
+      
+      console.log('[UGC Script] Request body (first 1000 chars):', JSON.stringify(requestBody).substring(0, 1000));
+
       const response = await fetch(
         'https://api.kie.ai/gemini-3-flash/v1/chat/completions',
         {
@@ -771,42 +782,38 @@ IMPORTANT JSON RULES:
             'Content-Type': 'application/json',
             Authorization: `Bearer ${apiKey}`,
           },
-          body: JSON.stringify({
-            messages: [
-              {
-                role: 'system',
-                content: [{ type: 'text', text: NANO_BANANA_UGC_CONFIG.system_prompt }],
-              },
-              {
-                role: 'user',
-                content: userContent,
-              },
-            ],
-            stream: false,
-            include_thoughts: false,
-            reasoning_effort: 'high',
-          }),
+          body: JSON.stringify(requestBody),
         }
       );
 
+      const responseText = await response.text();
+      console.log('[UGC Script] KIE API Raw Response:', responseText.substring(0, 500));
+      
+      let data: any;
+      try {
+        data = JSON.parse(responseText);
+      } catch (e) {
+        throw new Error(`Failed to parse KIE API response: ${responseText.substring(0, 200)}`);
+      }
+      
+      // Check for error in response body
+      if (data.code && data.code !== 200) {
+        throw new Error(`KIE API Error (code ${data.code}): ${data.msg || 'Unknown error'}`);
+      }
+      
       if (!response.ok) {
-        const errorText = await response.text();
-        console.error('[UGC Script] KIE API Error Response:', errorText);
-        throw new Error(`KIE Gemini Chat Error (${response.status}): ${errorText.substring(0, 200)}`);
+        throw new Error(`KIE Gemini Chat Error (${response.status}): ${responseText.substring(0, 200)}`);
       }
 
-      const data = await response.json();
-      console.log('[UGC Script] KIE API Response:', JSON.stringify(data).substring(0, 500));
-      const messageContent = data?.choices?.[0]?.message?.content;
+      // Per KIE AI docs, response content is a STRING (not array)
+      const responseContent = data?.choices?.[0]?.message?.content;
+      console.log('[UGC Script] Response content type:', typeof responseContent);
 
-      if (typeof messageContent === 'string') {
-        content = messageContent;
-      } else if (Array.isArray(messageContent)) {
-        content = messageContent
-          .map((part: any) => part?.text || part?.content || '')
-          .join('');
-      } else if (messageContent?.text) {
-        content = messageContent.text;
+      if (typeof responseContent === 'string') {
+        content = responseContent;
+      } else {
+        // Fallback for unexpected formats
+        content = JSON.stringify(responseContent);
       }
       
       console.log('[UGC Script] Extracted content length:', content?.length || 0);
@@ -947,10 +954,9 @@ Please refine the script based on the feedback. Return ONLY valid JSON (no markd
           messages: [
             {
               role: 'user',
-              content: [{ type: 'text', text: refinementPrompt }],
+              content: [{ type: 'text', text: refinementPrompt }], // Array format per KIE AI docs
             },
           ],
-          stream: false,
           include_thoughts: false,
           reasoning_effort: 'high',
         }),

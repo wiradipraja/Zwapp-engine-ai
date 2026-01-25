@@ -275,10 +275,9 @@ Generate 5 scenes following the structure above. All dialogue MUST be in Bahasa 
           messages: [
             {
               role: 'user',
-              content: [{ type: 'text', text: prompt }],
+              content: [{ type: 'text', text: prompt }], // Array format per KIE AI docs
             },
           ],
-          stream: false,
           include_thoughts: false,
           reasoning_effort: 'high',
         }),
@@ -406,10 +405,9 @@ Generate a single paragraph visual prompt in ENGLISH that describes exactly what
         messages: [
           {
             role: 'user',
-            content: [{ type: 'text', text: prompt }],
+            content: [{ type: 'text', text: prompt }], // Array format per KIE AI docs
           },
         ],
-        stream: false,
         include_thoughts: false,
         reasoning_effort: 'low',
       }),

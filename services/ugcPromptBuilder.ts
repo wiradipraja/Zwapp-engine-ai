@@ -252,9 +252,14 @@ export function buildKieGeminiUGCPayload(input: BuildUGCPayloadInput) {
     global_guardrail: NANO_BANANA_UGC_CONFIG.global_guardrail_text,
   });
 
-  const userContent: any[] = [{ type: "text", text: rendered_scene_prompt }];
-
-  // append image references if provided
+  // Per KIE AI docs: content MUST be array [{type: "text", text: "..."}]
+  // Combine system prompt with user prompt
+  const combinedPrompt = `${NANO_BANANA_UGC_CONFIG.system_prompt}\n\n---\n\n${rendered_scene_prompt}`;
+  
+  // Build content array - always start with text
+  const userContent: any[] = [{ type: "text", text: combinedPrompt }];
+  
+  // Append images if provided
   if (input.image_urls?.length) {
     for (const img of input.image_urls) {
       if (img?.url) {
@@ -263,19 +268,14 @@ export function buildKieGeminiUGCPayload(input: BuildUGCPayloadInput) {
     }
   }
 
-  // KIE AI format - content must be array, stream must be false
+  // KIE AI format per official documentation
   const payload: any = {
     messages: [
       {
-        role: "system",
-        content: [{ type: "text", text: NANO_BANANA_UGC_CONFIG.system_prompt }],
-      },
-      {
         role: "user",
-        content: userContent,
+        content: userContent, // Always array format per KIE AI docs
       },
     ],
-    stream: false,
     include_thoughts: false,
     reasoning_effort: "high",
   };
