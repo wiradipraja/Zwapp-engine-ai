@@ -139,8 +139,12 @@ const PromptEngineeringPanel: React.FC<PromptEngineeringPanelProps> = ({
             const isGenerated = generatedSceneIds.has(sceneId);
             const isGenerating = generatingScene === (prompt.sceneNumber || index + 1);
             
+            // Find the generated image for this scene
+            const generatedImage = generatedImages.find(img => img.sceneId === sceneId);
+            
             return (
               <div key={prompt.id || prompt.sceneId || index} className={`border bg-zinc-800/50 ${isGenerated ? 'border-green-600' : 'border-zinc-700'}`}>
+                {/* Scene Header */}
                 <div className="w-full px-4 py-3 flex items-center justify-between">
                   <button
                     onClick={() => setExpandedPrompt(isExpanded ? null : (prompt.id || prompt.sceneId))}
@@ -330,6 +334,56 @@ const PromptEngineeringPanel: React.FC<PromptEngineeringPanelProps> = ({
                       <label className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-2 block">🔍 Final Prompt Preview</label>
                       <p className="text-xs text-zinc-400 font-mono">{prompt.generatedPrompt || prompt.basePrompt}</p>
                     </div>
+
+                    {/* Generated Image Preview - INLINE OUTPUT */}
+                    {generatedImage && generatedImage.imageUrl && (
+                      <div className="bg-green-950/30 border border-green-700 p-3 mt-4">
+                        <label className="text-[10px] font-mono text-green-500 uppercase tracking-widest mb-2 block">✅ Generated Output</label>
+                        <div className="flex gap-4 items-start">
+                          <div className="w-32 h-32 bg-zinc-900 border border-green-600 overflow-hidden flex-shrink-0">
+                            <img 
+                              src={generatedImage.imageUrl} 
+                              alt={`Scene ${prompt.sceneNumber || index + 1}`}
+                              className="w-full h-full object-cover"
+                              onError={(e) => {
+                                const target = e.target as HTMLImageElement;
+                                target.src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect fill="%23333" width="100" height="100"/><text x="50" y="55" fill="%23666" text-anchor="middle" font-size="12">Error</text></svg>';
+                              }}
+                            />
+                          </div>
+                          <div className="flex-1 space-y-2">
+                            <p className="text-xs text-zinc-400 font-mono">
+                              <span className="text-green-500">Model:</span> {generatedImage.model || 'nano-banana-edit'}
+                            </p>
+                            <p className="text-xs text-zinc-400 font-mono">
+                              <span className="text-green-500">Quality:</span> {generatedImage.qualityScore || generatedImage.consistency?.overallQuality || 85}%
+                            </p>
+                            <p className="text-xs text-zinc-400 font-mono break-all">
+                              <span className="text-green-500">URL:</span> {generatedImage.imageUrl.substring(0, 60)}...
+                            </p>
+                            <div className="flex gap-2 mt-2">
+                              <a 
+                                href={generatedImage.imageUrl} 
+                                target="_blank" 
+                                rel="noopener noreferrer"
+                                className="text-xs bg-green-600 hover:bg-green-500 text-black px-2 py-1 font-mono"
+                              >
+                                🔗 Open
+                              </a>
+                              <button
+                                onClick={() => {
+                                  navigator.clipboard.writeText(generatedImage.imageUrl);
+                                  store.setSuccessMessage('URL copied to clipboard!');
+                                }}
+                                className="text-xs bg-zinc-700 hover:bg-zinc-600 text-zinc-300 px-2 py-1 font-mono"
+                              >
+                                📋 Copy URL
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

@@ -146,16 +146,63 @@ async function pollKieTask(
 
     const result: KieQueryResponse = await response.json();
     console.log('[KIE] Poll result state:', result.data?.state);
+    console.log('[KIE] Full poll result:', JSON.stringify(result).substring(0, 1000));
 
-    if (result.data?.state === 'success' && result.data.resultJson) {
-      console.log('[KIE] Raw resultJson:', result.data.resultJson);
+    if (result.data?.state === 'success') {
+      // Log everything we can about the result
+      console.log('[KIE] SUCCESS! Checking for resultJson...');
+      console.log('[KIE] result.data keys:', Object.keys(result.data));
       
-      try {
-        const parsed = JSON.parse(result.data.resultJson);
+      // Some APIs return the URL directly in different fields
+      const data = result.data as any;
+      
+      // Check if URL is directly in data object (not in resultJson)
+      if (data.imageUrl) {
+        console.log('[KIE] Found URL in data.imageUrl');
+        return data.imageUrl;
+      }
+      if (data.image_url) {
+        console.log('[KIE] Found URL in data.image_url');
+        return data.image_url;
+      }
+      if (data.url) {
+        console.log('[KIE] Found URL in data.url');
+        return data.url;
+      }
+      if (data.output) {
+        console.log('[KIE] Found data.output:', data.output);
+        if (typeof data.output === 'string' && data.output.startsWith('http')) {
+          return data.output;
+        }
+        if (Array.isArray(data.output) && data.output[0]) {
+          return data.output[0];
+        }
+      }
+      
+      if (result.data.resultJson) {
+        console.log('[KIE] Raw resultJson:', result.data.resultJson);
+        console.log('[KIE] resultJson type:', typeof result.data.resultJson);
+      
+        // Handle case where resultJson is already an object (not a string)
+        let parsed: any;
+        if (typeof result.data.resultJson === 'string') {
+          try {
+            parsed = JSON.parse(result.data.resultJson);
+          } catch (e) {
+            // Maybe it's a direct URL string
+            if (result.data.resultJson.startsWith('http')) {
+              console.log('[KIE] resultJson is direct URL string');
+              return result.data.resultJson;
+            }
+            throw e;
+          }
+        } else {
+          // resultJson is already an object
+          parsed = result.data.resultJson;
+        }
+        
         console.log('[KIE] Parsed result keys:', Object.keys(parsed));
         console.log('[KIE] Parsed result:', JSON.stringify(parsed).substring(0, 500));
-        
-        // Try multiple possible URL locations based on different KIE.AI model responses
         let imageUrl = '';
         
         // Format 1: { images: [{ url: "..." }] }
@@ -214,15 +261,11 @@ async function pollKieTask(
         
         console.error('[KIE] Could not find image URL in parsed result:', JSON.stringify(parsed));
         throw new Error(`No image URL found in result. Keys: ${Object.keys(parsed).join(', ')}`);
-      } catch (parseError) {
-        // Maybe resultJson is already a URL string
-        if (result.data.resultJson.startsWith('http')) {
-          console.log('[KIE] resultJson is direct URL');
-          return result.data.resultJson;
-        }
-        console.error('[KIE] Parse error:', parseError);
-        throw new Error(`Failed to parse result: ${parseError}`);
       }
+      
+      // No resultJson but state is success - check if there's any other URL field
+      console.error('[KIE] No resultJson but state is success. Full data:', JSON.stringify(result.data));
+      throw new Error('Task succeeded but no resultJson found');
     }
 
     if (result.data?.state === 'fail') {
