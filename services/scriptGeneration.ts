@@ -270,17 +270,6 @@ function getFallbackDialogue(
       return `I highly recommend ${productName}, it's absolutely worth it.`;
   }
 }
-      return `I used to waste time searching because everything was scattered.`;
-    case 'SOLUTION':
-      return `I switched to ${productName} and it fixed the chaos fast.`;
-    case 'PROOF':
-      return `Now my space looks clean and everything is easy to find.`;
-    case 'CTA':
-      return `Try ${productName} too — it makes organizing effortless.`;
-    default:
-      return `I recommend ${productName} for easy organizing.`;
-  }
-}
 
 function ensureScenes(
   scriptData: any,
