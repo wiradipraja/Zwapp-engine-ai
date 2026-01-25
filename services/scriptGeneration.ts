@@ -25,6 +25,96 @@ export interface ScriptGenerationConfig {
   preferences?: UGCPreferences;
 }
 
+function normalizeJsonCandidate(raw: string): string {
+  let text = raw.trim();
+
+  if (text.startsWith('```json')) {
+    text = text.slice(7);
+  } else if (text.startsWith('```')) {
+    text = text.slice(3);
+  }
+  if (text.endsWith('```')) {
+    text = text.slice(0, -3);
+  }
+
+  const firstBrace = text.indexOf('{');
+  const lastBrace = text.lastIndexOf('}');
+  if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+    text = text.slice(firstBrace, lastBrace + 1);
+  }
+
+  return text
+    .replace(/[“”]/g, '"')
+    .replace(/[‘’]/g, "'")
+    .trim();
+}
+
+function escapeNewlinesInStrings(text: string): string {
+  let result = '';
+  let inString = false;
+  let isEscaped = false;
+
+  for (let i = 0; i < text.length; i += 1) {
+    const ch = text[i];
+
+    if (inString) {
+      if (isEscaped) {
+        result += ch;
+        isEscaped = false;
+        continue;
+      }
+      if (ch === '\\') {
+        result += ch;
+        isEscaped = true;
+        continue;
+      }
+      if (ch === '"') {
+        inString = false;
+        result += ch;
+        continue;
+      }
+      if (ch === '\n') {
+        result += '\\n';
+        continue;
+      }
+      if (ch === '\r') {
+        result += '\\r';
+        continue;
+      }
+      if (ch === '\t') {
+        result += '\\t';
+        continue;
+      }
+      if (ch.charCodeAt(0) < 0x20) {
+        result += ' ';
+        continue;
+      }
+      result += ch;
+      continue;
+    }
+
+    if (ch === '"') {
+      inString = true;
+      result += ch;
+      continue;
+    }
+    result += ch;
+  }
+
+  return result;
+}
+
+function parseJsonSafe(raw: string): any {
+  const normalized = normalizeJsonCandidate(raw);
+
+  try {
+    return JSON.parse(normalized);
+  } catch (err) {
+    const repaired = escapeNewlinesInStrings(normalized).replace(/,(\s*[}\]])/g, '$1');
+    return JSON.parse(repaired);
+  }
+}
+
 /**
  * Generate UGC script using Google Gemini (FREE)
  * Creates scene-based script with model/product integration
@@ -248,7 +338,12 @@ Generate a UGC script. Return ONLY valid JSON (no markdown) with this structure:
     }
   ],
   "voiceoverText": "Full narration combining all scenes"
-}`;
+}
+
+IMPORTANT JSON RULES:
+- Output must be a single valid JSON object (no markdown, no extra text).
+- Escape all quotes/newlines inside strings (use \\n for line breaks).
+- Do NOT include trailing commas.`;
 
   try {
     const detectedProvider: 'google' | 'kie' = provider
@@ -258,6 +353,7 @@ Generate a UGC script. Return ONLY valid JSON (no markdown) with this structure:
         : 'kie';
 
     let content = '';
+    const resolvedModelName = detectedProvider === 'kie' ? 'kie-gemini-3-flash' : model;
 
     if (detectedProvider === 'kie') {
       console.log('[UGC Script] Using KIE Gemini Chat Completions');
@@ -372,20 +468,17 @@ Generate a UGC script. Return ONLY valid JSON (no markdown) with this structure:
       throw new Error('No content received from Gemini');
     }
 
-    // Clean the response - remove markdown code blocks if present
-    let cleanContent = content.trim();
-    if (cleanContent.startsWith('```json')) {
-      cleanContent = cleanContent.slice(7);
-    } else if (cleanContent.startsWith('```')) {
-      cleanContent = cleanContent.slice(3);
+    // Parse JSON response (with repair for common model formatting issues)
+    let scriptData: any;
+    try {
+      scriptData = parseJsonSafe(content);
+    } catch (parseError) {
+      console.error('[UGC Script] Failed to parse JSON from model response', parseError);
+      console.error('[UGC Script] Raw response snippet:', content.substring(0, 2000));
+      throw new Error(
+        `Script generation failed: ${parseError instanceof Error ? parseError.message : String(parseError)}`
+      );
     }
-    if (cleanContent.endsWith('```')) {
-      cleanContent = cleanContent.slice(0, -3);
-    }
-    cleanContent = cleanContent.trim();
-
-    // Parse JSON response
-    const scriptData = JSON.parse(cleanContent);
 
     // Build sceneBreakdown for UGC format
     const sceneBreakdown: SceneBreakdown[] = (scriptData.scenes || []).map(
@@ -426,7 +519,7 @@ Generate a UGC script. Return ONLY valid JSON (no markdown) with this structure:
       sceneBreakdown,
       voiceoverText: scriptData.voiceoverText || '',
       generatedAt: Date.now(),
-      model: 'gemini-2.5-flash',
+      model: resolvedModelName,
     };
 
     return generatedScript;

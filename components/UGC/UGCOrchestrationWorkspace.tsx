@@ -54,6 +54,7 @@ const UGCOrchestrationWorkspace: React.FC<UGCOrchestrationWorkspaceProps> = ({
       return;
     }
 
+    store.addDebugLog('Analysis started');
     store.setLoading(true);
     store.setStatus('PROCESSING');
     store.setCurrentStage('ANALYSIS');
@@ -70,6 +71,7 @@ const UGCOrchestrationWorkspace: React.FC<UGCOrchestrationWorkspaceProps> = ({
       store.setExtractedContext({ modelProfile, productProfile, narrativeContext });
       store.setProgress('SCRIPTING', 0, 'Starting script generation...');
       store.setCurrentStage('SCRIPTING');
+      store.addDebugLog('Analysis complete. Generating script...');
       
       // Get language and style settings from project
       const projectSettings = store.currentProject?.settings;
@@ -89,17 +91,20 @@ const UGCOrchestrationWorkspace: React.FC<UGCOrchestrationWorkspaceProps> = ({
       );
 
       store.setGeneratedScript(script);
+      store.addDebugLog(`Script generated with ${script.model || 'unknown model'}`);
       
       // Clear existing prompts before adding new ones to avoid duplicates
       store.clearPrompts();
       const prompts = generatePromptsFromScript(script, modelProfile, productProfile, projectSettings?.preferences);
       prompts.forEach(prompt => store.addPrompt(prompt));
+      store.addDebugLog(`Generated ${prompts.length} prompts`);
 
       store.setSuccessMessage('Analysis and script generation complete!');
       store.setLoading(false);
     } catch (error) {
       console.error('Analysis error:', error);
       store.setError(`Analysis failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      store.addDebugLog(`Analysis failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
       store.setLoading(false);
       store.setCurrentStage('INPUT');
     }
@@ -122,6 +127,7 @@ const UGCOrchestrationWorkspace: React.FC<UGCOrchestrationWorkspaceProps> = ({
       return;
     }
 
+    store.addDebugLog(`Image generation started (${prompts.length} prompts)`);
     store.setLoading(true);
     store.setCurrentStage('GENERATING');
 
@@ -136,11 +142,13 @@ const UGCOrchestrationWorkspace: React.FC<UGCOrchestrationWorkspaceProps> = ({
       );
 
       images.forEach(image => store.addGeneratedImage(image));
+      store.addDebugLog(`Generated ${images.length} images`);
       store.setSuccessMessage(`Generated ${images.length} images!`);
       store.setLoading(false);
     } catch (error) {
       console.error('Image generation error:', error);
       store.setError(`Image generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      store.addDebugLog(`Image generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
       store.setLoading(false);
     }
   };
@@ -154,6 +162,7 @@ const UGCOrchestrationWorkspace: React.FC<UGCOrchestrationWorkspaceProps> = ({
       return;
     }
 
+    store.addDebugLog(`QA started (${images.length} images)`);
     store.setLoading(true);
     store.setCurrentStage('QA');
 
@@ -168,16 +177,18 @@ const UGCOrchestrationWorkspace: React.FC<UGCOrchestrationWorkspaceProps> = ({
 
       const passRate = calculateOverallPassRate(qaResults);
       store.setQAResults(qaResults, passRate);
+      store.addDebugLog(`QA complete. Pass rate ${passRate}%`);
       store.setSuccessMessage(`QA Complete! Pass rate: ${passRate}%`);
       store.setLoading(false);
     } catch (error) {
       console.error('QA error:', error);
       store.setError(`QA failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      store.addDebugLog(`QA failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
       store.setLoading(false);
     }
   };
 
-  const handleGenerateVideo = async (options?: { engine?: VideoEngine; resolution?: '720p' | '1080p' | '1440p'; frameRate?: 24 | 30 | 60 }) => {
+  const handleGenerateVideo = async (options?: { engine?: VideoEngine; resolution?: '720p' | '1080p' | '1440p'; frameRate?: 24 | 30 | 60; brandLogoUrl?: string; usePipeline?: boolean }) => {
     if (!store.currentProject) return;
 
     if (!kieApiKey) {
@@ -193,6 +204,9 @@ const UGCOrchestrationWorkspace: React.FC<UGCOrchestrationWorkspaceProps> = ({
       return;
     }
 
+    store.addDebugLog(
+      `Video generation started. Engine: ${options?.engine || 'veo3'}, pipeline: ${options?.usePipeline !== false}, fps: ${options?.frameRate || 24}, resolution: ${options?.resolution || '1080p'}`
+    );
     store.setLoading(true);
     store.setCurrentStage('VIDEO_GENERATION');
 
@@ -203,16 +217,24 @@ const UGCOrchestrationWorkspace: React.FC<UGCOrchestrationWorkspaceProps> = ({
       const video = await generateUGCVideo(
         images,
         { kieApiKey: kieApiKey, geminiApiKey: geminiKey },
-        { resolution: options?.resolution || '1080p', frameRate: options?.frameRate || 30, engine },
+        {
+          resolution: options?.resolution || '1080p',
+          frameRate: options?.frameRate || 24,
+          engine,
+          brandLogoUrl: options?.brandLogoUrl,
+          usePipeline: options?.usePipeline,
+        },
         (msg, pct) => store.setProgress('VIDEO_GENERATION', pct, msg)
       );
 
       store.addGeneratedVideo(video);
+      store.addDebugLog(`Video generated (${video.status || 'completed'})`);
       store.setSuccessMessage(`Video generated successfully with ${(options?.engine || 'veo3').toUpperCase()}!`);
       store.setLoading(false);
     } catch (error) {
       console.error('Video generation error:', error);
       store.setError(`Video generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      store.addDebugLog(`Video generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
       store.setLoading(false);
     }
   };
@@ -421,6 +443,7 @@ const CompleteScreen: React.FC = () => {
 const UGCParameterPanel: React.FC<{ onEditInputs: () => void; onReset: () => void }> = ({ onEditInputs, onReset }) => {
   const store = useUGCStore();
   const project = store.currentProject;
+  const debugLogs = store.debugLogs;
 
   if (!project) return null;
 
@@ -495,6 +518,31 @@ const UGCParameterPanel: React.FC<{ onEditInputs: () => void; onReset: () => voi
           >
             Reset
           </button>
+        </div>
+
+        <div>
+          <div className="flex items-center justify-between">
+            <p className="text-[10px] text-zinc-500 font-mono uppercase tracking-widest">Debug Logs</p>
+            {debugLogs.length > 0 && (
+              <button
+                onClick={() => store.clearDebugLogs()}
+                className="text-[10px] text-zinc-400 hover:text-orange-400 font-mono"
+              >
+                Clear
+              </button>
+            )}
+          </div>
+          <div className="mt-2 border border-zinc-800 bg-zinc-950 p-2 max-h-32 overflow-auto text-[10px] font-mono text-zinc-400 space-y-1">
+            {debugLogs.length === 0 ? (
+              <div className="text-zinc-600">No logs yet</div>
+            ) : (
+              debugLogs.slice(-8).map((entry, idx) => (
+                <div key={`${entry}-${idx}`} className="break-words">
+                  {entry}
+                </div>
+              ))
+            )}
+          </div>
         </div>
       </div>
     </div>

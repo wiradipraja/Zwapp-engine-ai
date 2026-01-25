@@ -45,6 +45,9 @@ interface UGCStoreState {
   isLoading: boolean;
   error: string | null;
   successMessage: string | null;
+
+  // Debug logs
+  debugLogs: string[];
   
   // Actions
   initializeProject: (projectName: string, userId: string) => void;
@@ -99,6 +102,10 @@ interface UGCStoreState {
   setLoading: (isLoading: boolean) => void;
   setError: (error: string | null) => void;
   setSuccessMessage: (message: string | null) => void;
+
+  // Debug log actions
+  addDebugLog: (message: string) => void;
+  clearDebugLogs: () => void;
   
   // Project management
   resetProject: () => void;
@@ -116,6 +123,7 @@ export const useUGCStore = create<UGCStoreState>()(
     isLoading: false,
     error: null,
     successMessage: null,
+    debugLogs: [],
     
     setApiConfig: (config) => set({ apiConfig: config }),
     
@@ -157,7 +165,7 @@ export const useUGCStore = create<UGCStoreState>()(
         updatedAt: Date.now(),
       };
       
-      set({ currentProject: newProject });
+      set({ currentProject: newProject, debugLogs: [] });
     },
     
     setLanguage: (language) =>
@@ -503,8 +511,16 @@ export const useUGCStore = create<UGCStoreState>()(
     setLoading: (isLoading) => set({ isLoading }),
     setError: (error) => set({ error }),
     setSuccessMessage: (message) => set({ successMessage: message }),
+    addDebugLog: (message) =>
+      set((state) => {
+        const timestamp = new Date().toLocaleTimeString();
+        const entry = `${timestamp} - ${message}`;
+        const nextLogs = [...state.debugLogs, entry];
+        return { debugLogs: nextLogs.slice(-200) };
+      }),
+    clearDebugLogs: () => set({ debugLogs: [] }),
     
-    resetProject: () => set({ currentProject: null, error: null, successMessage: null }),
+    resetProject: () => set({ currentProject: null, error: null, successMessage: null, debugLogs: [] }),
     
     loadProject: (project) =>
       set({
@@ -519,6 +535,7 @@ export const useUGCStore = create<UGCStoreState>()(
             overallPassRate: project.qaResults?.overallPassRate || 0,
           },
         },
+        debugLogs: [],
       }),
 
     resetGeneratedOutputs: () =>

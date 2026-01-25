@@ -8,6 +8,7 @@ import { generateAllUGCImages, generateUGCImage as kieGenerateImage, generateUGC
 import { analyzeImageQuality } from './qualityAssurance';
 import { generateVideoWithVeo } from './videoGeneration';
 import { buildNanoBananaScenePrompt, type SceneType } from './ugcPromptBuilder';
+import { buildUGCVideoPipelinePayload, extractVideoUrl } from './ugcVideoPipeline';
 import {
   UGCProject,
   ModelProfile,
@@ -391,6 +392,7 @@ export function generatePromptsFromScript(
       sceneId: `scene-${scene.sceneNumber}`,
       sceneNumber: scene.sceneNumber,
       sceneDescription: `${scene.setting}. ${scene.action}.`,
+      sceneType,
       basePrompt: basePrompt,
       dynamicVariables: {
         modelLook: modelProfile.lookDescription || modelProfile.appearance,
@@ -625,6 +627,8 @@ export async function generateUGCVideo(
     frameRate?: 24 | 30 | 60;
     duration?: number;
     engine?: 'veo3' | 'kling' | 'runway' | 'pika';
+    brandLogoUrl?: string;
+    usePipeline?: boolean;
   },
   onProgress?: (message: string, percent: number) => void
 ): Promise<GeneratedVideo> {
@@ -635,16 +639,69 @@ export async function generateUGCVideo(
     runway: 'creative cinematic motion, stylized transitions, editorial vibe',
     pika: 'snappy social media transitions, lightweight motion, energetic pacing',
   };
+  const resolutionMap: Record<'720p' | '1080p' | '1440p', '1080x1920' | '1440x2560'> = {
+    '720p': '1080x1920',
+    '1080p': '1080x1920',
+    '1440p': '1440x2560',
+  };
   onProgress?.(`Preparing images for ${engineName.toUpperCase()}...`, 10);
 
   try {
-    const approvedImages = images.filter(img => img.approved !== false);
+    const approvedImages = images
+      .filter(img => img.approved !== false)
+      .sort((a, b) => (a.sceneNumber || 0) - (b.sceneNumber || 0) || (a.createdAt || 0) - (b.createdAt || 0));
     
     if (approvedImages.length < 2) {
       throw new Error('Need at least 2 approved images for video generation');
     }
 
     onProgress?.(`Generating video with ${engineName.toUpperCase()}...`, 30);
+
+    const productRefUrl = approvedImages[0]?.imageUrl || '';
+
+    if (options?.usePipeline !== false) {
+      const pipelinePayload = buildUGCVideoPipelinePayload({
+        product_ref_url: productRefUrl,
+        brand_logo_url: options?.brandLogoUrl,
+        fps: options?.frameRate || 24,
+        aspect_ratio: '9:16',
+        default_resolution: resolutionMap[options?.resolution || '1080p'],
+        use_engine: engineName === 'veo3' ? 'veo' : 'qwen',
+      });
+
+      const response = await fetch('/api/proxy/ugc_video_full_pipeline', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${config.kieApiKey}`,
+        },
+        body: JSON.stringify(pipelinePayload),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`UGC video pipeline failed (${response.status}): ${errorText.substring(0, 200)}`);
+      }
+
+      const data = await response.json();
+      const videoUrl = extractVideoUrl(data);
+
+      if (videoUrl) {
+        onProgress?.('Video generated successfully!', 100);
+        return {
+          id: crypto.randomUUID(),
+          imageId: approvedImages[0].id,
+          videoUrl,
+          duration: options?.duration || approvedImages.length * 3,
+          createdAt: Date.now(),
+          generatedAt: Date.now(),
+          model: engineName,
+          frameRate: options?.frameRate || 24,
+          resolution: options?.resolution || '1080p',
+          status: 'completed',
+        };
+      }
+    }
 
     const video = await generateVideoWithVeo(
       approvedImages.map(img => ({

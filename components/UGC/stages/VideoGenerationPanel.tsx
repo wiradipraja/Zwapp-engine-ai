@@ -8,6 +8,8 @@ interface VideoGenerationPanelProps {
     engine: VideoEngine;
     resolution: '720p' | '1080p' | '1440p';
     frameRate: 24 | 30 | 60;
+    brandLogoUrl?: string;
+    usePipeline?: boolean;
   }) => Promise<void>;
 }
 
@@ -34,6 +36,8 @@ const VideoGenerationPanel: React.FC<VideoGenerationPanelProps> = ({ onGenerateV
   const [resolution, setResolution] = useState<'720p' | '1080p' | '1440p'>('1080p');
   const [frameRate, setFrameRate] = useState<24 | 30 | 60>(30);
   const [selectedEngine, setSelectedEngine] = useState<VideoEngine>('veo3');
+  const [usePipeline, setUsePipeline] = useState(true);
+  const [brandLogoUrl, setBrandLogoUrl] = useState('');
 
   if (!store.currentProject) return null;
 
@@ -47,6 +51,8 @@ const VideoGenerationPanel: React.FC<VideoGenerationPanelProps> = ({ onGenerateV
         engine: selectedEngine,
         resolution,
         frameRate,
+        brandLogoUrl: brandLogoUrl.trim() || undefined,
+        usePipeline,
       });
     } else {
       store.setLoading(true);
@@ -199,6 +205,35 @@ const VideoGenerationPanel: React.FC<VideoGenerationPanelProps> = ({ onGenerateV
         <p className="text-[10px] text-zinc-600 font-mono mt-2">
           Estimated duration: ~{approvedImages.length * 3} seconds
         </p>
+      </div>
+
+      {/* Pipeline Options */}
+      <div className="bg-zinc-800 border border-zinc-700 p-4">
+        <h4 className="text-xs font-mono text-orange-500 uppercase tracking-widest mb-3">Pipeline Options</h4>
+        <div className="space-y-3">
+          <label className="flex items-center gap-2 text-xs text-zinc-300 font-mono">
+            <input
+              type="checkbox"
+              checked={usePipeline}
+              onChange={(e) => setUsePipeline(e.target.checked)}
+              className="accent-orange-500"
+            />
+            Use UGC video pipeline v1.1 (multi-scene stitching)
+          </label>
+          <div>
+            <label className="block text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-1">Brand Logo URL (CTA Overlay)</label>
+            <input
+              type="text"
+              value={brandLogoUrl}
+              onChange={(e) => setBrandLogoUrl(e.target.value)}
+              placeholder="https://your-cdn.com/logo.png"
+              className="w-full bg-zinc-950 border border-zinc-700 text-zinc-300 p-2 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 transition-colors font-mono text-sm"
+            />
+          </div>
+          <p className="text-[10px] text-zinc-500 font-mono">
+            Leave blank to skip logo overlay. Use official assets only.
+          </p>
+        </div>
       </div>
 
       {/* Loading State */}

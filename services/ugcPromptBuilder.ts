@@ -1,12 +1,9 @@
 // services/ugcPromptBuilder.ts
 // UGC Prompt Builder for Gemini Chat + Nano Banana consistency
 
-export type SceneType =
-  | "S1_MODEL_HOLDING_PRODUCT"
-  | "S2_HAND_ONLY_PRODUCT"
-  | "S3_PRODUCT_STANDALONE_HERO"
-  | "S4_IN_USE_DEMO_ACTION"
-  | "S5_LIFESTYLE_PLACEMENT_CONTEXT";
+import type { UGCSceneType } from "../types/ugc";
+
+export type SceneType = UGCSceneType;
 
 export type ImageUrl = { url: string };
 

@@ -3,12 +3,21 @@
 import React, { useState } from 'react';
 import { useUGCStore } from '../../../store/ugcStore';
 import { generateSingleUGCImage } from '../../../services/ugcIntegration';
-import { PromptTemplate } from '../../../types/ugc';
+import { buildNanoBananaScenePrompt } from '../../../services/ugcPromptBuilder';
+import { PromptTemplate, UGCSceneType } from '../../../types/ugc';
 
 interface PromptEngineeringPanelProps {
   onGenerateImages?: () => Promise<void>;
   onGenerateSingleImage?: (prompt: PromptTemplate) => Promise<void>;
 }
+
+const SCENE_TYPE_OPTIONS: Array<{ value: UGCSceneType; label: string }> = [
+  { value: 'S1_MODEL_HOLDING_PRODUCT', label: 'S1 Model + Product' },
+  { value: 'S2_HAND_ONLY_PRODUCT', label: 'S2 Hand + Product' },
+  { value: 'S3_PRODUCT_STANDALONE_HERO', label: 'S3 Standalone Product' },
+  { value: 'S4_IN_USE_DEMO_ACTION', label: 'S4 In-Use Demo' },
+  { value: 'S5_LIFESTYLE_PLACEMENT_CONTEXT', label: 'S5 Lifestyle Placement' },
+];
 
 const PromptEngineeringPanel: React.FC<PromptEngineeringPanelProps> = ({ 
   onGenerateImages,
@@ -20,12 +29,56 @@ const PromptEngineeringPanel: React.FC<PromptEngineeringPanelProps> = ({
 
   if (!store.currentProject) return null;
 
-  const prompts = store.currentProject.generatedContent.prompts || 
-                  store.currentProject.generatedContent.promptTemplates || [];
+  const project = store.currentProject;
+  const prompts = project.generatedContent.prompts || 
+                  project.generatedContent.promptTemplates || [];
   
   // Get already generated images to check which scenes are done
-  const generatedImages = store.currentProject.generatedContent.images || [];
+  const generatedImages = project.generatedContent.images || [];
   const generatedSceneIds = new Set(generatedImages.map(img => img.sceneId));
+  const prefs = project.settings.preferences;
+  const modelProfile = project.extractedContext.modelProfile;
+  const productProfile = project.extractedContext.productProfile;
+
+  const buildScenePrompt = (sceneType: UGCSceneType, prompt: PromptTemplate) => {
+    const productDescParts = [
+      productProfile?.name || prompt.dynamicVariables?.productName || 'product',
+      prefs?.productCategory || productProfile?.category || '',
+      ...(productProfile?.keyFeatures || []),
+    ].filter(Boolean);
+    const productDesc = productDescParts.join(', ') || 'product';
+    const lightingDesc = prompt.customizations?.lighting || prefs?.lightingStyle || 'natural soft light';
+    const cameraDesc = prompt.visualStyle || prefs?.framing || 'handheld smartphone, shallow depth of field';
+    const backgroundDesc =
+      prefs?.backgroundStyle ||
+      prompt.sceneDescription ||
+      prompt.dynamicVariables?.setting ||
+      'clean lifestyle background';
+    const modelDesc =
+      prefs?.characterProfile ||
+      modelProfile?.lookDescription ||
+      modelProfile?.appearance ||
+      'model';
+    const handPoseDesc = prompt.dynamicVariables?.action || prompt.sceneDescription || 'natural grip';
+    const actionDesc = prompt.dynamicVariables?.action || prompt.sceneDescription || 'natural product demonstration';
+    const propsDesc = prefs?.backgroundStyle || 'everyday lifestyle props';
+
+    return buildNanoBananaScenePrompt({
+      apiKey: '',
+      scene_type: sceneType,
+      product_desc: productDesc,
+      lighting_desc: lightingDesc,
+      camera_desc: cameraDesc,
+      background_desc: backgroundDesc,
+      model_desc: modelDesc,
+      hand_pose_desc: handPoseDesc,
+      action_desc: actionDesc,
+      props_desc: propsDesc,
+      stream: false,
+      include_thoughts: false,
+      reasoning_effort: 'high',
+    });
+  };
 
   const handleGenerateImages = async () => {
     if (onGenerateImages) {
@@ -217,6 +270,33 @@ const PromptEngineeringPanel: React.FC<PromptEngineeringPanelProps> = ({
                         className={`${inputClass} resize-none`}
                         rows={3}
                       />
+                    </div>
+
+                    {/* Scene Type */}
+                    <div>
+                      <label className={labelClass}>Scene Type</label>
+                      <div className="relative">
+                        <select
+                          value={(prompt.sceneType || 'S1_MODEL_HOLDING_PRODUCT') as UGCSceneType}
+                          onChange={(e) => {
+                            const nextSceneType = e.target.value as UGCSceneType;
+                            const updatedPrompt = {
+                              ...prompt,
+                              sceneType: nextSceneType,
+                              generatedPrompt: buildScenePrompt(nextSceneType, prompt),
+                            };
+                            store.updatePrompt(prompt.sceneId, updatedPrompt);
+                          }}
+                          className={selectClass}
+                        >
+                          {SCENE_TYPE_OPTIONS.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                        <div className="absolute right-2 top-2 pointer-events-none text-orange-500 text-xs">▼</div>
+                      </div>
                     </div>
 
                     {/* Visual Style */}

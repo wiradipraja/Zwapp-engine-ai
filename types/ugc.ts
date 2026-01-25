@@ -19,6 +19,13 @@ export type NarrationLanguage = 'EN' | 'ID';
 // UGC Content Style
 export type UGCContentStyle = 'selfie' | 'cinematic' | 'professional';
 
+export type UGCSceneType =
+  | 'S1_MODEL_HOLDING_PRODUCT'
+  | 'S2_HAND_ONLY_PRODUCT'
+  | 'S3_PRODUCT_STANDALONE_HERO'
+  | 'S4_IN_USE_DEMO_ACTION'
+  | 'S5_LIFESTYLE_PLACEMENT_CONTEXT';
+
 // PRD 4.2: Comprehensive Dropdown Options
 export interface UGCPreferences {
   characterProfile: 'Asian Female 20s' | 'Asian Male 20s' | 'Western Female 20s' | 'Professional Female 30s' | 'Custom';
@@ -200,6 +207,7 @@ export interface PromptTemplate {
   sceneId: string;
   sceneNumber?: number;
   sceneDescription?: string;
+  sceneType?: UGCSceneType;
   basePrompt: string;
   dynamicVariables: Record<string, string>;
   consistencyCheckpoints: ConsistencyCheckpoint[];
