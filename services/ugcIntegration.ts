@@ -80,6 +80,7 @@ function inferProductCategory(name: string): string {
 export interface UGCServiceConfig {
   kieApiKey: string;
   visionApiKey?: string;
+  googleGeminiApiKey?: string;
 }
 
 function resolveTargetSceneCount(preferences?: UGCPreferences): number {
@@ -294,10 +295,10 @@ export async function generateUGCScript(
       fullProductProfile,
       fullNarrativeContext,
       {
-        // Use KIE API key for KIE AI endpoint (api.kie.ai)
-        apiKey: config.kieApiKey,
-        model: 'gemini-2.5-flash',
-        temperature: 0.7,
+        // Require Google Gemini API Key for direct access
+        apiKey: config.googleGeminiApiKey || config.kieApiKey,
+        model: 'gemini-1.5-flash',
+        temperature: 0.85,
         language,
         contentStyle,
         preferences

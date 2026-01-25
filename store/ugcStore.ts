@@ -26,6 +26,7 @@ import {
 export interface UGCAPIConfig {
   kieApiKey: string;
   visionApiKey: string;
+  googleGeminiApiKey?: string;
 }
 
 interface UGCStoreState {

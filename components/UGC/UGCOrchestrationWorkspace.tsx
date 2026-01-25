@@ -21,6 +21,7 @@ import VideoGenerationPanel from './stages/VideoGenerationPanel';
 
 interface UGCOrchestrationWorkspaceProps {
   apiKey?: string;
+  googleApiKey?: string;
   onOpenSettings?: () => void;
 }
 
@@ -28,25 +29,36 @@ type VideoEngine = 'veo3' | 'kling' | 'runway' | 'pika';
 
 const UGCOrchestrationWorkspace: React.FC<UGCOrchestrationWorkspaceProps> = ({
   apiKey,
+  googleApiKey,
   onOpenSettings,
 }) => {
   const store = useUGCStore();
   const setApiConfig = useUGCStore((state) => state.setApiConfig);
   const kieApiKey = apiKey || '';
+  const geminiApiKey = googleApiKey || '';
 
   useEffect(() => {
     setApiConfig({
       kieApiKey: kieApiKey,
       visionApiKey: '',
+      googleGeminiApiKey: geminiApiKey,
     });
-  }, [kieApiKey, setApiConfig]);
+  }, [kieApiKey, geminiApiKey, setApiConfig]);
 
   const handleAnalyzeAndGenerate = async () => {
     if (!store.currentProject) return;
     
-    if (!kieApiKey) {
-      store.setError('KIE API Key diperlukan untuk generate script');
+    // Check keys - We need Google Key for script, KIE Key for images
+    if (!geminiApiKey) {
+      store.setError('Google Gemini API Key diperlukan untuk Script Generation (Input di Settings)');
       onOpenSettings?.();
+      return;
+    }
+    
+    if (!kieApiKey) {
+      store.setError('KIE API Key diperlukan untuk Image Generation');
+      onOpenSettings?.();
+      // Don't return, allow script gen at least? No, workflow is coupled.
       return;
     }
 

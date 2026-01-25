@@ -50,6 +50,7 @@ const AppContent: React.FC = () => {
 
   // App State
   const [apiKey, setApiKey] = useState('');
+  const [googleApiKey, setGoogleApiKey] = useState('');
   const [tasks, setTasks] = useState<LocalTask[]>([]);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [logs, setLogs] = useState<string[]>([]);
@@ -101,6 +102,10 @@ const AppContent: React.FC = () => {
     if (storedKey) {
         setApiKey(storedKey);
     }
+    const storedGoogleKey = localStorage.getItem('google_gemini_api_key');
+    if (storedGoogleKey) {
+        setGoogleApiKey(storedGoogleKey);
+    }
 
     return () => subscription.unsubscribe();
   }, []);
@@ -143,10 +148,14 @@ const AppContent: React.FC = () => {
     }
   };
 
-  const handleSaveApiKey = (kieKey: string) => {
+  const handleSaveApiKey = (kieKey: string, googleKey: string) => {
       setApiKey(kieKey);
       localStorage.setItem('kie_api_key', kieKey);
-      addLog('System Configuration Updated: API Key Saved.');
+      
+      setGoogleApiKey(googleKey);
+      localStorage.setItem('google_gemini_api_key', googleKey);
+      
+      addLog('System Configuration Updated: API Keys Saved.');
   };
 
   const handleLogout = async () => {
@@ -493,6 +502,7 @@ const AppContent: React.FC = () => {
         onClose={() => setIsSettingsOpen(false)} 
         onSave={handleSaveApiKey}
         currentKey={apiKey}
+        currentGoogleKey={googleApiKey}
       />
 
       {/* Sidebar - Narrow icon-based */}
@@ -557,6 +567,7 @@ const AppContent: React.FC = () => {
             <div className="flex-1 p-6">
               <UGCOrchestrationWorkspace
                 apiKey={apiKey}
+                googleApiKey={googleApiKey}
                 onOpenSettings={() => setIsSettingsOpen(true)}
               />
             </div>
