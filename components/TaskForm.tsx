@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { MotionControlInput } from '../types';
 import { Button } from './ui/Button';
 import { Dropzone } from './ui/Dropzone';
-import { uploadImageToKieAI, uploadVideoToKieAI, fileToDataURL } from '../services/kieFileUpload';
+import { uploadImageToKieAI, uploadVideoToKieAI } from '../services/kieFileUpload';
 
 interface ImagePreview {
   dataUrl: string;
@@ -43,13 +43,19 @@ export const TaskForm: React.FC<TaskFormProps> = ({ onSubmit, isLoading, apiKey 
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
-  const handleImageSelect = async (file: File) => {
+  // Dropzone callback: (base64: string, originalFile?: File)
+  const handleImageSelect = async (base64: string, file?: File) => {
     setUploadError('');
+    
+    if (!file) {
+      setUploadError('No file selected');
+      return;
+    }
+    
     try {
-      // Create preview
-      const dataUrl = await fileToDataURL(file);
+      // Use base64 from Dropzone for preview (already read)
       const previewItem: ImagePreview = {
-        dataUrl,
+        dataUrl: base64,
         url: '',
         fileName: file.name,
         isUploading: true,
@@ -64,7 +70,7 @@ export const TaskForm: React.FC<TaskFormProps> = ({ onSubmit, isLoading, apiKey 
 
       // Update preview with URL
       setImagePreviews([{
-        dataUrl,
+        dataUrl: base64,
         url: publicUrl,
         fileName: file.name,
         isUploading: false,
@@ -81,13 +87,19 @@ export const TaskForm: React.FC<TaskFormProps> = ({ onSubmit, isLoading, apiKey 
     }
   };
 
-  const handleVideoSelect = async (file: File) => {
+  // Dropzone callback: (base64: string, originalFile?: File)
+  const handleVideoSelect = async (base64: string, file?: File) => {
     setUploadError('');
+    
+    if (!file) {
+      setUploadError('No file selected');
+      return;
+    }
+    
     try {
-      // Create preview
-      const dataUrl = await fileToDataURL(file);
+      // Use base64 from Dropzone for preview (already read)
       const previewItem: VideoPreview = {
-        dataUrl,
+        dataUrl: base64,
         url: '',
         fileName: file.name,
         isUploading: true,
@@ -102,7 +114,7 @@ export const TaskForm: React.FC<TaskFormProps> = ({ onSubmit, isLoading, apiKey 
 
       // Update preview with URL
       setVideoPreviews([{
-        dataUrl,
+        dataUrl: base64,
         url: publicUrl,
         fileName: file.name,
         isUploading: false,
@@ -165,8 +177,8 @@ export const TaskForm: React.FC<TaskFormProps> = ({ onSubmit, isLoading, apiKey 
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
-          <label className={labelClass}>Reference Image</label>
           <Dropzone 
+            label="Reference Image"
             subLabel="JPG/PNG, Max 10MB, >300px"
             accept="image/*"
             onFileSelect={handleImageSelect}
@@ -198,8 +210,8 @@ export const TaskForm: React.FC<TaskFormProps> = ({ onSubmit, isLoading, apiKey 
         </div>
 
         <div>
-          <label className={labelClass}>Reference Video</label>
           <Dropzone 
+            label="Reference Video"
             subLabel="MP4/MOV, Max 100MB"
             accept="video/*"
             onFileSelect={handleVideoSelect}
