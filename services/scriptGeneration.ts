@@ -491,7 +491,7 @@ export async function generateScriptWithGemini(
     provider,
     model = 'gemini-2.5-flash', // Free tier model
     temperature = 0.7,
-    maxTokens = 2048,
+    maxTokens = 8192, // Increased from 2048 to prevent truncated JSON responses
     language = 'EN',
     contentStyle = 'selfie',
     preferences

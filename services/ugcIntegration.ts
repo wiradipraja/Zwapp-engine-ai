@@ -197,7 +197,9 @@ export async function analyzeInputAssets(
   
   // Extract product profile from uploaded photos
   const productPhoto = project.inputAssets.productPhotos[0];
-  const inferredProductName = inferProductName(productPhoto);
+  // Use user input for product name if available
+  const userProductName = project.inputAssets.productName;
+  const inferredProductName = userProductName || inferProductName(productPhoto);
   const inferredProductCategory = inferProductCategory(inferredProductName || productPhoto?.fileName || '');
   const productProfile: ProductProfile = {
     name: inferredProductName || 'Product',

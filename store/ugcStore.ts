@@ -64,6 +64,7 @@ interface UGCStoreState {
   updateSettings: (settings: Partial<UGCProject['settings']>) => void;
   
   // Input actions
+  setProductName: (name: string) => void;
   addModelPhotos: (assets: UploadedAsset[]) => void;
   removeModelPhoto: (assetId: string) => void;
   addProductPhotos: (assets: UploadedAsset[]) => void;
@@ -177,6 +178,21 @@ export const useUGCStore = create<UGCStoreState>()(
             settings: {
               ...state.currentProject.settings,
               language,
+            },
+            updatedAt: Date.now(),
+          },
+        };
+      }),
+
+    setProductName: (name) =>
+      set((state) => {
+        if (!state.currentProject) return {};
+        return {
+          currentProject: {
+            ...state.currentProject,
+            inputAssets: {
+              ...state.currentProject.inputAssets,
+              productName: name,
             },
             updatedAt: Date.now(),
           },

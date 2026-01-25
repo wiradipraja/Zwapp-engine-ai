@@ -182,6 +182,21 @@ const InputModule: React.FC<InputModuleProps> = ({ onStartGeneration }) => {
               <span className="w-5 h-5 bg-orange-500 text-black text-xs font-bold flex items-center justify-center">2</span>
               <label className="text-sm font-bold text-white uppercase tracking-wider">Product Photos</label>
             </div>
+
+            {/* PRODUCT NAME INPUT - NEW FIELD */}
+            <div className="mb-3">
+              <label className="block text-[10px] font-mono text-zinc-500 mb-1 tracking-widest uppercase truncate">
+                Product Name <span className="text-orange-500">*</span>
+              </label>
+              <input
+                type="text"
+                placeholder="e.g. Sunglass A, Bikini Set B..."
+                value={store.currentProject.inputAssets.productName || ''}
+                onChange={(e) => store.setProductName(e.target.value)}
+                className="w-full bg-zinc-950 border border-zinc-700 text-zinc-300 p-2 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 transition-colors font-mono text-xs"
+              />
+              <p className="text-[10px] text-zinc-600 mt-1 font-mono">Used for AI script generation context</p>
+            </div>
             
             <div
               onDragOver={(e) => { e.preventDefault(); setDragOver('product'); }}
