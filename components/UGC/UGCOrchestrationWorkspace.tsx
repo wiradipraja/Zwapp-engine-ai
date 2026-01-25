@@ -33,16 +33,17 @@ const UGCOrchestrationWorkspace: React.FC<UGCOrchestrationWorkspaceProps> = ({
   onOpenSettings,
 }) => {
   const store = useUGCStore();
+  const setApiConfig = useUGCStore((state) => state.setApiConfig);
   const kieApiKey = apiKey || '';
   const geminiKey = geminiApiKey || '';
 
   useEffect(() => {
-    store.setApiConfig({
+    setApiConfig({
       geminiApiKey: geminiKey,
       kieApiKey: kieApiKey,
       visionApiKey: '',
     });
-  }, [kieApiKey, geminiKey, store]);
+  }, [kieApiKey, geminiKey, setApiConfig]);
 
   const handleAnalyzeAndGenerate = async () => {
     if (!store.currentProject) return;
