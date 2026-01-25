@@ -1,6 +1,7 @@
 // components/layout/Sidebar.tsx
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
+import { fetchUserCredits, formatCreditsShort, getCreditWarningLevel } from '../../services/credits';
 
 export type MenuSection = 'home' | 'video' | 'nano-banana' | 'qwen' | 'flux' | 'sora2' | 'veo3' | 'ugc' | 'settings';
 export type ModuleType = 
@@ -49,6 +50,7 @@ interface SidebarProps {
   onLogout: () => void;
   userEmail?: string;
   apiConnected: boolean;
+  apiKey?: string;
 }
 
 const Sidebar: React.FC<SidebarProps> = ({
@@ -60,11 +62,56 @@ const Sidebar: React.FC<SidebarProps> = ({
   onLogout,
   userEmail,
   apiConnected,
+  apiKey,
 }) => {
   const { theme, toggleTheme } = useTheme();
   const isDark = theme === 'dark';
   const [isCollapsed, setIsCollapsed] = useState(true);
   const [isHovered, setIsHovered] = useState(false);
+  
+  // Credit balance state
+  const [creditBalance, setCreditBalance] = useState<number | null>(null);
+  const [isLoadingCredits, setIsLoadingCredits] = useState(false);
+  const [creditError, setCreditError] = useState<string | null>(null);
+
+  // Fetch credits when apiKey changes or on mount
+  const refreshCredits = useCallback(async () => {
+    if (!apiKey || apiKey.trim() === '') {
+      setCreditBalance(null);
+      return;
+    }
+
+    setIsLoadingCredits(true);
+    setCreditError(null);
+    
+    try {
+      const credits = await fetchUserCredits(apiKey);
+      setCreditBalance(credits);
+    } catch (error) {
+      console.error('[Sidebar] Failed to fetch credits:', error);
+      setCreditError('Failed to load');
+    } finally {
+      setIsLoadingCredits(false);
+    }
+  }, [apiKey]);
+
+  // Initial fetch and periodic refresh
+  useEffect(() => {
+    refreshCredits();
+    
+    // Refresh credits every 60 seconds
+    const intervalId = setInterval(refreshCredits, 60000);
+    return () => clearInterval(intervalId);
+  }, [refreshCredits]);
+
+  // Get credit display color based on balance
+  const getCreditColor = () => {
+    if (creditBalance === null) return isDark ? 'text-zinc-500' : 'text-zinc-400';
+    if (creditBalance === 0) return 'text-red-500';
+    if (creditBalance < 100) return 'text-orange-500';
+    if (creditBalance < 500) return 'text-yellow-500';
+    return 'text-green-500';
+  };
 
   // Auto expand when hovered, collapse when not
   const sidebarExpanded = !isCollapsed || isHovered;
@@ -429,6 +476,39 @@ const Sidebar: React.FC<SidebarProps> = ({
           </svg>
           {sidebarExpanded && <span>Logout</span>}
         </button>
+
+        {/* Credit Balance */}
+        <div 
+          className={`flex items-center gap-2 rounded cursor-pointer transition-colors ${
+            isDark ? 'bg-zinc-900 hover:bg-zinc-800' : 'bg-zinc-100 hover:bg-zinc-200'
+          } ${sidebarExpanded ? 'px-3 py-2' : 'p-2 justify-center'}`}
+          onClick={refreshCredits}
+          title={!sidebarExpanded ? `Credits: ${creditBalance !== null ? formatCreditsShort(creditBalance) : 'N/A'}` : 'Click to refresh'}
+        >
+          {isLoadingCredits ? (
+            <div className="w-4 h-4 border-2 border-violet-500/30 border-t-violet-500 rounded-full animate-spin flex-shrink-0" />
+          ) : (
+            <svg className={`w-4 h-4 flex-shrink-0 ${getCreditColor()}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          )}
+          {sidebarExpanded && (
+            <div className="flex flex-col min-w-0">
+              <span className={`text-[10px] font-mono ${isDark ? 'text-zinc-500' : 'text-zinc-600'}`}>
+                CREDITS
+              </span>
+              <span className={`text-xs font-mono font-bold ${getCreditColor()}`}>
+                {creditError ? (
+                  <span className="text-red-500">{creditError}</span>
+                ) : creditBalance !== null ? (
+                  formatCreditsShort(creditBalance)
+                ) : (
+                  <span className={isDark ? 'text-zinc-600' : 'text-zinc-400'}>—</span>
+                )}
+              </span>
+            </div>
+          )}
+        </div>
 
         {/* API Status */}
         <div className={`flex items-center gap-2 rounded ${isDark ? 'bg-zinc-900' : 'bg-zinc-100'} ${sidebarExpanded ? 'px-3 py-2' : 'p-2 justify-center'}`}>

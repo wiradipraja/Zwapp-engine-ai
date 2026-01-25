@@ -473,6 +473,7 @@ const AppContent: React.FC = () => {
         onLogout={handleLogout}
         userEmail={session?.user?.email}
         apiConnected={!!apiKey}
+        apiKey={apiKey}
       />
 
       {/* Main Content Area - Fixed margin for collapsed sidebar, sidebar expands over content on hover */}
