@@ -2,25 +2,80 @@
 
 import React, { useState } from 'react';
 import { useUGCStore } from '../../../store/ugcStore';
+import { generateSingleUGCImage } from '../../../services/ugcIntegration';
+import { PromptTemplate } from '../../../types/ugc';
 
 interface PromptEngineeringPanelProps {
   onGenerateImages?: () => Promise<void>;
+  onGenerateSingleImage?: (prompt: PromptTemplate) => Promise<void>;
 }
 
-const PromptEngineeringPanel: React.FC<PromptEngineeringPanelProps> = ({ onGenerateImages }) => {
+const PromptEngineeringPanel: React.FC<PromptEngineeringPanelProps> = ({ 
+  onGenerateImages,
+  onGenerateSingleImage 
+}) => {
   const store = useUGCStore();
   const [expandedPrompt, setExpandedPrompt] = useState<string | null>(null);
+  const [generatingScene, setGeneratingScene] = useState<number | null>(null);
 
   if (!store.currentProject) return null;
 
   const prompts = store.currentProject.generatedContent.prompts || 
                   store.currentProject.generatedContent.promptTemplates || [];
+  
+  // Get already generated images to check which scenes are done
+  const generatedImages = store.currentProject.generatedContent.images || [];
+  const generatedSceneIds = new Set(generatedImages.map(img => img.sceneId));
 
   const handleGenerateImages = async () => {
     if (onGenerateImages) {
       await onGenerateImages();
     } else {
       store.setCurrentStage('GENERATING');
+    }
+  };
+
+  // Handle single scene generation
+  const handleGenerateSingleScene = async (prompt: PromptTemplate) => {
+    if (onGenerateSingleImage) {
+      await onGenerateSingleImage(prompt);
+      return;
+    }
+
+    // Default implementation
+    const kieApiKey = localStorage.getItem('kie_api_key') || '';
+    if (!kieApiKey) {
+      store.setError('KIE API Key diperlukan untuk generate images');
+      return;
+    }
+
+    const modelPhoto = store.currentProject?.inputAssets.modelPhotos[0];
+    const productPhoto = store.currentProject?.inputAssets.productPhotos[0];
+
+    if (!modelPhoto?.supabaseUrl && !productPhoto?.supabaseUrl) {
+      store.setError('At least one reference image required');
+      return;
+    }
+
+    setGeneratingScene(prompt.sceneNumber || 1);
+    store.setProgress('GENERATING', 10, `Generating scene ${prompt.sceneNumber}...`);
+
+    try {
+      const image = await generateSingleUGCImage(
+        prompt,
+        modelPhoto!,
+        productPhoto!,
+        { kieApiKey, geminiApiKey: '' },
+        (msg, pct) => store.setProgress('GENERATING', pct, msg)
+      );
+
+      store.addGeneratedImage(image);
+      store.setSuccessMessage(`Scene ${prompt.sceneNumber} generated successfully!`);
+    } catch (error) {
+      console.error('Single image generation error:', error);
+      store.setError(`Failed to generate scene ${prompt.sceneNumber}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setGeneratingScene(null);
     }
   };
 
@@ -47,6 +102,29 @@ const PromptEngineeringPanel: React.FC<PromptEngineeringPanelProps> = ({ onGener
         )}
       </div>
 
+      {/* Generation Status Bar */}
+      {generatedImages.length > 0 && (
+        <div className="bg-zinc-800 border border-zinc-700 p-3 flex items-center justify-between">
+          <span className="text-xs text-zinc-400 font-mono">
+            📸 {generatedImages.length} of {prompts.length} scenes generated
+          </span>
+          <div className="flex items-center gap-2">
+            {prompts.map((_, idx) => (
+              <div 
+                key={idx}
+                className={`w-3 h-3 border ${
+                  generatedSceneIds.has(`scene-${idx + 1}`) 
+                    ? 'bg-green-500 border-green-400' 
+                    : generatingScene === idx + 1
+                    ? 'bg-orange-500 border-orange-400 animate-pulse'
+                    : 'bg-zinc-700 border-zinc-600'
+                }`}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
       {prompts.length === 0 ? (
         <div className="bg-zinc-800 border border-zinc-700 p-8 text-center">
           <div className="text-4xl mb-4">⚙️</div>
@@ -57,25 +135,68 @@ const PromptEngineeringPanel: React.FC<PromptEngineeringPanelProps> = ({ onGener
         <div className="space-y-3">
           {prompts.map((prompt: any, index: number) => {
             const isExpanded = expandedPrompt === (prompt.id || prompt.sceneId);
+            const sceneId = prompt.sceneId || `scene-${prompt.sceneNumber || index + 1}`;
+            const isGenerated = generatedSceneIds.has(sceneId);
+            const isGenerating = generatingScene === (prompt.sceneNumber || index + 1);
+            
             return (
-              <div key={prompt.id || prompt.sceneId || index} className="border border-zinc-700 bg-zinc-800/50">
-                <button
-                  onClick={() => setExpandedPrompt(isExpanded ? null : (prompt.id || prompt.sceneId))}
-                  className="w-full px-4 py-3 flex items-center justify-between hover:bg-zinc-800 transition-colors"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 bg-orange-600 flex items-center justify-center text-black font-bold text-sm">
-                      {prompt.sceneNumber || index + 1}
+              <div key={prompt.id || prompt.sceneId || index} className={`border bg-zinc-800/50 ${isGenerated ? 'border-green-600' : 'border-zinc-700'}`}>
+                <div className="w-full px-4 py-3 flex items-center justify-between">
+                  <button
+                    onClick={() => setExpandedPrompt(isExpanded ? null : (prompt.id || prompt.sceneId))}
+                    className="flex items-center gap-3 flex-1 hover:opacity-80 transition-opacity"
+                  >
+                    <div className={`w-8 h-8 flex items-center justify-center text-black font-bold text-sm ${isGenerated ? 'bg-green-500' : 'bg-orange-600'}`}>
+                      {isGenerated ? '✓' : prompt.sceneNumber || index + 1}
                     </div>
                     <div className="text-left">
-                      <p className="text-sm font-bold text-white">Scene {prompt.sceneNumber || index + 1}</p>
+                      <p className="text-sm font-bold text-white flex items-center gap-2">
+                        Scene {prompt.sceneNumber || index + 1}
+                        {isGenerated && <span className="text-xs text-green-500 font-mono">GENERATED</span>}
+                        {isGenerating && <span className="text-xs text-orange-500 font-mono animate-pulse">GENERATING...</span>}
+                      </p>
                       <p className="text-xs text-zinc-500 font-mono truncate max-w-md">
                         {(prompt.sceneDescription || prompt.basePrompt)?.substring(0, 60)}...
                       </p>
                     </div>
+                  </button>
+                  
+                  {/* Generate Single Scene Button */}
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleGenerateSingleScene(prompt);
+                      }}
+                      disabled={isGenerating || generatingScene !== null}
+                      className={`px-3 py-1.5 text-xs font-mono uppercase tracking-wider transition-all ${
+                        isGenerated 
+                          ? 'bg-zinc-700 text-zinc-400 border border-zinc-600 hover:bg-zinc-600' 
+                          : 'bg-orange-600 text-black hover:bg-orange-500 border border-orange-500'
+                      } disabled:opacity-50 disabled:cursor-not-allowed`}
+                    >
+                      {isGenerating ? (
+                        <span className="flex items-center gap-1">
+                          <svg className="animate-spin h-3 w-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          </svg>
+                          ...
+                        </span>
+                      ) : isGenerated ? (
+                        '🔄 Regen'
+                      ) : (
+                        '🎨 Generate'
+                      )}
+                    </button>
+                    <span 
+                      onClick={() => setExpandedPrompt(isExpanded ? null : (prompt.id || prompt.sceneId))}
+                      className="text-zinc-500 text-sm cursor-pointer hover:text-zinc-300 p-1"
+                    >
+                      {isExpanded ? '▼' : '▶'}
+                    </span>
                   </div>
-                  <span className="text-zinc-500 text-sm">{isExpanded ? '▼' : '▶'}</span>
-                </button>
+                </div>
 
                 {isExpanded && (
                   <div className="border-t border-zinc-700 px-4 py-4 bg-zinc-900 space-y-4">
@@ -217,32 +338,53 @@ const PromptEngineeringPanel: React.FC<PromptEngineeringPanelProps> = ({ onGener
         </div>
       )}
 
-      <div className="flex gap-4 justify-end pt-4 border-t border-zinc-800">
+      <div className="flex gap-4 justify-between items-center pt-4 border-t border-zinc-800">
         <button
           onClick={() => store.setCurrentStage('SCRIPTING')}
           className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-400 border border-zinc-700 font-mono text-sm uppercase tracking-wider transition-colors"
         >
           ← Back
         </button>
-        <button
-          onClick={handleGenerateImages}
-          disabled={prompts.length === 0 || store.isLoading}
-          className="relative font-bold uppercase tracking-wider py-3 px-6 bg-orange-600 hover:bg-orange-500 text-black border-l-4 border-orange-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {store.isLoading ? (
-            <span className="flex items-center gap-2">
-              <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-              </svg>
-              GENERATING...
+
+        <div className="flex items-center gap-3">
+          {/* Generation Stats */}
+          {generatedImages.length > 0 && (
+            <span className="text-xs text-zinc-500 font-mono">
+              {generatedImages.length}/{prompts.length} done
             </span>
-          ) : (
-            '🎨 GENERATE IMAGES →'
           )}
-          <div className="absolute top-0 right-0 w-2 h-2 border-t-2 border-r-2 border-current opacity-50"></div>
-          <div className="absolute bottom-0 left-0 w-2 h-2 border-b-2 border-l-2 border-current opacity-50"></div>
-        </button>
+
+          {/* View Gallery Button - show when some images generated */}
+          {generatedImages.length > 0 && (
+            <button
+              onClick={() => store.setCurrentStage('GENERATING')}
+              className="px-4 py-2 bg-zinc-700 hover:bg-zinc-600 text-white border border-zinc-600 font-mono text-sm uppercase tracking-wider transition-colors"
+            >
+              📸 View Gallery
+            </button>
+          )}
+
+          {/* Generate All Button */}
+          <button
+            onClick={handleGenerateImages}
+            disabled={prompts.length === 0 || store.isLoading || generatingScene !== null}
+            className="relative font-bold uppercase tracking-wider py-3 px-6 bg-orange-600 hover:bg-orange-500 text-black border-l-4 border-orange-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {store.isLoading ? (
+              <span className="flex items-center gap-2">
+                <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                GENERATING...
+              </span>
+            ) : (
+              `🎨 GENERATE ALL (${prompts.length}) →`
+            )}
+            <div className="absolute top-0 right-0 w-2 h-2 border-t-2 border-r-2 border-current opacity-50"></div>
+            <div className="absolute bottom-0 left-0 w-2 h-2 border-b-2 border-l-2 border-current opacity-50"></div>
+          </button>
+        </div>
       </div>
     </div>
   );

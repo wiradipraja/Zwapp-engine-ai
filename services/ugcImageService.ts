@@ -36,19 +36,21 @@ export interface KieQueryResponse {
 async function createImageTask(
   prompt: string,
   imageUrls: string[],
-  apiKey: string
+  apiKey: string,
+  aspectRatio: '1:1' | '4:3' | '3:4' | '16:9' | '9:16' | '3:2' | '2:3' | 'auto' = '1:1',
+  resolution: '1K' | '2K' = '1K'
 ): Promise<string> {
   console.log('[UGC Image] Creating task with prompt:', prompt.substring(0, 100) + '...');
   console.log('[UGC Image] Reference images:', imageUrls);
 
+  // Use flux/flex/image-to-image - the correct KIE.AI model name
   const payload = {
-    model: 'flux-kontext/flex-image',
+    model: 'flux/flex/image-to-image',
     input: {
       prompt: prompt,
-      image_urls: imageUrls.filter(url => url && url.length > 0),
-      aspect_ratio: '1:1',
-      output_format: 'png',
-      safety_tolerance: 2,
+      input_urls: imageUrls.filter(url => url && url.length > 0), // Correct field name
+      aspect_ratio: aspectRatio,
+      resolution: resolution,
     },
   };
 
@@ -209,7 +211,7 @@ ${prompt.generatedPrompt || prompt.basePrompt}
       promptUsed: fullPrompt,
       generatedAt: Date.now(),
       createdAt: Date.now(),
-      model: 'flux-kontext/flex-image',
+      model: 'flux/flex/image-to-image',
       consistency: {
         modelConsistency: 85,
         productPlacement: 90,

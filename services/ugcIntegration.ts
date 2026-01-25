@@ -2,7 +2,7 @@
 // Integration service untuk menghubungkan UGC components dengan backend services
 
 import { generateScriptWithGemini } from './scriptGeneration';
-import { generateAllUGCImages } from './ugcImageService';
+import { generateAllUGCImages, generateUGCImage } from './ugcImageService';
 import { analyzeImageQuality } from './qualityAssurance';
 import { generateVideoWithVeo } from './videoGeneration';
 import {
@@ -380,6 +380,49 @@ export async function generateUGCImages(
     return images;
   } catch (error) {
     console.error('[UGC Integration] Image generation error:', error);
+    throw error;
+  }
+}
+
+/**
+ * Generate SINGLE image for a specific scene (Manual 1-by-1 generation)
+ */
+export async function generateSingleUGCImage(
+  prompt: PromptTemplate,
+  modelPhoto: UploadedAsset,
+  productPhoto: UploadedAsset,
+  config: UGCServiceConfig,
+  onProgress?: (message: string, percent: number) => void
+): Promise<GeneratedImage> {
+  console.log('[UGC Integration] Generating single image for scene', prompt.sceneNumber);
+
+  if (!config.kieApiKey) {
+    throw new Error('KIE API Key is required for image generation');
+  }
+
+  if (!modelPhoto?.supabaseUrl && !productPhoto?.supabaseUrl) {
+    throw new Error('At least one reference image (model or product photo) is required');
+  }
+
+  onProgress?.(`Preparing scene ${prompt.sceneNumber}...`, 10);
+
+  try {
+    const image = await generateUGCImage(
+      prompt.sceneNumber || 1,
+      prompt,
+      {
+        apiKey: config.kieApiKey,
+        modelPhotoUrl: modelPhoto?.supabaseUrl || '',
+        productPhotoUrl: productPhoto?.supabaseUrl || '',
+      },
+      (msg) => onProgress?.(msg, 50)
+    );
+
+    onProgress?.(`Scene ${prompt.sceneNumber} complete!`, 100);
+    console.log('[UGC Integration] Successfully generated image for scene', prompt.sceneNumber);
+    return image;
+  } catch (error) {
+    console.error('[UGC Integration] Single image generation error:', error);
     throw error;
   }
 }
