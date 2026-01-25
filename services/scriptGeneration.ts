@@ -394,9 +394,12 @@ async function callGoogleGeminiDirect(
   images: { url: string }[] = [],
   temperature: number = 0.8
 ): Promise<string> {
-  // Endpoint resmi Google Gemini
-  const finalModel = modelName.includes('gemini') ? modelName : 'gemini-1.5-flash';
+  // Safe model selection - use 2.0 Flash Exp as robust default
+  const finalModel = modelName.includes('gemini') ? modelName : 'gemini-2.0-flash-exp';
+  
+  // Log URL for debugging 404s
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${finalModel}:generateContent?key=${apiKey}`;
+  console.log(`[Gemini Direct] Calling URL: https://generativelanguage.googleapis.com/v1beta/models/${finalModel}:generateContent`);
 
   // Membangun request body sesuai standar Google Gemini
   const parts: any[] = [{ text: userPrompt }];
@@ -429,6 +432,7 @@ async function callGoogleGeminiDirect(
 
     if (!response.ok) {
       const errorText = await response.text();
+      console.error(`[Gemini Direct] Response Error ${response.status}:`, errorText);
       // Safe error logging without exposing key
       throw new Error(`Google Gemini API Error (${response.status}): ${errorText.substring(0, 200)}`);
     }
@@ -489,7 +493,7 @@ export async function generateScriptWithGemini(
   const {
     apiKey,
     provider,
-    model = 'gemini-1.5-flash', // Free tier model
+    model = 'gemini-2.0-flash-exp', // Updated to 2.0 Flash Exp
     temperature = 0.7,
     maxTokens = 8192, // Increased from 2048 to prevent truncated JSON responses
     language = 'EN',
@@ -911,7 +915,7 @@ Please refine the script based on the feedback. Return ONLY valid JSON (no markd
       sceneBreakdown,
       voiceoverText: refinedData.voiceoverText || currentScript.voiceoverText,
       generatedAt: Date.now(),
-      model: 'gemini-1.5-flash',
+      model: resolvedModelName || 'gemini-2.0-flash-exp',
     };
   } catch (error) {
     throw new Error(

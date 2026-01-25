@@ -297,7 +297,8 @@ export async function generateUGCScript(
       {
         // Require Google Gemini API Key for direct access
         apiKey: config.googleGeminiApiKey || config.kieApiKey,
-        model: 'gemini-1.5-flash',
+        // Switching to 2.0 Flash Experimental as 1.5 Flash returned 404 for this user
+        model: 'gemini-2.0-flash-exp', 
         temperature: 0.85,
         language,
         contentStyle,
