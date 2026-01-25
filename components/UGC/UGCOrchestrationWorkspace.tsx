@@ -92,6 +92,9 @@ const UGCOrchestrationWorkspace: React.FC<UGCOrchestrationWorkspaceProps> = ({
       );
 
       store.setGeneratedScript(script);
+      
+      // Clear existing prompts before adding new ones to avoid duplicates
+      store.clearPrompts();
       const prompts = generatePromptsFromScript(script, modelProfile, productProfile, projectSettings?.preferences);
       prompts.forEach(prompt => store.addPrompt(prompt));
 

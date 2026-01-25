@@ -37,20 +37,20 @@ async function createImageTask(
   prompt: string,
   imageUrls: string[],
   apiKey: string,
-  aspectRatio: '1:1' | '4:3' | '3:4' | '16:9' | '9:16' | '3:2' | '2:3' | 'auto' = '1:1',
-  resolution: '1K' | '2K' = '1K'
+  aspectRatio: '1:1' | '4:3' | '3:4' | '16:9' | '9:16' | '3:2' | '2:3' | '5:4' | '4:5' | '21:9' | 'auto' = '9:16',
+  outputFormat: 'png' | 'jpeg' = 'png'
 ): Promise<string> {
-  console.log('[UGC Image] Creating task with prompt:', prompt.substring(0, 100) + '...');
+  console.log('[UGC Image] Creating Nano Banana task with prompt:', prompt.substring(0, 100) + '...');
   console.log('[UGC Image] Reference images:', imageUrls);
 
-  // Use flux/flex/image-to-image - the correct KIE.AI model name
+  // Use google/nano-banana-edit - PRD requirement for image-to-image
   const payload = {
-    model: 'flux/flex/image-to-image',
+    model: 'google/nano-banana-edit',
     input: {
       prompt: prompt,
-      input_urls: imageUrls.filter(url => url && url.length > 0), // Correct field name
-      aspect_ratio: aspectRatio,
-      resolution: resolution,
+      image_urls: imageUrls.filter(url => url && url.length > 0),
+      image_size: aspectRatio,
+      output_format: outputFormat,
     },
   };
 
@@ -164,21 +164,31 @@ export async function generateUGCImage(
 ): Promise<GeneratedImage> {
   const { apiKey, modelPhotoUrl, productPhotoUrl } = config;
 
-  // Build comprehensive prompt
+  // PRD Identity Lock Prompt Structure for Nano Banana
+  const LOCK_IDENTITY = `Keep the person EXACTLY the same as in the reference image. Do not change face, hair, outfit, skin tone, accessories.`;
+  const LOCK_ENV = `Keep background and lighting EXACTLY the same. No new props or camera changes.`;
+  const PRODUCT_INTEGRATION = `Integrate product from reference image. Place product naturally, sharp and readable. Add soft realistic shadow.`;
+  const NEGATIVE = `Negative: face morphing, outfit change, background change, extra fingers, blur, text overlays, watermarks.`;
+
+  // Build comprehensive prompt with Identity Lock structure
   const fullPrompt = `
-UGC style authentic photo for social media content.
+[LOCK_IDENTITY]
+${LOCK_IDENTITY}
+
+[LOCK_ENV]
+${LOCK_ENV}
+
+[PRODUCT_INTEGRATION]
+${PRODUCT_INTEGRATION}
 
 Scene: ${prompt.sceneDescription}
-
 Style: ${prompt.visualStyle || 'Natural UGC photography, authentic and relatable'}
-
-Instructions:
-- Create a realistic photo that looks like authentic user-generated content
-- Natural lighting, lifestyle setting
-- Product should be clearly visible: ${prompt.productIntegration}
-- Expression/mood: genuine and relatable
+Product Placement: ${prompt.productIntegration || 'Product visible in frame'}
 
 ${prompt.generatedPrompt || prompt.basePrompt}
+
+[NEGATIVE]
+${NEGATIVE}
 `.trim();
 
   // Collect reference images
@@ -211,7 +221,7 @@ ${prompt.generatedPrompt || prompt.basePrompt}
       promptUsed: fullPrompt,
       generatedAt: Date.now(),
       createdAt: Date.now(),
-      model: 'flux/flex/image-to-image',
+      model: 'google/nano-banana-edit',
       consistency: {
         modelConsistency: 85,
         productPlacement: 90,

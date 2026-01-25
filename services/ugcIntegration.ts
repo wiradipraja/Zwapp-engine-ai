@@ -168,7 +168,7 @@ export async function generateUGCScript(
       fullNarrativeContext,
       {
         apiKey: config.geminiApiKey,
-        model: 'gemini-1.5-flash',
+        model: 'gemini-2.5-flash',
         temperature: 0.7,
         language,
         contentStyle,

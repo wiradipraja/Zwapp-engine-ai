@@ -77,6 +77,7 @@ interface UGCStoreState {
   // Content generation
   setGeneratedScript: (script: GeneratedScript) => void;
   setVisualStyleGuide: (guide: VisualStyleGuide) => void;
+  clearPrompts: () => void;
   addPrompt: (prompt: PromptTemplate) => void;
   updatePrompt: (sceneId: string, prompt: PromptTemplate) => void;
   
@@ -350,6 +351,22 @@ export const useUGCStore = create<UGCStoreState>()(
             generatedContent: {
               ...state.currentProject.generatedContent,
               prompts: [...state.currentProject.generatedContent.prompts, prompt],
+            },
+            updatedAt: Date.now(),
+          },
+        };
+      }),
+    
+    clearPrompts: () =>
+      set((state) => {
+        if (!state.currentProject) return {};
+        return {
+          currentProject: {
+            ...state.currentProject,
+            generatedContent: {
+              ...state.currentProject.generatedContent,
+              prompts: [],
+              promptTemplates: [],
             },
             updatedAt: Date.now(),
           },

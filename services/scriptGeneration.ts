@@ -35,7 +35,7 @@ export async function generateScriptWithGemini(
 ): Promise<GeneratedScript> {
   const {
     apiKey,
-    model = 'gemini-1.5-flash', // Free tier model
+    model = 'gemini-2.5-flash', // Free tier model
     temperature = 0.7,
     maxTokens = 2048,
     language = 'EN',
@@ -119,25 +119,39 @@ BRAND NARRATIVE:
 - Tone: ${targetTone}
 - Target Platform: ${targetPlatform}
 
+SCENE STRUCTURE (PRD REQUIREMENT - EXACTLY 5 SCENES):
+1. HOOK - Scroll-stopping opening (powerful statement/question)
+2. PAIN/PROBLEM - Relatable problem moment
+3. SOLUTION - Product introduction as solution (confident)
+4. PROOF - Social proof/demonstration (calm, trustworthy)
+5. CTA - Call to action (soft, direct)
+
+VOICE OVER RULES (per scene):
+- 1 scene = 1 kalimat saja
+- 12-16 kata per kalimat
+- Conversational, 130-160 WPM speaking pace
+
 Generate a UGC script. Return ONLY valid JSON (no markdown) with this structure:
 {
   "title": "Script title",
   "duration": 30,
-  "hook": "The powerful opening hook",
-  "problemStatement": "The problem being addressed",
-  "solution": "How the product solves it",
-  "cta": "Call to action",
+  "hook": "The powerful opening hook (${targetLanguage === 'ID' ? 'dalam Bahasa Indonesia gaul' : 'in English'})",
+  "problemStatement": "The problem being addressed (${targetLanguage === 'ID' ? 'Bahasa Indonesia' : 'English'})",
+  "solution": "How the product solves it (${targetLanguage === 'ID' ? 'Bahasa Indonesia' : 'English'})",
+  "cta": "Call to action (${targetLanguage === 'ID' ? 'Bahasa Indonesia' : 'English'})",
   "scenes": [
     {
       "sceneNumber": 1,
-      "setting": "Description of setting (ALWAYS IN ENGLISH, e.g. 'A living room with natural light')",
+      "scenePurpose": "HOOK",
+      "setting": "Description of setting (ALWAYS IN ENGLISH)",
       "action": "What the model does (ALWAYS IN ENGLISH)",
-      "dialogue": "What the model SAYS (IN ${targetLanguage})",
+      "dialogue": "What the model SAYS - MUST BE IN ${targetLanguage === 'ID' ? 'BAHASA INDONESIA GAUL (gunakan: gue, lo, banget, sih, deh)' : 'ENGLISH'}",
       "productPlacement": "How product is shown (ALWAYS IN ENGLISH)",
-      "emotionalBeat": "The emotional moment (ALWAYS IN ENGLISH)"
+      "emotionalBeat": "The emotional moment (ALWAYS IN ENGLISH)",
+      "voiceOver": "12-16 word sentence for this scene (${targetLanguage === 'ID' ? 'Bahasa Indonesia' : 'English'})"
     }
   ],
-  "voiceoverText": "Optional narration"
+  "voiceoverText": "Full narration combining all scenes"
 }`;
 
   try {
@@ -233,7 +247,7 @@ Generate a UGC script. Return ONLY valid JSON (no markdown) with this structure:
       sceneBreakdown,
       voiceoverText: scriptData.voiceoverText || '',
       generatedAt: Date.now(),
-      model: 'gemini-1.5-flash',
+      model: 'gemini-2.5-flash',
     };
 
     return generatedScript;
@@ -255,7 +269,7 @@ export function estimateScriptGenerationCost(model: string): number {
   // Gemini 1.5 Flash is FREE for up to 15 requests/minute
   // Gemini 1.5 Pro has a free tier too
   const costs: Record<string, number> = {
-    'gemini-1.5-flash': 0, // FREE
+    'gemini-2.5-flash': 0, // FREE
     'gemini-1.5-pro': 0, // FREE (limited)
     'gemini-pro': 0, // FREE
   };
@@ -270,7 +284,7 @@ export async function refineScriptWithGemini(
   feedback: string,
   config: ScriptGenerationConfig
 ): Promise<GeneratedScript> {
-  const { apiKey, model = 'gemini-1.5-flash' } = config;
+  const { apiKey, model = 'gemini-2.5-flash' } = config;
 
   const refinementPrompt = `You are refining a UGC script based on feedback.
 
@@ -368,7 +382,7 @@ Please refine the script based on the feedback. Return ONLY valid JSON (no markd
       sceneBreakdown,
       voiceoverText: refinedData.voiceoverText || currentScript.voiceoverText,
       generatedAt: Date.now(),
-      model: 'gemini-1.5-flash',
+      model: 'gemini-2.5-flash',
     };
   } catch (error) {
     throw new Error(
