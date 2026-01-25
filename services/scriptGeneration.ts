@@ -240,24 +240,36 @@ function getFallbackDialogue(
   if (targetLanguage === 'ID') {
     switch (purpose) {
       case 'HOOK':
-        return `Lo pernah ngerasa penyimpanan berantakan banget gak sih?`;
+        return `Lo pernah ngerasa susah banget cari ${productName || 'produk'} yang beneran oke gak sih?`;
       case 'PAIN':
-        return `Gue sering pusing nyari barang karena wadahnya gak jelas.`;
+        return `Gue sering banget kecewa sama produk lain yang kualitasnya biasa aja dan gak sesuai ekspektasi.`;
       case 'SOLUTION':
-        return `Akhirnya gue pake ${productName} biar rapi dan gampang dicari.`;
+        return `Untungnya sekarang gue nemu ${productName}, ini beneran game changer banget sih!`;
       case 'PROOF':
-        return `Sekarang meja gue lebih clean dan semuanya ketata rapi.`;
+        return `Liat deh hasilnya, beneran beda banget kan? Kualitasnya ga main-main.`;
       case 'CTA':
-        return `Cobain juga ${productName} ini, serius bikin hidup lebih gampang!`;
+        return `Buruan cobain ${productName} sekarang, jangan sampe nyesel belakangan!`;
       default:
-        return `Gue rekomend ${productName} buat bikin rapi.`;
+        return `Gue rekomend banget ${productName} ini buat lo yang mau upgrade lifestyle.`;
     }
   }
 
+  // Generic English Fallback
   switch (purpose) {
     case 'HOOK':
-      return `Do you ever feel like your storage is always messy?`;
+      return `Have you ever struggled to find a ${productName || 'product'} that actually works?`;
     case 'PAIN':
+      return `I used to be so frustrated with low quality options that basically did nothing.`;
+    case 'SOLUTION':
+      return `Then I found ${productName} and it completely changed everything for me!`;
+    case 'PROOF':
+      return `Just look at this quality, it's honestly on another level compared to others.`;
+    case 'CTA':
+      return `You seriously need to try ${productName}, grab yours before it's gone!`;
+    default:
+      return `I highly recommend ${productName}, it's absolutely worth it.`;
+  }
+}
       return `I used to waste time searching because everything was scattered.`;
     case 'SOLUTION':
       return `I switched to ${productName} and it fixed the chaos fast.`;
