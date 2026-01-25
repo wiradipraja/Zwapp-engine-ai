@@ -295,7 +295,8 @@ export function generatePromptsFromScript(
   script: GeneratedScript,
   modelProfile: ModelProfile,
   productProfile: ProductProfile,
-  preferences?: UGCPreferences
+  preferences?: UGCPreferences,
+  visualStyleGuide?: { cameraSpecs?: string; lighting?: string; compositions?: string[] }
 ): PromptTemplate[] {
   const scenes = script.scenes || script.sceneBreakdown.map(s => ({
     sceneNumber: s.sceneNumber,
@@ -331,34 +332,35 @@ export function generatePromptsFromScript(
       sceneNumber: scene.sceneNumber,
       sceneDescription: `${scene.setting}. ${scene.action}.`,
       basePrompt: basePrompt,
-    dynamicVariables: {
-      modelLook: modelProfile.lookDescription || modelProfile.appearance,
-      productName: productProfile.name,
-      setting: scene.setting,
-      action: scene.action,
-    },
-    consistencyCheckpoints: [
-      {
-        aspect: 'model_face' as const,
-        baseline: modelProfile.facialFeatures || 'consistent',
-        requirement: 'Match reference model face from first reference image',
+      dynamicVariables: {
+        modelLook: modelProfile.lookDescription || modelProfile.appearance,
+        productName: productProfile.name,
+        setting: scene.setting,
+        action: scene.action,
       },
-      {
-        aspect: 'product_accuracy' as const,
-        baseline: productProfile.name,
-        requirement: 'Product must match reference image exactly',
+      consistencyCheckpoints: [
+        {
+          aspect: 'model_face' as const,
+          baseline: modelProfile.facialFeatures || 'consistent',
+          requirement: 'Match reference model face from first reference image',
+        },
+        {
+          aspect: 'product_accuracy' as const,
+          baseline: productProfile.name,
+          requirement: 'Product must match reference image exactly',
+        },
+      ],
+      generatedPrompt: `${MODEL_SOP} ${PRODUCT_SOP} Professional UGC content: ${modelProfile.lookDescription || modelProfile.appearance} model in ${scene.setting}, ${scene.action}. Product (${productProfile.name}) ${scene.productPlacement}. Style: authentic social media content, natural lighting, lifestyle photography. Expression: ${scene.emotionalBeat}.`,
+      visualStyle: visualStyleGuide?.cameraSpecs || 'natural UGC photography style',
+      productIntegration: scene.productPlacement,
+      negativePrompts: ['blurry', 'distorted', 'watermark', 'low quality', 'artificial', 'stock photo', 'wrong product', 'different person'],
+      customizations: {
+        style: 'authentic UGC',
+        lighting: visualStyleGuide?.lighting || 'natural soft lighting',
+        composition: visualStyleGuide?.compositions?.[index] || 'rule of thirds',
       },
-    ],
-    generatedPrompt: `${MODEL_SOP} ${PRODUCT_SOP} Professional UGC content: ${modelProfile.lookDescription || modelProfile.appearance} model in ${scene.setting}, ${scene.action}. Product (${productProfile.name}) ${scene.productPlacement}. Style: authentic social media content, natural lighting, lifestyle photography. Expression: ${scene.emotionalBeat}.`,
-    visualStyle: visualStyleGuide?.cameraSpecs || 'natural UGC photography style',
-    productIntegration: scene.productPlacement,
-    negativePrompts: ['blurry', 'distorted', 'watermark', 'low quality', 'artificial', 'stock photo', 'wrong product', 'different person'],
-    customizations: {
-      style: 'authentic UGC',
-      lighting: visualStyleGuide?.lighting || 'natural soft lighting',
-      composition: visualStyleGuide?.compositions?.[index] || 'rule of thirds',
-    },
-  }));
+    };
+  });
 }
 
 /**
