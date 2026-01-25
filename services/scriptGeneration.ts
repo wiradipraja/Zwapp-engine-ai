@@ -105,13 +105,118 @@ function escapeNewlinesInStrings(text: string): string {
   return result;
 }
 
+function repairJsonStringLax(text: string): string {
+  let result = '';
+  let inString = false;
+  let isEscaped = false;
+  let expectingKey = false;
+  let stringRole: 'key' | 'value' | null = null;
+  const stack: Array<'object' | 'array'> = [];
+
+  const nextNonWhitespace = (start: number): string => {
+    for (let i = start; i < text.length; i += 1) {
+      const ch = text[i];
+      if (!/\s/.test(ch)) return ch;
+    }
+    return '';
+  };
+
+  for (let i = 0; i < text.length; i += 1) {
+    const ch = text[i];
+
+    if (!inString) {
+      if (ch === '{') {
+        stack.push('object');
+        expectingKey = true;
+        result += ch;
+        continue;
+      }
+      if (ch === '[') {
+        stack.push('array');
+        expectingKey = false;
+        result += ch;
+        continue;
+      }
+      if (ch === '}' || ch === ']') {
+        stack.pop();
+        expectingKey = stack[stack.length - 1] === 'object';
+        result += ch;
+        continue;
+      }
+      if (ch === ':') {
+        expectingKey = false;
+        result += ch;
+        continue;
+      }
+      if (ch === ',') {
+        expectingKey = stack[stack.length - 1] === 'object';
+        result += ch;
+        continue;
+      }
+      if (ch === '"') {
+        inString = true;
+        stringRole = expectingKey ? 'key' : 'value';
+        result += ch;
+        continue;
+      }
+      result += ch;
+      continue;
+    }
+
+    if (isEscaped) {
+      result += ch;
+      isEscaped = false;
+      continue;
+    }
+    if (ch === '\\') {
+      result += ch;
+      isEscaped = true;
+      continue;
+    }
+    if (ch === '"') {
+      const next = nextNonWhitespace(i + 1);
+      const isKeyClose = stringRole === 'key' && next === ':';
+      const isValueClose = stringRole === 'value' && (next === ',' || next === '}' || next === ']' || next === '');
+
+      if (isKeyClose || isValueClose) {
+        inString = false;
+        stringRole = null;
+        result += ch;
+      } else {
+        result += '\\"';
+      }
+      continue;
+    }
+    if (ch === '\n') {
+      result += '\\n';
+      continue;
+    }
+    if (ch === '\r') {
+      result += '\\r';
+      continue;
+    }
+    if (ch === '\t') {
+      result += '\\t';
+      continue;
+    }
+    if (ch.charCodeAt(0) < 0x20) {
+      result += ' ';
+      continue;
+    }
+
+    result += ch;
+  }
+
+  return result;
+}
+
 function parseJsonSafe(raw: string): any {
   const normalized = normalizeJsonCandidate(raw);
 
   try {
     return JSON.parse(normalized);
   } catch (err) {
-    const repaired = escapeNewlinesInStrings(normalized).replace(/,(\s*[}\]])/g, '$1');
+    const repaired = repairJsonStringLax(escapeNewlinesInStrings(normalized)).replace(/,(\s*[}\]])/g, '$1');
     return JSON.parse(repaired);
   }
 }
@@ -259,6 +364,24 @@ function ensureScenes(
   return {
     ...scriptData,
     scenes: normalizedScenes,
+  };
+}
+
+function buildFallbackScriptData(
+  targetLanguage: 'ID' | 'EN',
+  productName: string,
+  targetDuration: string
+): any {
+  const duration = /15s/i.test(targetDuration) ? 15 : 30;
+  return {
+    title: `${productName} UGC Script`,
+    duration,
+    hook: getFallbackDialogue(targetLanguage, 'HOOK', productName),
+    problemStatement: getFallbackDialogue(targetLanguage, 'PAIN', productName),
+    solution: getFallbackDialogue(targetLanguage, 'SOLUTION', productName),
+    cta: getFallbackDialogue(targetLanguage, 'CTA', productName),
+    scenes: [],
+    voiceoverText: '',
   };
 }
 
@@ -733,14 +856,18 @@ IMPORTANT JSON RULES:
         scriptData = parseJsonSafe(repairedContent);
       } catch (repairError) {
         console.error('[UGC Script] JSON repair failed', repairError);
-        throw new Error(
-          `Script generation failed: ${repairError instanceof Error ? repairError.message : String(repairError)}`
-        );
+        scriptData = buildFallbackScriptData(targetLanguage, productName, targetDuration);
       }
     }
 
     const targetSceneCount = getTargetSceneCount(preferences);
     scriptData = ensureScenes(scriptData, targetSceneCount, targetLanguage, productName);
+    if (!scriptData.voiceoverText && Array.isArray(scriptData.scenes)) {
+      scriptData.voiceoverText = scriptData.scenes
+        .map((scene: any) => scene.voiceOver || scene.dialogue || '')
+        .filter(Boolean)
+        .join(' ');
+    }
 
     // Build sceneBreakdown for UGC format
     const sceneBreakdown: SceneBreakdown[] = (scriptData.scenes || []).map(

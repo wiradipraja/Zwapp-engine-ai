@@ -349,16 +349,24 @@ export async function generateUGCImage(
 
   // Build prompt with Identity Lock structure
   const scenePrompt = prompt.generatedPrompt || prompt.basePrompt || prompt.sceneDescription || '';
+  const modelHint = prompt.dynamicVariables?.modelLook || 'reference model';
+  const productHint = prompt.dynamicVariables?.productName || 'product';
   const fullPrompt = `
+use the provided image for accurate facial features
+
 [LOCK_IDENTITY]
 Keep the person EXACTLY the same as in Reference Image 1.
 Do NOT change face, hair, outfit, skin tone.
+Reference Image 1 is the ONLY source of truth for the model identity.
+Model description: ${modelHint}
 
 [LOCK_ENV]
 Keep background and lighting consistent.
 
 [PRODUCT_INTEGRATION]
 Product from Reference Image 2 must appear naturally.
+Reference Image 2 is the ONLY source of truth for the product.
+Product description: ${productHint}
 
 [BRAND_LOCK]
 Preserve any brand name/logo/text EXACTLY as in the reference image(s).

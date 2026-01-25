@@ -83,6 +83,63 @@ export interface UGCServiceConfig {
   visionApiKey?: string;
 }
 
+function resolveTargetSceneCount(preferences?: UGCPreferences): number {
+  const duration = preferences?.videoDuration || '';
+  if (/15s/i.test(duration) || /3\s*scenes/i.test(duration)) return 3;
+  return 5;
+}
+
+function ensureScriptScenes(
+  script: GeneratedScript,
+  productName: string,
+  targetLanguage: 'ID' | 'EN',
+  targetSceneCount: number
+): GeneratedScript {
+  if (Array.isArray(script.scenes) && script.scenes.length >= targetSceneCount) return script;
+
+  const purposes: Array<'HOOK' | 'PAIN' | 'SOLUTION' | 'PROOF' | 'CTA'> = [
+    'HOOK',
+    'PAIN',
+    'SOLUTION',
+    'PROOF',
+    'CTA',
+  ];
+  const fallbackDialogue: Record<string, string> = targetLanguage === 'ID'
+    ? {
+        HOOK: 'Lo pernah ngerasa barang berantakan bikin pusing gak sih?',
+        PAIN: 'Gue sering buang waktu nyari barang karena gak rapi.',
+        SOLUTION: `Akhirnya gue pake ${productName} biar semuanya rapi.`,
+        PROOF: 'Sekarang meja gue kelihatan clean dan gampang dicari.',
+        CTA: `Cobain ${productName} ini, beneran ngebantu!`,
+      }
+    : {
+        HOOK: 'Do you ever feel like your stuff is always messy?',
+        PAIN: 'I used to waste time searching because nothing was organized.',
+        SOLUTION: `I switched to ${productName} and it fixed the chaos.`,
+        PROOF: 'Now my space looks clean and everything is easy to find.',
+        CTA: `Try ${productName} — it makes organizing effortless.`,
+      };
+
+  const baseScenes = Array.isArray(script.scenes) ? [...script.scenes] : [];
+  while (baseScenes.length < targetSceneCount) {
+    const idx = baseScenes.length;
+    const purpose = purposes[idx] || 'CTA';
+    baseScenes.push({
+      sceneNumber: idx + 1,
+      setting: 'Clean lifestyle room with soft daylight',
+      action: `Model presents ${productName} to camera`,
+      dialogue: fallbackDialogue[purpose] || fallbackDialogue.CTA,
+      productPlacement: `${productName} visible on surface`,
+      emotionalBeat: 'Engaging',
+    });
+  }
+
+  return {
+    ...script,
+    scenes: baseScenes.slice(0, targetSceneCount),
+  };
+}
+
 /**
  * Re-export key types and functions for easier access
  */
@@ -247,17 +304,25 @@ export async function generateUGCScript(
 
     onProgress?.('Script generated successfully!', 100);
 
+    const targetSceneCount = resolveTargetSceneCount(preferences);
+    const normalizedScript = ensureScriptScenes(
+      script,
+      fullProductProfile.name || 'product',
+      language,
+      targetSceneCount
+    );
+
     // Convert to UGC format
     return {
-      id: script.id,
-      title: script.title,
-      duration: script.duration,
-      hook: script.scenes?.[0]?.dialogue || 'Engaging hook',
-      problemStatement: script.scenes?.[0]?.action || 'Problem statement',
-      solution: script.scenes?.[1]?.action || 'Solution',
-      cta: script.voiceoverText || 'Call to action',
-      fullNarrative: script.voiceoverText || '',
-      sceneBreakdown: script.scenes?.map(s => ({
+      id: normalizedScript.id,
+      title: normalizedScript.title,
+      duration: normalizedScript.duration,
+      hook: normalizedScript.scenes?.[0]?.dialogue || 'Engaging hook',
+      problemStatement: normalizedScript.scenes?.[0]?.action || 'Problem statement',
+      solution: normalizedScript.scenes?.[1]?.action || 'Solution',
+      cta: normalizedScript.voiceoverText || 'Call to action',
+      fullNarrative: normalizedScript.voiceoverText || '',
+      sceneBreakdown: normalizedScript.scenes?.map(s => ({
         sceneNumber: s.sceneNumber,
         description: s.setting,
         modelAction: s.action,
@@ -267,10 +332,10 @@ export async function generateUGCScript(
         cameraAngle: 'medium shot',
         narrativePoint: s.dialogue,
       })) || [],
-      scenes: script.scenes,
-      voiceoverText: script.voiceoverText,
-      generatedAt: script.generatedAt,
-      model: script.model,
+      scenes: normalizedScript.scenes,
+      voiceoverText: normalizedScript.voiceoverText,
+      generatedAt: normalizedScript.generatedAt,
+      model: normalizedScript.model,
     };
   } catch (error) {
     console.error('Script generation error:', error);
