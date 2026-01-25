@@ -205,8 +205,13 @@ async function pollKieTask(
         console.log('[KIE] Parsed result:', JSON.stringify(parsed).substring(0, 500));
         let imageUrl = '';
         
+        // Format 0: { resultUrls: ["url1", "url2"] } - KIE.AI nano-banana-edit format!
+        if (parsed.resultUrls && Array.isArray(parsed.resultUrls) && parsed.resultUrls[0]) {
+          imageUrl = parsed.resultUrls[0];
+          console.log('[KIE] Found URL in resultUrls[0]');
+        }
         // Format 1: { images: [{ url: "..." }] }
-        if (parsed.images && Array.isArray(parsed.images) && parsed.images[0]?.url) {
+        else if (parsed.images && Array.isArray(parsed.images) && parsed.images[0]?.url) {
           imageUrl = parsed.images[0].url;
           console.log('[KIE] Found URL in images[0].url');
         }

@@ -128,8 +128,13 @@ async function pollTaskResult(
             // Try multiple URL formats
             let imageUrl = '';
             
+            // Format 0: { resultUrls: ["url1", "url2"] } - KIE.AI nano-banana format!
+            if (parsed.resultUrls && Array.isArray(parsed.resultUrls) && parsed.resultUrls[0]) {
+              imageUrl = parsed.resultUrls[0];
+              console.log('[UGC Image] Found URL in resultUrls[0]');
+            }
             // Format 1: { images: [{ url: "..." }] }
-            if (parsed.images && Array.isArray(parsed.images) && parsed.images[0]?.url) {
+            else if (parsed.images && Array.isArray(parsed.images) && parsed.images[0]?.url) {
               imageUrl = parsed.images[0].url;
             }
             // Format 2: { image: { url: "..." } }
