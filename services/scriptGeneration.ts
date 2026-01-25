@@ -386,6 +386,68 @@ function buildFallbackScriptData(
   };
 }
 
+async function callGoogleGeminiDirect(
+  apiKey: string,
+  modelName: string, 
+  systemInstruction: string,
+  userPrompt: string,
+  images: { url: string }[] = [],
+  temperature: number = 0.8
+): Promise<string> {
+  // Endpoint resmi Google Gemini
+  const finalModel = modelName.includes('gemini') ? modelName : 'gemini-1.5-flash';
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${finalModel}:generateContent?key=${apiKey}`;
+
+  // Membangun request body sesuai standar Google Gemini
+  const parts: any[] = [{ text: userPrompt }];
+  
+  const requestBody = {
+    system_instruction: {
+      parts: { text: systemInstruction }
+    },
+    contents: [
+      {
+        role: "user",
+        parts: parts
+      }
+    ],
+    generationConfig: {
+      temperature: temperature,
+      maxOutputTokens: 8192,
+      responseMimeType: "application/json"
+    }
+  };
+
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(requestBody)
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      // Safe error logging without exposing key
+      throw new Error(`Google Gemini API Error (${response.status}): ${errorText.substring(0, 200)}`);
+    }
+
+    const data = await response.json();
+    const textResponse = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    
+    if (!textResponse) {
+      throw new Error('Empty response from Google Gemini');
+    }
+
+    return textResponse;
+
+  } catch (error) {
+    console.error('Direct Gemini Call Failed:', error);
+    throw error;
+  }
+}
+
 async function repairJsonWithModel(
   raw: string,
   provider: 'google' | 'kie',
@@ -396,84 +458,22 @@ async function repairJsonWithModel(
     'Fix the JSON below. Return ONLY valid JSON (no markdown, no explanations). ' +
     'Preserve all fields and values. Escape newlines inside strings and add missing commas if needed.';
 
-  // Combine system instruction with user prompt
-  const combinedPrompt = `You are a strict JSON repair tool.\n\n${repairInstruction}\n\n${raw}`;
+  const combinedPrompt = `${repairInstruction}\n\n${raw}`;
 
-  if (provider === 'kie') {
-    const response = await fetch('https://api.kie.ai/gemini-3-flash/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        messages: [
-          {
-            role: 'user',
-            content: [{ type: 'text', text: combinedPrompt }], // Array format per KIE AI docs
-          },
-        ],
-        include_thoughts: false,
-        reasoning_effort: 'low',
-      }),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`KIE JSON repair failed (${response.status}): ${errorText.substring(0, 200)}`);
-    }
-
-    const data = await response.json();
-    const messageContent = data?.choices?.[0]?.message?.content;
-
-    if (typeof messageContent === 'string') {
-      return messageContent;
-    }
-    if (Array.isArray(messageContent)) {
-      return messageContent.map((part: any) => part?.text || part?.content || '').join('');
-    }
-    if (messageContent?.text) {
-      return messageContent.text;
-    }
-    throw new Error('KIE JSON repair returned empty content');
+  try {
+     return await callGoogleGeminiDirect(
+         apiKey,
+         model,
+         "You are a strict JSON repair tool. Return ONLY raw JSON.",
+         combinedPrompt,
+         [],
+         0.1
+     );
+  } catch (e) {
+      console.error("JSON Repair failed:", e);
+      // Return original or empty if repair fails
+      return "";
   }
-
-  // Fallback - also use KIE AI for non-KIE providers (unified endpoint)
-  console.log('[JSON Repair] Using KIE AI endpoint for JSON repair');
-  const response = await fetch(
-    'https://api.kie.ai/gemini-3-flash/v1/chat/completions',
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        messages: [
-          {
-            role: 'user',
-            content: [{ type: 'text', text: combinedPrompt }], // Array format per KIE AI docs
-          },
-        ],
-        include_thoughts: false,
-        reasoning_effort: 'low',
-      }),
-    }
-  );
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(
-      `KIE JSON repair failed (${response.status}): ${errorText.substring(0, 200)}`
-    );
-  }
-
-  const data = await response.json();
-  const msgContent = data?.choices?.[0]?.message?.content;
-  if (typeof msgContent === 'string') return msgContent;
-  if (Array.isArray(msgContent)) return msgContent.map((p: any) => p?.text || p?.content || '').join('');
-  if (msgContent?.text) return msgContent.text;
-  return '';
 }
 
 /**
@@ -723,124 +723,43 @@ IMPORTANT JSON RULES:
 - Do NOT include trailing commas.`;
 
   try {
-    // ALWAYS use KIE AI endpoint for Gemini - this ensures requests are logged in KIE dashboard
-    // KIE AI supports both KIE API keys and Google Gemini API keys
-    const detectedProvider: 'google' | 'kie' = 'kie';
+    console.log('[UGC Script] Using DIRECT Google Gemini API');
 
-    let content = '';
-    const resolvedModelName = 'kie-gemini-3-flash';
+    // Separate System Prompt and User Prompt for best results with Gemini
+    const systemPromptBase = `Kamu adalah CREATIVE DIRECTOR & UGC SCRIPTWRITER senior.\n${languageInstruction}\n${styleInstruction}`;
     
-    // Debug: Log API key format (masked)
-    const keyPrefix = apiKey?.substring(0, 8) || 'EMPTY';
-    console.log(`[UGC Script] API Key prefix: ${keyPrefix}... (length: ${apiKey?.length || 0})`);
+    // Combine the rest into User Prompt
+    const userPromptFull = `${prompt}\n\nPlease generate the JSON based on these details.`;
 
-    if (detectedProvider === 'kie') {
-      console.log('[UGC Script] Using KIE Gemini Chat Completions');
-      
-      // Combine system prompt with user prompt for simpler request format
-      const combinedPrompt = `${NANO_BANANA_UGC_CONFIG.system_prompt}\n\n---\n\n${prompt}`;
-      
-      const userContent: any[] = [
-        {
-          type: 'text',
-          text: combinedPrompt,
-        },
-      ];
+    // Call direct Gemini function
+    const content = await callGoogleGeminiDirect(
+        apiKey,
+        model, 
+        systemPromptBase,
+        userPromptFull,
+        [], // Processing images skipped for text stability
+        temperature
+    );
 
-      if (modelProfile.referenceImageUrl) {
-        userContent.push({
-          type: 'image_url',
-          image_url: { url: modelProfile.referenceImageUrl },
-        });
-      }
-      if (productProfile.referenceImageUrl) {
-        userContent.push({
-          type: 'image_url',
-          image_url: { url: productProfile.referenceImageUrl },
-        });
-      }
+    console.log('[UGC Script] Gemini Response Length:', content.length);
 
-      // KIE AI format: content MUST be array [{type: "text", text: "..."}]
-      const requestBody = {
-        messages: [
-          {
-            role: 'user',
-            content: userContent, // Always array format per KIE AI docs
-          },
-        ],
-        include_thoughts: false,
-        reasoning_effort: 'high',
-      };
-      
-      console.log('[UGC Script] Request body (first 1000 chars):', JSON.stringify(requestBody).substring(0, 1000));
-
-      const response = await fetch(
-        'https://api.kie.ai/gemini-3-flash/v1/chat/completions',
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${apiKey}`,
-          },
-          body: JSON.stringify(requestBody),
-        }
-      );
-
-      const responseText = await response.text();
-      console.log('[UGC Script] KIE API Raw Response:', responseText.substring(0, 500));
-      
-      let data: any;
-      try {
-        data = JSON.parse(responseText);
-      } catch (e) {
-        throw new Error(`Failed to parse KIE API response: ${responseText.substring(0, 200)}`);
-      }
-      
-      // Check for error in response body
-      if (data.code && data.code !== 200) {
-        throw new Error(`KIE API Error (code ${data.code}): ${data.msg || 'Unknown error'}`);
-      }
-      
-      if (!response.ok) {
-        throw new Error(`KIE Gemini Chat Error (${response.status}): ${responseText.substring(0, 200)}`);
-      }
-
-      // Per KIE AI docs, response content is a STRING (not array)
-      const responseContent = data?.choices?.[0]?.message?.content;
-      console.log('[UGC Script] Response content type:', typeof responseContent);
-
-      if (typeof responseContent === 'string') {
-        content = responseContent;
-      } else {
-        // Fallback for unexpected formats
-        content = JSON.stringify(responseContent);
-      }
-      
-      console.log('[UGC Script] Extracted content length:', content?.length || 0);
-      console.log('[UGC Script] Content preview:', content?.substring(0, 200) || 'EMPTY');
-    }
-    // Removed Google Gemini direct branch - now always uses KIE AI
-
-    if (!content) {
-      console.error('[UGC Script] No content extracted from response');
-      throw new Error('No content received from Gemini');
-    }
-
-    // Parse JSON response (with repair for common model formatting issues)
+    // Parse JSON response 
     let scriptData: any;
     try {
       scriptData = parseJsonSafe(content);
     } catch (parseError) {
-      console.error('[UGC Script] Failed to parse JSON from model response', parseError);
-      console.error('[UGC Script] Raw response snippet:', content.substring(0, 2000));
-      try {
-        const repairedContent = await repairJsonWithModel(content, detectedProvider, apiKey, model);
-        scriptData = parseJsonSafe(repairedContent);
-      } catch (repairError) {
-        console.error('[UGC Script] JSON repair failed', repairError);
-        scriptData = buildFallbackScriptData(targetLanguage, productName, targetDuration);
-      }
+       console.error('JSON Parse error, trying fallback/repair...');
+       try {
+           // We pass 'google' as provider but it is ignored by new implementation
+           const repairedContent = await repairJsonWithModel(content, 'google', apiKey, model);
+           scriptData = parseJsonSafe(repairedContent);
+       } catch (e) {
+           console.error('Repair failed, using fallback script');
+           scriptData = buildFallbackScriptData(targetLanguage, productName, targetDuration);
+       }
     }
+
+    const resolvedModelName = model; // Ensure model name is carried over
 
     const targetSceneCount = getTargetSceneCount(preferences);
     scriptData = ensureScenes(scriptData, targetSceneCount, targetLanguage, productName);
@@ -940,62 +859,18 @@ ${feedback}
 Please refine the script based on the feedback. Return ONLY valid JSON (no markdown, no code blocks) with the same structure as the current script.`;
 
   try {
-    // USE KIE AI ENDPOINT
-    console.log('[UGC Script] Refining script via KIE Gemini');
-    const response = await fetch(
-      'https://api.kie.ai/gemini-3-flash/v1/chat/completions',
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`,
-        },
-        body: JSON.stringify({
-          messages: [
-            {
-              role: 'user',
-              content: [{ type: 'text', text: refinementPrompt }], // Array format per KIE AI docs
-            },
-          ],
-          include_thoughts: false,
-          reasoning_effort: 'high',
-        }),
-      }
-    );
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Failed to refine script: ${errorText.substring(0, 200)}`);
-    }
-
-    const data = await response.json();
-    const messageContent = data?.choices?.[0]?.message?.content;
-    let content = '';
-    if (typeof messageContent === 'string') {
-      content = messageContent;
-    } else if (Array.isArray(messageContent)) {
-      content = messageContent.map((p: any) => p?.text || p?.content || '').join('');
-    } else if (messageContent?.text) {
-      content = messageContent.text;
-    }
-
-    if (!content) {
-      throw new Error('No refinement content received');
-    }
-
-    // Clean the response
-    let cleanContent = content.trim();
-    if (cleanContent.startsWith('```json')) {
-      cleanContent = cleanContent.slice(7);
-    } else if (cleanContent.startsWith('```')) {
-      cleanContent = cleanContent.slice(3);
-    }
-    if (cleanContent.endsWith('```')) {
-      cleanContent = cleanContent.slice(0, -3);
-    }
-    cleanContent = cleanContent.trim();
-
-    const refinedData = JSON.parse(cleanContent);
+     console.log('[UGC Script] Refining script via DIRECT Google Gemini');
+     
+     const content = await callGoogleGeminiDirect(
+         apiKey,
+         model,
+         "You are a professional script editor. Return ONLY valid JSON.",
+         refinementPrompt,
+         [],
+         0.7
+     );
+     
+     const refinedData = parseJsonSafe(content);
 
     // Build sceneBreakdown for UGC format
     const sceneBreakdown: SceneBreakdown[] = (refinedData.scenes || []).map(
