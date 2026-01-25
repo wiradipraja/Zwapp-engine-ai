@@ -115,23 +115,65 @@ async function pollTaskResult(
 
       const result: KieQueryResponse = await response.json();
       
-      console.log('[UGC Image] Poll result:', result.data?.state);
+      console.log('[UGC Image] Poll result state:', result.data?.state);
 
       if (result.data?.state === 'success') {
         if (result.data.resultJson) {
+          console.log('[UGC Image] Raw resultJson:', result.data.resultJson);
+          
           try {
             const parsed = JSON.parse(result.data.resultJson);
-            const imageUrl = parsed.images?.[0]?.url || 
-                            parsed.image?.url ||
-                            parsed.output?.[0] ||
-                            parsed.url ||
-                            '';
+            console.log('[UGC Image] Parsed keys:', Object.keys(parsed));
+            
+            // Try multiple URL formats
+            let imageUrl = '';
+            
+            // Format 1: { images: [{ url: "..." }] }
+            if (parsed.images && Array.isArray(parsed.images) && parsed.images[0]?.url) {
+              imageUrl = parsed.images[0].url;
+            }
+            // Format 2: { image: { url: "..." } }
+            else if (parsed.image?.url) {
+              imageUrl = parsed.image.url;
+            }
+            // Format 3: { output: ["url1", "url2"] }
+            else if (parsed.output && Array.isArray(parsed.output) && parsed.output[0]) {
+              imageUrl = parsed.output[0];
+            }
+            // Format 4: { url: "..." }
+            else if (parsed.url) {
+              imageUrl = parsed.url;
+            }
+            // Format 5: { data: { url: "..." } }
+            else if (parsed.data?.url) {
+              imageUrl = parsed.data.url;
+            }
+            else if (parsed.data?.images?.[0]?.url) {
+              imageUrl = parsed.data.images[0].url;
+            }
+            // Format 6: { image_url: "..." }
+            else if (parsed.image_url) {
+              imageUrl = parsed.image_url;
+            }
+            // Format 7: { result: { url } } or { result: "url" }
+            else if (parsed.result?.url) {
+              imageUrl = parsed.result.url;
+            }
+            else if (typeof parsed.result === 'string' && parsed.result.startsWith('http')) {
+              imageUrl = parsed.result;
+            }
             
             if (imageUrl) {
-              console.log('[UGC Image] Got image URL:', imageUrl.substring(0, 50) + '...');
+              console.log('[UGC Image] Got image URL:', imageUrl.substring(0, 80) + '...');
               return imageUrl;
             }
+            
+            console.error('[UGC Image] No URL found. Result:', JSON.stringify(parsed).substring(0, 300));
           } catch (e) {
+            // Maybe resultJson is already a URL
+            if (result.data.resultJson.startsWith('http')) {
+              return result.data.resultJson;
+            }
             console.error('[UGC Image] Parse error:', e);
           }
         }

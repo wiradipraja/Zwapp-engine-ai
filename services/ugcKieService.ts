@@ -139,20 +139,94 @@ async function pollKieTask(
     });
 
     if (!response.ok) {
+      console.log(`[KIE] Poll attempt ${attempt + 1} - response not ok, retrying...`);
       await new Promise(r => setTimeout(r, intervalMs));
       continue;
     }
 
     const result: KieQueryResponse = await response.json();
+    console.log('[KIE] Poll result state:', result.data?.state);
 
     if (result.data?.state === 'success' && result.data.resultJson) {
-      const parsed = JSON.parse(result.data.resultJson);
-      const imageUrl = parsed.images?.[0]?.url || parsed.image?.url || parsed.output?.[0] || parsed.url || '';
-      if (imageUrl) return imageUrl;
-      throw new Error('No image URL in result');
+      console.log('[KIE] Raw resultJson:', result.data.resultJson);
+      
+      try {
+        const parsed = JSON.parse(result.data.resultJson);
+        console.log('[KIE] Parsed result keys:', Object.keys(parsed));
+        console.log('[KIE] Parsed result:', JSON.stringify(parsed).substring(0, 500));
+        
+        // Try multiple possible URL locations based on different KIE.AI model responses
+        let imageUrl = '';
+        
+        // Format 1: { images: [{ url: "..." }] }
+        if (parsed.images && Array.isArray(parsed.images) && parsed.images[0]?.url) {
+          imageUrl = parsed.images[0].url;
+          console.log('[KIE] Found URL in images[0].url');
+        }
+        // Format 2: { image: { url: "..." } }
+        else if (parsed.image?.url) {
+          imageUrl = parsed.image.url;
+          console.log('[KIE] Found URL in image.url');
+        }
+        // Format 3: { output: ["url1", "url2"] }
+        else if (parsed.output && Array.isArray(parsed.output) && parsed.output[0]) {
+          imageUrl = parsed.output[0];
+          console.log('[KIE] Found URL in output[0]');
+        }
+        // Format 4: { url: "..." }
+        else if (parsed.url) {
+          imageUrl = parsed.url;
+          console.log('[KIE] Found URL in url');
+        }
+        // Format 5: { data: { url: "..." } } or { data: { images: [...] } }
+        else if (parsed.data?.url) {
+          imageUrl = parsed.data.url;
+          console.log('[KIE] Found URL in data.url');
+        }
+        else if (parsed.data?.images?.[0]?.url) {
+          imageUrl = parsed.data.images[0].url;
+          console.log('[KIE] Found URL in data.images[0].url');
+        }
+        // Format 6: Direct string (the resultJson itself might be the URL)
+        else if (typeof parsed === 'string' && parsed.startsWith('http')) {
+          imageUrl = parsed;
+          console.log('[KIE] resultJson is direct URL string');
+        }
+        // Format 7: { image_url: "..." }
+        else if (parsed.image_url) {
+          imageUrl = parsed.image_url;
+          console.log('[KIE] Found URL in image_url');
+        }
+        // Format 8: { result: { url: "..." } } or { result: "url" }
+        else if (parsed.result?.url) {
+          imageUrl = parsed.result.url;
+          console.log('[KIE] Found URL in result.url');
+        }
+        else if (typeof parsed.result === 'string' && parsed.result.startsWith('http')) {
+          imageUrl = parsed.result;
+          console.log('[KIE] Found URL in result (string)');
+        }
+        
+        if (imageUrl) {
+          console.log('[KIE] Final image URL:', imageUrl.substring(0, 100) + '...');
+          return imageUrl;
+        }
+        
+        console.error('[KIE] Could not find image URL in parsed result:', JSON.stringify(parsed));
+        throw new Error(`No image URL found in result. Keys: ${Object.keys(parsed).join(', ')}`);
+      } catch (parseError) {
+        // Maybe resultJson is already a URL string
+        if (result.data.resultJson.startsWith('http')) {
+          console.log('[KIE] resultJson is direct URL');
+          return result.data.resultJson;
+        }
+        console.error('[KIE] Parse error:', parseError);
+        throw new Error(`Failed to parse result: ${parseError}`);
+      }
     }
 
     if (result.data?.state === 'fail') {
+      console.error('[KIE] Task failed:', result.data.failMsg);
       throw new Error(result.data.failMsg || 'Generation failed');
     }
 
