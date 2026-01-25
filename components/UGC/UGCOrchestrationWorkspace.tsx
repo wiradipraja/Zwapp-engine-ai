@@ -83,7 +83,8 @@ const UGCOrchestrationWorkspace: React.FC<UGCOrchestrationWorkspaceProps> = ({
         { 
           language: projectSettings?.language || 'EN', 
           contentStyle: projectSettings?.contentStyle || 'selfie',
-          preferences: projectSettings?.preferences
+          preferences: projectSettings?.preferences,
+          allowFallback: false
         }
       );
 
@@ -224,6 +225,29 @@ const UGCOrchestrationWorkspace: React.FC<UGCOrchestrationWorkspaceProps> = ({
     GENERATING: 'GENERATE', QA: 'QA CHECK', VIDEO_GENERATION: 'VIDEO', COMPLETE: 'COMPLETE',
   };
 
+  const renderStageContent = () => {
+    switch (store.currentProject?.currentStage) {
+      case 'INPUT':
+        return <InputModule onStartGeneration={handleAnalyzeAndGenerate} />;
+      case 'ANALYSIS':
+        return <AnalysisLoading />;
+      case 'SCRIPTING':
+        return <ScriptReviewPanel />;
+      case 'PROMPTING':
+        return <PromptEngineeringPanel onGenerateImages={handleGenerateImages} />;
+      case 'GENERATING':
+        return <ImageGalleryView onRunQA={handleRunQA} />;
+      case 'QA':
+        return <QAResultsPanel onContinue={() => store.setCurrentStage('VIDEO_GENERATION')} />;
+      case 'VIDEO_GENERATION':
+        return <VideoGenerationPanel onGenerateVideo={handleGenerateVideo} />;
+      case 'COMPLETE':
+        return <CompleteScreen />;
+      default:
+        return null;
+    }
+  };
+
   // New Project Screen
   if (!store.currentProject) {
     return (
@@ -314,14 +338,18 @@ const UGCOrchestrationWorkspace: React.FC<UGCOrchestrationWorkspaceProps> = ({
 
       {/* Main Content */}
       <div className="p-6">
-        {store.currentProject.currentStage === 'INPUT' && <InputModule onStartGeneration={handleAnalyzeAndGenerate} />}
-        {store.currentProject.currentStage === 'ANALYSIS' && <AnalysisLoading />}
-        {store.currentProject.currentStage === 'SCRIPTING' && <ScriptReviewPanel />}
-        {store.currentProject.currentStage === 'PROMPTING' && <PromptEngineeringPanel onGenerateImages={handleGenerateImages} />}
-        {store.currentProject.currentStage === 'GENERATING' && <ImageGalleryView onRunQA={handleRunQA} />}
-        {store.currentProject.currentStage === 'QA' && <QAResultsPanel onContinue={() => store.setCurrentStage('VIDEO_GENERATION')} />}
-        {store.currentProject.currentStage === 'VIDEO_GENERATION' && <VideoGenerationPanel onGenerateVideo={handleGenerateVideo} />}
-        {store.currentProject.currentStage === 'COMPLETE' && <CompleteScreen />}
+        {store.currentProject.currentStage === 'INPUT' ? (
+          renderStageContent()
+        ) : (
+          <div className="grid grid-cols-12 gap-6">
+            <div className="col-span-12 lg:col-span-4 xl:col-span-3">
+              <UGCParameterPanel onEditInputs={() => store.setCurrentStage('INPUT')} onReset={() => store.resetProject()} />
+            </div>
+            <div className="col-span-12 lg:col-span-8 xl:col-span-9">
+              {renderStageContent()}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Toast Notifications */}
@@ -386,6 +414,89 @@ const CompleteScreen: React.FC = () => {
         <div className="absolute top-0 right-0 w-2 h-2 border-t-2 border-r-2 border-current opacity-50"></div>
         <div className="absolute bottom-0 left-0 w-2 h-2 border-b-2 border-l-2 border-current opacity-50"></div>
       </button>
+    </div>
+  );
+};
+
+const UGCParameterPanel: React.FC<{ onEditInputs: () => void; onReset: () => void }> = ({ onEditInputs, onReset }) => {
+  const store = useUGCStore();
+  const project = store.currentProject;
+
+  if (!project) return null;
+
+  const modelPhoto = project.inputAssets.modelPhotos[0];
+  const productPhoto = project.inputAssets.productPhotos[0];
+  const prefs = project.settings.preferences;
+
+  return (
+    <div className="bg-zinc-900/80 border border-zinc-800">
+      <div className="px-4 py-3 border-b border-zinc-800">
+        <h3 className="text-xs font-bold uppercase tracking-widest text-white">Parameters</h3>
+        <p className="text-[10px] text-zinc-500 font-mono">Quick reference & edits</p>
+      </div>
+      <div className="p-4 space-y-4">
+        <div>
+          <p className="text-[10px] text-zinc-500 font-mono uppercase tracking-widest mb-2">Assets</p>
+          <div className="grid grid-cols-2 gap-2">
+            <div className="border border-zinc-700 bg-zinc-950 p-2">
+              <p className="text-[9px] text-zinc-500 font-mono mb-2">Model</p>
+              {modelPhoto?.supabaseUrl ? (
+                <img src={modelPhoto.supabaseUrl} alt="Model" className="w-full h-24 object-cover" />
+              ) : (
+                <div className="h-24 flex items-center justify-center text-[10px] text-zinc-600 font-mono">No image</div>
+              )}
+            </div>
+            <div className="border border-zinc-700 bg-zinc-950 p-2">
+              <p className="text-[9px] text-zinc-500 font-mono mb-2">Product</p>
+              {productPhoto?.supabaseUrl ? (
+                <img src={productPhoto.supabaseUrl} alt="Product" className="w-full h-24 object-contain" />
+              ) : (
+                <div className="h-24 flex items-center justify-center text-[10px] text-zinc-600 font-mono">No image</div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {prefs && (
+          <div>
+            <p className="text-[10px] text-zinc-500 font-mono uppercase tracking-widest mb-2">Preferences</p>
+            <div className="space-y-2 text-[11px] text-zinc-300">
+              {[
+                ['Character', prefs.characterProfile],
+                ['Outfit', prefs.outfitStyle],
+                ['Background', prefs.backgroundStyle],
+                ['Lighting', prefs.lightingStyle],
+                ['Framing', prefs.framing],
+                ['Platform', prefs.platform],
+                ['Objective', prefs.objective],
+                ['Tone', prefs.brandTone],
+                ['Language', prefs.language],
+                ['Duration', prefs.videoDuration],
+              ].map(([label, value]) => (
+                <div key={label} className="flex items-start justify-between gap-2">
+                  <span className="text-[10px] text-zinc-500 font-mono uppercase">{label}</span>
+                  <span className="text-right">{value}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="pt-2 border-t border-zinc-800 flex gap-2">
+          <button
+            onClick={onEditInputs}
+            className="flex-1 px-3 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-zinc-700 text-[11px] font-mono uppercase tracking-wider"
+          >
+            Edit Inputs
+          </button>
+          <button
+            onClick={onReset}
+            className="flex-1 px-3 py-2 bg-zinc-900 hover:bg-zinc-800 text-red-400 border border-red-900 text-[11px] font-mono uppercase tracking-wider"
+          >
+            Reset
+          </button>
+        </div>
+      </div>
     </div>
   );
 };

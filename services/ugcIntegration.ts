@@ -127,11 +127,13 @@ export async function generateUGCScript(
     language?: 'EN' | 'ID'; 
     contentStyle?: 'selfie' | 'cinematic' | 'professional';
     preferences?: UGCPreferences;
+    allowFallback?: boolean;
   }
 ): Promise<GeneratedScript> {
   const language = options?.language || 'EN';
   const contentStyle = options?.contentStyle || 'selfie';
   const preferences = options?.preferences;
+  const allowFallback = options?.allowFallback ?? false;
   
   onProgress?.(`Generating script with AI (${language})...`, 20);
 
@@ -217,6 +219,10 @@ export async function generateUGCScript(
     console.error('Script generation error:', error);
     
     // Return mock script if API fails - respect language setting
+    if (!allowFallback) {
+      throw error;
+    }
+
     onProgress?.('Using fallback script template...', 100);
     
     const isIndonesian = language === 'ID';
@@ -407,7 +413,7 @@ export function generatePromptsFromScript(
       generatedPrompt: nanoBananaPrompt,
       visualStyle: visualStyleGuide?.cameraSpecs || 'natural UGC photography style',
       productIntegration: scene.productPlacement,
-      negativePrompts: ['blurry', 'distorted', 'watermark', 'low quality', 'artificial', 'stock photo', 'wrong product', 'different person'],
+      negativePrompts: ['blurry', 'distorted', 'watermark', 'low quality', 'artificial', 'stock photo', 'wrong product', 'different person', 'misspelled logo', 'altered logo', 'wrong text', 'garbled text', 'fake label'],
       customizations: {
         style: 'authentic UGC',
         lighting: visualStyleGuide?.lighting || 'natural soft lighting',

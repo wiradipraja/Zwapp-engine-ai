@@ -290,6 +290,13 @@ Generate a UGC script. Return ONLY valid JSON (no markdown) with this structure:
             Authorization: `Bearer ${apiKey}`,
           },
           body: JSON.stringify({
+            config: {
+              model: 'gemini-3-flash',
+              brand_lock: true,
+              stream: false,
+              include_thoughts: false,
+              reasoning_effort: 'high',
+            },
             messages: [
               {
                 role: 'system',

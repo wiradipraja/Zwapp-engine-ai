@@ -56,6 +56,10 @@ Integrate product from Reference Image 2.
 Product must be sharp, readable, naturally placed.
 Product: ${anchor.productDescription}
 
+[BRAND_LOCK]
+Preserve any brand name/logo/text EXACTLY as in reference images.
+If label text is unclear, keep it softly unreadable (do NOT guess).
+
 [SCENE_VISUAL]
 ${visualPrompt}
 Frame Type: ${frameType === 'star' ? 'Entry/Start' : 'Exit/End'} Frame
@@ -355,6 +359,10 @@ Keep background and lighting consistent.
 
 [PRODUCT_INTEGRATION]
 Product from Reference Image 2 must appear naturally.
+
+[BRAND_LOCK]
+Preserve any brand name/logo/text EXACTLY as in the reference image(s).
+If label text is unclear, keep it softly unreadable (do NOT guess).
 
 [SCENE]
 ${scenePrompt}
