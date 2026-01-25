@@ -344,6 +344,7 @@ export async function generateUGCImage(
   onProgress?.(`Creating task for Scene ${prompt.sceneNumber}...`);
 
   // Build prompt with Identity Lock structure
+  const scenePrompt = prompt.generatedPrompt || prompt.basePrompt || prompt.sceneDescription || '';
   const fullPrompt = `
 [LOCK_IDENTITY]
 Keep the person EXACTLY the same as in Reference Image 1.
@@ -356,7 +357,7 @@ Keep background and lighting consistent.
 Product from Reference Image 2 must appear naturally.
 
 [SCENE]
-${prompt.basePrompt || prompt.generatedPrompt || prompt.sceneDescription}
+${scenePrompt}
 
 [STYLE]
 UGC iPhone quality, authentic social media content.
@@ -378,7 +379,7 @@ face morphing, outfit change, blur, watermark, low quality, cartoon.
     sceneId: prompt.sceneId || `scene-${prompt.sceneNumber}`,
     imageUrl,
     supabasePath: `ugc-generated/${crypto.randomUUID()}.png`,
-    prompt: prompt.basePrompt || prompt.generatedPrompt || '',
+    prompt: scenePrompt,
     promptUsed: fullPrompt,
     generatedAt: Date.now(),
     createdAt: Date.now(),

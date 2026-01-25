@@ -12,9 +12,11 @@ import {
   UGC_CONTENT_STYLES,
   UGCPreferences
 } from '../types/ugc';
+import { NANO_BANANA_UGC_CONFIG } from './ugcPromptBuilder';
 
 export interface ScriptGenerationConfig {
   apiKey: string;
+  provider?: 'google' | 'kie';
   model?: string;
   temperature?: number;
   maxTokens?: number;
@@ -35,6 +37,7 @@ export async function generateScriptWithGemini(
 ): Promise<GeneratedScript> {
   const {
     apiKey,
+    provider,
     model = 'gemini-2.5-flash', // Free tier model
     temperature = 0.7,
     maxTokens = 2048,
@@ -248,39 +251,115 @@ Generate a UGC script. Return ONLY valid JSON (no markdown) with this structure:
 }`;
 
   try {
-    // Call Gemini API (FREE)
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
+    const detectedProvider: 'google' | 'kie' = provider
+      ? provider
+      : apiKey?.startsWith('AIza')
+        ? 'google'
+        : 'kie';
+
+    let content = '';
+
+    if (detectedProvider === 'kie') {
+      console.log('[UGC Script] Using KIE Gemini Chat Completions');
+      const userContent: any[] = [
+        {
+          type: 'text',
+          text: prompt,
         },
-        body: JSON.stringify({
-          contents: [
-            {
-              parts: [{ text: prompt }],
-            },
-          ],
-          generationConfig: {
-            temperature,
-            maxOutputTokens: maxTokens,
-            topP: 0.95,
-            topK: 40,
-          },
-        }),
+      ];
+
+      if (modelProfile.referenceImageUrl) {
+        userContent.push({
+          type: 'image_url',
+          image_url: { url: modelProfile.referenceImageUrl },
+        });
       }
-    );
+      if (productProfile.referenceImageUrl) {
+        userContent.push({
+          type: 'image_url',
+          image_url: { url: productProfile.referenceImageUrl },
+        });
+      }
 
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(
-        `Gemini API Error: ${error.error?.message || JSON.stringify(error)}`
+      const response = await fetch(
+        '/api/proxy-gemini/gemini-3-flash/v1/chat/completions',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${apiKey}`,
+          },
+          body: JSON.stringify({
+            messages: [
+              {
+                role: 'system',
+                content: [{ type: 'text', text: NANO_BANANA_UGC_CONFIG.system_prompt }],
+              },
+              {
+                role: 'user',
+                content: userContent,
+              },
+            ],
+            stream: false,
+            include_thoughts: false,
+            reasoning_effort: 'high',
+          }),
+        }
       );
-    }
 
-    const data = await response.json();
-    const content = data.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`KIE Gemini Chat Error (${response.status}): ${errorText.substring(0, 200)}`);
+      }
+
+      const data = await response.json();
+      const messageContent = data?.choices?.[0]?.message?.content;
+
+      if (typeof messageContent === 'string') {
+        content = messageContent;
+      } else if (Array.isArray(messageContent)) {
+        content = messageContent
+          .map((part: any) => part?.text || part?.content || '')
+          .join('');
+      } else if (messageContent?.text) {
+        content = messageContent.text;
+      }
+    } else {
+      console.log('[UGC Script] Using Google Gemini GenerateContent');
+      // Call Gemini API (FREE)
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            contents: [
+              {
+                parts: [{ text: prompt }],
+              },
+            ],
+            generationConfig: {
+              temperature,
+              maxOutputTokens: maxTokens,
+              topP: 0.95,
+              topK: 40,
+            },
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(
+          `Gemini API Error: ${error.error?.message || JSON.stringify(error)}`
+        );
+      }
+
+      const data = await response.json();
+      content = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    }
 
     if (!content) {
       throw new Error('No content received from Gemini');

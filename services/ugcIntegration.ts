@@ -7,6 +7,7 @@ import { generateUGCPlan, generateSceneVisualPrompt, type UGCPlanResult } from '
 import { generateAllUGCImages, generateUGCImage as kieGenerateImage, generateUGCVideo as kieGenerateVideo, type KieConfig } from './ugcKieService';
 import { analyzeImageQuality } from './qualityAssurance';
 import { generateVideoWithVeo } from './videoGeneration';
+import { buildNanoBananaScenePrompt, type SceneType } from './ugcPromptBuilder';
 import {
   UGCProject,
   ModelProfile,
@@ -308,6 +309,22 @@ export function generatePromptsFromScript(
   preferences?: UGCPreferences,
   visualStyleGuide?: { cameraSpecs?: string; lighting?: string; compositions?: string[] }
 ): PromptTemplate[] {
+  const pickSceneType = (scene: { setting: string; action: string; dialogue: string; productPlacement: string }, index: number, hasModel: boolean): SceneType => {
+    const merged = `${scene.setting} ${scene.action} ${scene.dialogue} ${scene.productPlacement}`.toLowerCase();
+
+    if (/(use|apply|spray|wash|clean|demo|pour|rub|mix)/.test(merged)) {
+      return 'S4_IN_USE_DEMO_ACTION';
+    }
+    if (/(hand|hold|grip|finger|touch)/.test(merged)) {
+      return hasModel ? 'S1_MODEL_HOLDING_PRODUCT' : 'S2_HAND_ONLY_PRODUCT';
+    }
+    if (/(lifestyle|room|living|bedroom|bath|kitchen|office|outdoor|park|street|desk|table|shelf)/.test(merged)) {
+      return 'S5_LIFESTYLE_PLACEMENT_CONTEXT';
+    }
+
+    return hasModel ? 'S1_MODEL_HOLDING_PRODUCT' : 'S3_PRODUCT_STANDALONE_HERO';
+  };
+
   const scenes = script.scenes || script.sceneBreakdown.map(s => ({
     sceneNumber: s.sceneNumber,
     setting: s.backgroundDescription,
@@ -333,8 +350,35 @@ export function generatePromptsFromScript(
     const photoStyle = `[PHOTOGRAPHIC_STYLE: Realism, 4k, ${framingState}, UGC Phone Camera quality]`;
     const tech = `[TECHNICAL_PARAMS: high detail, sharp focus, f/1.8]`;
 
-    // Final Identity Lock Prompt
+    // Final Identity Lock Prompt (kept as base)
     const basePrompt = `${subject} ${action} ${product} ${environment} ${photoStyle} ${tech}`;
+
+    const sceneType = pickSceneType(scene, index, !!modelProfile);
+    const productDescParts = [productProfile.name, productProfile.category, ...productProfile.keyFeatures].filter(Boolean);
+    const productDesc = productDescParts.join(', ');
+    const lightingDesc = preferences?.lightingStyle || visualStyleGuide?.lighting || 'natural soft light';
+    const cameraDesc = preferences?.framing || visualStyleGuide?.cameraSpecs || 'handheld smartphone, shallow depth of field';
+    const backgroundDesc = preferences?.backgroundStyle || scene.setting || 'clean lifestyle background';
+    const modelDesc = preferences?.characterProfile || modelProfile.lookDescription || modelProfile.appearance;
+    const handPoseDesc = scene.action || 'relaxed natural grip';
+    const actionDesc = scene.action || 'natural product demonstration';
+    const propsDesc = preferences?.backgroundStyle || 'everyday lifestyle props';
+
+    const nanoBananaPrompt = buildNanoBananaScenePrompt({
+      apiKey: '',
+      scene_type: sceneType,
+      product_desc: productDesc || productProfile.name || 'product',
+      lighting_desc: lightingDesc,
+      camera_desc: cameraDesc,
+      background_desc: backgroundDesc,
+      model_desc: modelDesc,
+      hand_pose_desc: handPoseDesc,
+      action_desc: actionDesc,
+      props_desc: propsDesc,
+      stream: false,
+      include_thoughts: false,
+      reasoning_effort: 'high',
+    });
 
     return {
       id: crypto.randomUUID(),
@@ -360,7 +404,7 @@ export function generatePromptsFromScript(
           requirement: 'Product must match reference image exactly',
         },
       ],
-      generatedPrompt: `${MODEL_SOP} ${PRODUCT_SOP} Professional UGC content: ${modelProfile.lookDescription || modelProfile.appearance} model in ${scene.setting}, ${scene.action}. Product (${productProfile.name}) ${scene.productPlacement}. Style: authentic social media content, natural lighting, lifestyle photography. Expression: ${scene.emotionalBeat}.`,
+      generatedPrompt: nanoBananaPrompt,
       visualStyle: visualStyleGuide?.cameraSpecs || 'natural UGC photography style',
       productIntegration: scene.productPlacement,
       negativePrompts: ['blurry', 'distorted', 'watermark', 'low quality', 'artificial', 'stock photo', 'wrong product', 'different person'],

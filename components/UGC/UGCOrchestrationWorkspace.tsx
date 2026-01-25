@@ -35,7 +35,7 @@ const UGCOrchestrationWorkspace: React.FC<UGCOrchestrationWorkspaceProps> = ({
   const store = useUGCStore();
   const setApiConfig = useUGCStore((state) => state.setApiConfig);
   const kieApiKey = apiKey || '';
-  const geminiKey = geminiApiKey || '';
+  const geminiKey = geminiApiKey || apiKey || '';
 
   useEffect(() => {
     setApiConfig({
