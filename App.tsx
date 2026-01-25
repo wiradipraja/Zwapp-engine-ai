@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { createTask, queryTask } from './services/api';
 import { supabase, signOut } from './services/supabase';
 import { generateVeo3Video } from './services/veo3Generation';
+import { fetchUserCredits, formatCreditsShort } from './services/credits';
 import { MotionControlInput, NanoBananaInput, ImageEditInput, ZImageInput, Flux2Input, Flux2ProTextInput, Flux2ProImageInput, Flux2FlexTextInput, Flux2FlexImageInput, QwenTextToImageInput, Sora2CharactersInput, Sora2TextToVideoInput, Sora2ImageToVideoInput, Sora2ProTextToVideoInput, Sora2ProImageToVideoInput, Veo3TextToVideoInput, Veo3ImageToVideoInput, Veo3ReferenceToVideoInput, Veo3Input, LocalTask } from './types';
 import { TaskForm } from './components/TaskForm';
 import { NanoBananaGenForm } from './components/NanoBananaGenForm';
@@ -65,6 +66,10 @@ const AppContent: React.FC = () => {
   
   // Credit refresh trigger - increment to force credit balance refresh
   const [creditRefreshTrigger, setCreditRefreshTrigger] = useState(0);
+  
+  // Credit balance state for header display
+  const [creditBalance, setCreditBalance] = useState<number | null>(null);
+  const [isLoadingCredits, setIsLoadingCredits] = useState(false);
 
   // Toast notifications
   const toast = useToast();
@@ -104,6 +109,34 @@ const AppContent: React.FC = () => {
 
     return () => subscription.unsubscribe();
   }, []);
+
+  // Fetch credits when apiKey changes or when creditRefreshTrigger changes
+  useEffect(() => {
+    const loadCredits = async () => {
+      if (!apiKey || apiKey.trim() === '') {
+        setCreditBalance(null);
+        return;
+      }
+
+      setIsLoadingCredits(true);
+      try {
+        const credits = await fetchUserCredits(apiKey);
+        setCreditBalance(credits);
+        console.log('[App] Credits loaded:', credits);
+      } catch (error) {
+        console.error('[App] Failed to load credits:', error);
+        setCreditBalance(null);
+      } finally {
+        setIsLoadingCredits(false);
+      }
+    };
+
+    loadCredits();
+    
+    // Auto-refresh credits every 30 seconds
+    const intervalId = setInterval(loadCredits, 30000);
+    return () => clearInterval(intervalId);
+  }, [apiKey, creditRefreshTrigger]);
 
   const addLog = (msg: string, isError: boolean = false) => {
     setLogs(prev => [`> ${msg}`, ...prev].slice(0, 50));
@@ -482,8 +515,6 @@ const AppContent: React.FC = () => {
         onLogout={handleLogout}
         userEmail={session?.user?.email}
         apiConnected={!!apiKey}
-        apiKey={apiKey}
-        creditRefreshTrigger={creditRefreshTrigger}
       />
 
       {/* Main Content Area - Fixed margin for collapsed sidebar, sidebar expands over content on hover */}
@@ -507,9 +538,25 @@ const AppContent: React.FC = () => {
           
           {/* Credits Display */}
           <div className="flex items-center gap-4">
-            <div className={`px-4 py-2 border ${isDark ? 'border-zinc-700 bg-zinc-900' : 'border-zinc-200 bg-zinc-50'}`}>
+            <div 
+              className={`px-4 py-2 border cursor-pointer transition-colors ${isDark ? 'border-zinc-700 bg-zinc-900 hover:bg-zinc-800' : 'border-zinc-200 bg-zinc-50 hover:bg-zinc-100'}`}
+              onClick={() => setCreditRefreshTrigger(prev => prev + 1)}
+              title="Click to refresh credits"
+            >
               <span className={`text-xs font-mono ${isDark ? 'text-zinc-500' : 'text-zinc-600'}`}>CREDITS: </span>
-              <span className="text-xs font-mono text-orange-500">∞</span>
+              {isLoadingCredits ? (
+                <span className="inline-block w-3 h-3 border-2 border-orange-500/30 border-t-orange-500 rounded-full animate-spin" />
+              ) : (
+                <span className={`text-xs font-mono font-bold ${
+                  creditBalance === null ? (isDark ? 'text-zinc-600' : 'text-zinc-400') :
+                  creditBalance === 0 ? 'text-red-500' :
+                  creditBalance < 100 ? 'text-orange-500' :
+                  creditBalance < 500 ? 'text-yellow-500' :
+                  'text-green-500'
+                }`}>
+                  {creditBalance !== null ? formatCreditsShort(creditBalance) : '—'}
+                </span>
+              )}
             </div>
           </div>
         </header>
