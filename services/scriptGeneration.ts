@@ -489,7 +489,7 @@ export async function generateScriptWithGemini(
   const {
     apiKey,
     provider,
-    model = 'gemini-2.5-flash', // Free tier model
+    model = 'gemini-1.5-flash', // Free tier model
     temperature = 0.7,
     maxTokens = 8192, // Increased from 2048 to prevent truncated JSON responses
     language = 'EN',
@@ -831,7 +831,7 @@ export function estimateScriptGenerationCost(model: string): number {
   // Gemini 1.5 Flash is FREE for up to 15 requests/minute
   // Gemini 1.5 Pro has a free tier too
   const costs: Record<string, number> = {
-    'gemini-2.5-flash': 0, // FREE
+    'gemini-1.5-flash': 0, // FREE
     'gemini-1.5-pro': 0, // FREE (limited)
     'gemini-pro': 0, // FREE
   };
@@ -846,7 +846,7 @@ export async function refineScriptWithGemini(
   feedback: string,
   config: ScriptGenerationConfig
 ): Promise<GeneratedScript> {
-  const { apiKey, model = 'gemini-2.5-flash' } = config;
+  const { apiKey, model = 'gemini-1.5-flash' } = config;
 
   const refinementPrompt = `You are refining a UGC script based on feedback.
 
@@ -911,7 +911,7 @@ Please refine the script based on the feedback. Return ONLY valid JSON (no markd
       sceneBreakdown,
       voiceoverText: refinedData.voiceoverText || currentScript.voiceoverText,
       generatedAt: Date.now(),
-      model: 'gemini-2.5-flash',
+      model: 'gemini-1.5-flash',
     };
   } catch (error) {
     throw new Error(

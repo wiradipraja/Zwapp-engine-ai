@@ -88,7 +88,7 @@ const UGCOrchestrationWorkspace: React.FC<UGCOrchestrationWorkspaceProps> = ({
         modelProfile,
         productProfile,
         narrativeContext,
-        { kieApiKey: kieApiKey },
+        { kieApiKey: kieApiKey, googleGeminiApiKey: geminiApiKey },
         (msg, pct) => store.setProgress('SCRIPTING', pct, msg),
         { 
           language: projectSettings?.language || 'EN', 
