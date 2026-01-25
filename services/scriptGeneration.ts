@@ -10,7 +10,8 @@ import {
   NarrationLanguage,
   UGCContentStyle,
   UGC_CONTENT_STYLES,
-  UGCPreferences
+  UGCPreferences,
+  DEFAULT_UGC_PREFERENCES
 } from '../types/ugc';
 import { NANO_BANANA_UGC_CONFIG } from './ugcPromptBuilder';
 
@@ -115,6 +116,96 @@ function parseJsonSafe(raw: string): any {
   }
 }
 
+async function repairJsonWithModel(
+  raw: string,
+  provider: 'google' | 'kie',
+  apiKey: string,
+  model: string
+): Promise<string> {
+  const repairInstruction =
+    'Fix the JSON below. Return ONLY valid JSON (no markdown, no explanations). ' +
+    'Preserve all fields and values. Escape newlines inside strings and add missing commas if needed.';
+
+  if (provider === 'kie') {
+    const response = await fetch('/api/proxy-gemini/gemini-3-flash/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        messages: [
+          {
+            role: 'system',
+            content: [{ type: 'text', text: 'You are a strict JSON repair tool.' }],
+          },
+          {
+            role: 'user',
+            content: [
+              { type: 'text', text: repairInstruction },
+              { type: 'text', text: raw },
+            ],
+          },
+        ],
+        stream: false,
+        include_thoughts: false,
+        reasoning_effort: 'low',
+        temperature: 0,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`KIE JSON repair failed (${response.status}): ${errorText.substring(0, 200)}`);
+    }
+
+    const data = await response.json();
+    const messageContent = data?.choices?.[0]?.message?.content;
+
+    if (typeof messageContent === 'string') {
+      return messageContent;
+    }
+    if (Array.isArray(messageContent)) {
+      return messageContent.map((part: any) => part?.text || part?.content || '').join('');
+    }
+    if (messageContent?.text) {
+      return messageContent.text;
+    }
+    throw new Error('KIE JSON repair returned empty content');
+  }
+
+  const response = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        contents: [
+          {
+            parts: [{ text: `${repairInstruction}\n\n${raw}` }],
+          },
+        ],
+        generationConfig: {
+          temperature: 0,
+          maxOutputTokens: 2048,
+        },
+      }),
+    }
+  );
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(
+      `Gemini JSON repair failed: ${error.error?.message || JSON.stringify(error)}`
+    );
+  }
+
+  const data = await response.json();
+  return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+}
+
 /**
  * Generate UGC script using Google Gemini (FREE)
  * Creates scene-based script with model/product integration
@@ -145,6 +236,20 @@ export async function generateScriptWithGemini(
   const targetPlatform = preferences?.platform || 'TikTok';
   const targetDuration = preferences?.videoDuration || '30s';
   const customNote = preferences?.customNote ? `\nSPECIAL INSTRUCTION: ${preferences.customNote}` : '';
+  const productName = productProfile.name || 'Product';
+  const lowerProductName = productName.toLowerCase();
+  const isDefaultCategory = preferences?.productCategory === DEFAULT_UGC_PREFERENCES.productCategory;
+  const hasSkincareCue = /(skin|serum|cream|lotion|face|beauty|cosmetic|moistur|sunscreen|toner|acne)/.test(lowerProductName);
+  const shouldUsePreferenceCategory = preferences?.productCategory && (!isDefaultCategory || hasSkincareCue);
+  const safeProductCategory =
+    (shouldUsePreferenceCategory ? preferences?.productCategory : undefined) ||
+    productProfile.category ||
+    'General';
+  const productIdentityRules = `PRODUCT IDENTITY RULES:
+- Use product name EXACTLY as provided: "${productName}" (do NOT rename).
+- If product type is unclear, keep it generic (e.g., "plastic container" or "household container").
+- Do NOT assume skincare/beauty unless explicitly indicated by the product name or reference image.
+- If reference images are provided, they are the single source of truth for product identity.`;
   
   // Language instruction - CRITICAL for dialogue output
   // Now handles both ID and EN properly based on 'preferences.language' or 'config.language'
@@ -295,10 +400,12 @@ MODEL PROFILE (IDENTITY LOCK):
 - Framing Preference: ${preferences?.framing || 'Selfie'}
 
 PRODUCT:
-- Name: ${productProfile.name}
-- Category: ${preferences?.productCategory || productProfile.category || 'General'}
+- Name: ${productName}
+- Category: ${safeProductCategory}
 - Key Features: ${productProfile.keyFeatures.join(', ')}
 - Price Perception: ${preferences?.priceRange || productProfile.priceRange || 'Affordable'}
+
+${productIdentityRules}
 
 BRAND NARRATIVE:
 - Objective: ${targetObjective}
@@ -475,9 +582,15 @@ IMPORTANT JSON RULES:
     } catch (parseError) {
       console.error('[UGC Script] Failed to parse JSON from model response', parseError);
       console.error('[UGC Script] Raw response snippet:', content.substring(0, 2000));
-      throw new Error(
-        `Script generation failed: ${parseError instanceof Error ? parseError.message : String(parseError)}`
-      );
+      try {
+        const repairedContent = await repairJsonWithModel(content, detectedProvider, apiKey, model);
+        scriptData = parseJsonSafe(repairedContent);
+      } catch (repairError) {
+        console.error('[UGC Script] JSON repair failed', repairError);
+        throw new Error(
+          `Script generation failed: ${repairError instanceof Error ? repairError.message : String(repairError)}`
+        );
+      }
     }
 
     // Build sceneBreakdown for UGC format

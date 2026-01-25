@@ -23,6 +23,60 @@ import {
   UGCPreferences,
 } from '../types/ugc';
 
+const STOPWORDS = new Set([
+  'image',
+  'img',
+  'photo',
+  'picture',
+  'file',
+  'download',
+  'ref',
+  'product',
+  'produk',
+  'asset',
+  'upload',
+]);
+
+function normalizeAssetName(raw: string): string {
+  const base = raw.replace(/\.[^/.]+$/, '');
+  const cleaned = base.replace(/[_\-]+/g, ' ').replace(/[^a-zA-Z0-9 ]/g, ' ').trim();
+  const tokens = cleaned
+    .split(/\s+/)
+    .map((t) => t.trim())
+    .filter(
+      (t) =>
+        t.length > 1 &&
+        /[a-zA-Z]/.test(t) &&
+        !STOPWORDS.has(t.toLowerCase())
+    );
+  return tokens.join(' ').trim();
+}
+
+function inferProductName(asset?: UploadedAsset): string {
+  if (!asset) return '';
+  const candidate = normalizeAssetName(asset.fileName || asset.supabasePath || '');
+  const lower = candidate.toLowerCase();
+
+  if (!candidate) return '';
+  if (/(toples|jar)/.test(lower)) return 'plastic jar';
+  if (/(container|wadah)/.test(lower)) return 'plastic container';
+  if (/(bottle|botol)/.test(lower)) return 'plastic bottle';
+  if (/(box|kotak)/.test(lower)) return 'plastic box';
+  if (/(cup|gelas)/.test(lower)) return 'plastic cup';
+
+  return candidate;
+}
+
+function inferProductCategory(name: string): string {
+  const lower = name.toLowerCase();
+  if (/(skin|serum|cream|lotion|face|beauty|cosmetic)/.test(lower)) return 'skincare';
+  if (/(food|snack|drink|beverage|coffee|tea)/.test(lower)) return 'f&b';
+  if (/(bottle|jar|container|box|cup|tumbler|kitchen|home|house|living|plastic|wadah|toples|botol|gelas|kotak)/.test(lower)) {
+    return 'home living';
+  }
+  return '';
+}
+
 export interface UGCServiceConfig {
   kieApiKey: string;
   geminiApiKey: string;
@@ -86,13 +140,15 @@ export async function analyzeInputAssets(
   
   // Extract product profile from uploaded photos
   const productPhoto = project.inputAssets.productPhotos[0];
+  const inferredProductName = inferProductName(productPhoto);
+  const inferredProductCategory = inferProductCategory(inferredProductName || productPhoto?.fileName || '');
   const productProfile: ProductProfile = {
-    name: 'Product',
+    name: inferredProductName || 'Product',
     colors: ['primary', 'accent'],
     dimensions: 'standard',
     keyFeatures: ['quality', 'design', 'value'],
     highlightAngles: ['front', 'side', '45-degree'],
-    category: 'consumer goods',
+    category: inferredProductCategory || 'consumer goods',
     priceRange: 'mid-range',
     referenceImageUrl: productPhoto?.supabaseUrl || '',
   };
