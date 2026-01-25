@@ -284,9 +284,10 @@ export async function generateUGCScript(
   }
 }
 
-/**
- * Generate prompt templates from script
- */
+// SOP Prefixes for consistent prompt generation
+const MODEL_SOP = "Use the first provided reference image for the main character.";
+const PRODUCT_SOP = "Ensure high fidelity to the product provided in the reference image. The product MUST appear in the generated image.";
+
 /**
  * Generate prompt templates from script
  * Implements "Identity Lock" Prompt Structure
