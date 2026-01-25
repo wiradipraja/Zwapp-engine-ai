@@ -116,6 +116,152 @@ function parseJsonSafe(raw: string): any {
   }
 }
 
+function getTargetSceneCount(preferences?: UGCPreferences): number {
+  const duration = preferences?.videoDuration || '';
+  if (/15s/i.test(duration) || /3\s*scenes/i.test(duration)) {
+    return 3;
+  }
+  if (/30s/i.test(duration) || /5\s*scenes/i.test(duration)) {
+    return 5;
+  }
+  return 5;
+}
+
+function getFallbackDialogue(
+  targetLanguage: 'ID' | 'EN',
+  purpose: 'HOOK' | 'PAIN' | 'SOLUTION' | 'PROOF' | 'CTA',
+  productName: string
+): string {
+  if (targetLanguage === 'ID') {
+    switch (purpose) {
+      case 'HOOK':
+        return `Lo pernah ngerasa penyimpanan berantakan banget gak sih?`;
+      case 'PAIN':
+        return `Gue sering pusing nyari barang karena wadahnya gak jelas.`;
+      case 'SOLUTION':
+        return `Akhirnya gue pake ${productName} biar rapi dan gampang dicari.`;
+      case 'PROOF':
+        return `Sekarang meja gue lebih clean dan semuanya ketata rapi.`;
+      case 'CTA':
+        return `Cobain juga ${productName} ini, serius bikin hidup lebih gampang!`;
+      default:
+        return `Gue rekomend ${productName} buat bikin rapi.`;
+    }
+  }
+
+  switch (purpose) {
+    case 'HOOK':
+      return `Do you ever feel like your storage is always messy?`;
+    case 'PAIN':
+      return `I used to waste time searching because everything was scattered.`;
+    case 'SOLUTION':
+      return `I switched to ${productName} and it fixed the chaos fast.`;
+    case 'PROOF':
+      return `Now my space looks clean and everything is easy to find.`;
+    case 'CTA':
+      return `Try ${productName} too — it makes organizing effortless.`;
+    default:
+      return `I recommend ${productName} for easy organizing.`;
+  }
+}
+
+function ensureScenes(
+  scriptData: any,
+  targetSceneCount: number,
+  targetLanguage: 'ID' | 'EN',
+  productName: string
+): any {
+  const baseScenes = Array.isArray(scriptData.scenes) ? [...scriptData.scenes] : [];
+  const purposes: Array<'HOOK' | 'PAIN' | 'SOLUTION' | 'PROOF' | 'CTA'> = [
+    'HOOK',
+    'PAIN',
+    'SOLUTION',
+    'PROOF',
+    'CTA',
+  ];
+
+  const fallbackVisuals = [
+    {
+      setting: 'Cozy living room with natural window light, subtle lifestyle decor',
+      action: 'Model addresses the camera in selfie mode with a relatable expression',
+      productPlacement: 'No product visible yet, focus on model expression',
+      emotionalBeat: 'Curiosity',
+    },
+    {
+      setting: 'Kitchen counter with light clutter and everyday items',
+      action: 'Model points at the messy area to show the problem',
+      productPlacement: 'Product not shown yet, problem-focused',
+      emotionalBeat: 'Frustration',
+    },
+    {
+      setting: 'Clean countertop with warm daylight',
+      action: `Model holds the ${productName} and shows how it organizes items`,
+      productPlacement: `Product clearly visible in hand (${productName})`,
+      emotionalBeat: 'Relief',
+    },
+    {
+      setting: 'Close-up tabletop shot with organized items',
+      action: `Model demonstrates the ${productName} in use, showing neat results`,
+      productPlacement: `${productName} centered with visible contents`,
+      emotionalBeat: 'Confidence',
+    },
+    {
+      setting: 'Bright lifestyle corner with minimal props',
+      action: `Model gestures to the ${productName} and smiles to camera`,
+      productPlacement: `${productName} placed on surface with clean framing`,
+      emotionalBeat: 'Satisfaction',
+    },
+  ];
+
+  const targetPurposes = purposes.slice(0, targetSceneCount);
+
+  while (baseScenes.length < targetSceneCount) {
+    const idx = baseScenes.length;
+    const purpose = targetPurposes[idx] || 'CTA';
+    const fallback = fallbackVisuals[idx] || fallbackVisuals[fallbackVisuals.length - 1];
+    const dialogueSource =
+      purpose === 'HOOK'
+        ? scriptData.hook
+        : purpose === 'PAIN'
+        ? scriptData.problemStatement
+        : purpose === 'SOLUTION'
+        ? scriptData.solution
+        : purpose === 'CTA'
+        ? scriptData.cta
+        : '';
+
+    baseScenes.push({
+      sceneNumber: idx + 1,
+      scenePurpose: purpose,
+      setting: fallback.setting,
+      action: fallback.action,
+      dialogue: dialogueSource || getFallbackDialogue(targetLanguage, purpose, productName),
+      productPlacement: fallback.productPlacement,
+      emotionalBeat: fallback.emotionalBeat,
+      voiceOver: getFallbackDialogue(targetLanguage, purpose, productName),
+    });
+  }
+
+  const normalizedScenes = baseScenes.slice(0, targetSceneCount).map((scene, idx) => {
+    const fallback = fallbackVisuals[idx] || fallbackVisuals[fallbackVisuals.length - 1];
+    return {
+      sceneNumber: scene.sceneNumber || idx + 1,
+      scenePurpose: scene.scenePurpose || targetPurposes[idx],
+      setting: scene.setting || fallback.setting,
+      action: scene.action || fallback.action,
+      dialogue: scene.dialogue || getFallbackDialogue(targetLanguage, targetPurposes[idx], productName),
+      productPlacement: scene.productPlacement || fallback.productPlacement,
+      emotionalBeat: scene.emotionalBeat || fallback.emotionalBeat,
+      voiceOver: scene.voiceOver || getFallbackDialogue(targetLanguage, targetPurposes[idx], productName),
+    };
+  });
+
+  return {
+    ...scriptData,
+    scenes: normalizedScenes,
+  };
+}
+
 async function repairJsonWithModel(
   raw: string,
   provider: 'google' | 'kie',
@@ -592,6 +738,9 @@ IMPORTANT JSON RULES:
         );
       }
     }
+
+    const targetSceneCount = getTargetSceneCount(preferences);
+    scriptData = ensureScenes(scriptData, targetSceneCount, targetLanguage, productName);
 
     // Build sceneBreakdown for UGC format
     const sceneBreakdown: SceneBreakdown[] = (scriptData.scenes || []).map(
