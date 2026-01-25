@@ -19,6 +19,27 @@ export type NarrationLanguage = 'EN' | 'ID';
 // UGC Content Style
 export type UGCContentStyle = 'selfie' | 'cinematic' | 'professional';
 
+// PRD 4.2: Comprehensive Dropdown Options
+export interface UGCPreferences {
+  characterProfile: 'Asian Female 20s' | 'Asian Male 20s' | 'Western Female 20s' | 'Professional Female 30s' | 'Custom';
+  outfitStyle: 'Casual T-Shirt' | 'Smart Casual' | 'Sporty/Activewear' | 'Modest Hijab' | 'Formal Business';
+  backgroundStyle: 'Living Room' | 'Minimalist Bedroom' | 'Urban Street' | 'Office Desk' | 'Outdoor Park';
+  framing: 'Selfie (Close Up)' | 'Half Body (Medium)' | 'Full Body';
+  lightingStyle: 'Natural Window' | 'Golden Hour' | 'Soft Studio' | 'Ring Light';
+  
+  productCategory: 'Skincare' | 'Fashion' | 'F&B' | 'Gadget' | 'Home Living';
+  priceRange: 'Budget (<100k)' | 'Affordable (100k-500k)' | 'Premium (>500k)';
+  
+  platform: 'TikTok' | 'Instagram Reels' | 'YouTube Shorts';
+  objective: 'Brand Awareness' | 'Soft Selling' | 'Hard Selling' | 'Educational';
+  
+  brandTone: 'Excited/Hype' | 'Calm/Healing' | 'Professional/Trust' | 'Friendly/Bestie';
+  language: 'ID (Bahasa Gaul)' | 'ID (Formal)' | 'EN (Casual)' | 'EN (Professional)';
+  videoDuration: '15s (3 scenes)' | '30s (5 scenes)';
+  
+  customNote?: string;
+}
+
 export interface UGCContentStyleInfo {
   id: UGCContentStyle;
   name: string;
@@ -253,6 +274,7 @@ export interface UGCProject {
   settings: {
     language: NarrationLanguage;
     contentStyle: UGCContentStyle;
+    preferences?: UGCPreferences; // Added from PRD
   };
   
   inputAssets: InputAssets;

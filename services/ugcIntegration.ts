@@ -16,6 +16,7 @@ import {
   QAResult,
   GeneratedVideo,
   UploadedAsset,
+  UGCPreferences,
 } from '../types/ugc';
 
 export interface UGCServiceConfig {
@@ -112,10 +113,15 @@ export async function generateUGCScript(
   narrativeContext: NarrativeContext,
   config: UGCServiceConfig,
   onProgress?: (message: string, percent: number) => void,
-  options?: { language?: 'EN' | 'ID'; contentStyle?: 'selfie' | 'cinematic' | 'professional' }
+  options?: { 
+    language?: 'EN' | 'ID'; 
+    contentStyle?: 'selfie' | 'cinematic' | 'professional';
+    preferences?: UGCPreferences;
+  }
 ): Promise<GeneratedScript> {
   const language = options?.language || 'EN';
   const contentStyle = options?.contentStyle || 'selfie';
+  const preferences = options?.preferences;
   
   onProgress?.(`Generating script with AI (${language})...`, 20);
 
@@ -166,6 +172,7 @@ export async function generateUGCScript(
         temperature: 0.7,
         language,
         contentStyle,
+        preferences
       }
     );
 
@@ -280,17 +287,15 @@ export async function generateUGCScript(
 /**
  * Generate prompt templates from script
  */
+/**
+ * Generate prompt templates from script
+ * Implements "Identity Lock" Prompt Structure
+ */
 export function generatePromptsFromScript(
   script: GeneratedScript,
   modelProfile: ModelProfile,
   productProfile: ProductProfile,
-  visualStyleGuide?: {
-    cameraSpecs: string;
-    lighting: string;
-    backgroundStyle: string;
-    colorPalette: string[];
-    compositions: string[];
-  }
+  preferences?: UGCPreferences
 ): PromptTemplate[] {
   const scenes = script.scenes || script.sceneBreakdown.map(s => ({
     sceneNumber: s.sceneNumber,
@@ -301,16 +306,31 @@ export function generatePromptsFromScript(
     emotionalBeat: s.modelExpression,
   }));
 
-  // SOP Prefixes for consistent prompt generation
-  const MODEL_SOP = "Use the first provided reference image for the main character.";
-  const PRODUCT_SOP = "Ensure high fidelity to the product provided in the reference image. The product MUST appear in the generated image.";
+  return scenes.map((scene, index) => {
+    // Identity Lock Components based on PRD
+    const subjectState = preferences?.characterProfile || modelProfile.lookDescription || modelProfile.appearance;
+    const outfitState = preferences?.outfitStyle || modelProfile.outfitStyle || 'Casual clothing';
+    const envState = preferences?.backgroundStyle || scene.setting;
+    const lightingState = preferences?.lightingStyle || 'Natural Lighting';
+    const framingState = preferences?.framing || 'Medium Shot';
+    
+    // Construct structured prompt segments
+    const subject = `[SUBJECT: ${subjectState}, wearing ${outfitState}]`;
+    const action = `[ACTION: ${scene.action}, showing ${scene.emotionalBeat} expression]`;
+    const product = `[PRODUCT: ${productProfile.name} visible as ${scene.productPlacement}]`;
+    const environment = `[ENVIRONMENT: ${envState}, ${lightingState} lighting]`;
+    const photoStyle = `[PHOTOGRAPHIC_STYLE: Realism, 4k, ${framingState}, UGC Phone Camera quality]`;
+    const tech = `[TECHNICAL_PARAMS: high detail, sharp focus, f/1.8]`;
 
-  return scenes.map((scene, index) => ({
-    id: crypto.randomUUID(),
-    sceneId: `scene-${scene.sceneNumber}`,
-    sceneNumber: scene.sceneNumber,
-    sceneDescription: `${scene.setting}. ${scene.action}. Model showing ${scene.emotionalBeat} expression.`,
-    basePrompt: `${MODEL_SOP} ${PRODUCT_SOP} UGC style photo: ${modelProfile.lookDescription || modelProfile.appearance} model ${scene.action} in ${scene.setting}. Product (${productProfile.name}) placement: ${scene.productPlacement}. Expression: ${scene.emotionalBeat}. High quality, authentic, social media style.`,
+    // Final Identity Lock Prompt
+    const basePrompt = `${subject} ${action} ${product} ${environment} ${photoStyle} ${tech}`;
+
+    return {
+      id: crypto.randomUUID(),
+      sceneId: `scene-${scene.sceneNumber}`,
+      sceneNumber: scene.sceneNumber,
+      sceneDescription: `${scene.setting}. ${scene.action}.`,
+      basePrompt: basePrompt,
     dynamicVariables: {
       modelLook: modelProfile.lookDescription || modelProfile.appearance,
       productName: productProfile.name,

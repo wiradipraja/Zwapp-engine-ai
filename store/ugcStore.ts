@@ -57,6 +57,7 @@ interface UGCStoreState {
   // Settings actions
   setLanguage: (language: NarrationLanguage) => void;
   setContentStyle: (style: UGCContentStyle) => void;
+  updateSettings: (settings: Partial<UGCProject['settings']>) => void;
   
   // Input actions
   addModelPhotos: (assets: UploadedAsset[]) => void;
@@ -178,6 +179,21 @@ export const useUGCStore = create<UGCStoreState>()(
             settings: {
               ...state.currentProject.settings,
               contentStyle: style,
+            },
+            updatedAt: Date.now(),
+          },
+        };
+      }),
+
+    updateSettings: (settings) =>
+      set((state) => {
+        if (!state.currentProject) return {};
+        return {
+          currentProject: {
+            ...state.currentProject,
+            settings: {
+              ...state.currentProject.settings,
+              ...settings,
             },
             updatedAt: Date.now(),
           },

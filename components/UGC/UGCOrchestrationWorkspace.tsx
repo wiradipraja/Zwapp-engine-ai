@@ -86,12 +86,13 @@ const UGCOrchestrationWorkspace: React.FC<UGCOrchestrationWorkspaceProps> = ({
         (msg, pct) => store.setProgress('SCRIPTING', pct, msg),
         { 
           language: projectSettings?.language || 'EN', 
-          contentStyle: projectSettings?.contentStyle || 'selfie' 
+          contentStyle: projectSettings?.contentStyle || 'selfie',
+          preferences: projectSettings?.preferences
         }
       );
 
       store.setGeneratedScript(script);
-      const prompts = generatePromptsFromScript(script, modelProfile, productProfile);
+      const prompts = generatePromptsFromScript(script, modelProfile, productProfile, projectSettings?.preferences);
       prompts.forEach(prompt => store.addPrompt(prompt));
 
       store.setSuccessMessage('Analysis and script generation complete!');

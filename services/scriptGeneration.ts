@@ -10,6 +10,7 @@ import {
   NarrationLanguage,
   UGCContentStyle,
   UGC_CONTENT_STYLES,
+  UGCPreferences
 } from '../types/ugc';
 
 export interface ScriptGenerationConfig {
@@ -19,6 +20,7 @@ export interface ScriptGenerationConfig {
   maxTokens?: number;
   language?: NarrationLanguage;
   contentStyle?: UGCContentStyle;
+  preferences?: UGCPreferences;
 }
 
 /**
@@ -38,42 +40,51 @@ export async function generateScriptWithGemini(
     maxTokens = 2048,
     language = 'EN',
     contentStyle = 'selfie',
+    preferences
   } = config;
 
   // Get content style info
   const styleInfo = UGC_CONTENT_STYLES.find(s => s.id === contentStyle) || UGC_CONTENT_STYLES[0];
   
+  // Use Preferences if available (Identity Lock System)
+  const targetObjective = preferences?.objective || narrativeContext.campaignGoal || 'Soft Selling';
+  const targetTone = preferences?.brandTone || narrativeContext.brandVoice || 'Friendly/Bestie';
+  const targetPlatform = preferences?.platform || 'TikTok';
+  const targetDuration = preferences?.videoDuration || '30s';
+  const customNote = preferences?.customNote ? `\nSPECIAL INSTRUCTION: ${preferences.customNote}` : '';
+  
   // Language instruction - CRITICAL for dialogue output
-  const languageInstruction = language === 'ID' 
-    ? `BAHASA WAJIB: Semua dialogue/dialog model HARUS dalam Bahasa Indonesia yang KASUAL dan GAUL.
-Contoh style bahasa:
-- "Akhirnya gue nemu yang cocok!"
-- "Guys, ini sih beneran worth it!"
-- "Kalian wajib cobain deh!"
+  // Now handles both ID and EN properly based on 'preferences.language' or 'config.language'
+  const targetLanguage = preferences?.language?.includes('ID') ? 'ID' : (language === 'ID' ? 'ID' : 'EN');
+  
+  const languageInstruction = targetLanguage === 'ID' 
+    ? `BAHASA WAJIB: Semua dialogue/dialog model HARUS dalam Bahasa Indonesia (Style: ${targetTone}).
+Contoh style bahasa: "Gue", "Lo", "Banget", "Sumpah", "Worth it".
 JANGAN gunakan bahasa Inggris untuk dialogue. Visual description tetap dalam English.`
-    : 'LANGUAGE: All dialogue must be written in English. Use casual, relatable tone.';
+    : `LANGUAGE: All dialogue must be written in English. Use tone: ${targetTone}.`;
   
   // Style instruction
   const styleInstruction = `CONTENT STYLE: ${styleInfo.name}
 - Camera Style: ${styleInfo.cameraStyle}
-- Visual Approach: ${styleInfo.promptModifier}`;
+- Visual Approach: ${styleInfo.promptModifier}
+- Platform: ${targetPlatform} (Optimize structure for this platform)`;
 
-  // Hook templates for powerful FYP-breaking hooks
-  const hookTemplates = language === 'ID' 
-    ? `HOOK TEMPLATES (pilih dan kembangkan salah satu):
-a. "Akhirnya gue nemu [PRODUK] yang gak gampang [MASALAH]!"
-b. "[PRODUK] ini bisa bikin [BENEFIT] banget sih!"
-c. "Ini [PRODUK] tapi [FUNGSI GANDA]! Gila ga sih?"
+  // Hook templates based on objective
+  const hookTemplates = targetLanguage === 'ID' 
+    ? `HOOK TEMPLATES (Choose one best for ${targetObjective}):
+a. [Problem/Agitation] "Kalian ngerasa ga sih kalau [MASALAH] itu ganggu banget?"
+b. [Direct Benefit] "Akhirnya gue nemu [PRODUK] yang beneran [SOLUSI]!"
+c. [Curiosity] "Ini dia rahasia [HASIL] yang gue sembunyiin selama ini!"
 
-Hook HARUS powerful untuk menembus FYP dan mendapatkan GMV!`
-    : `HOOK TEMPLATES (choose and develop one):
-a. "Finally found [PRODUCT] that doesn't [PROBLEM]!"
-b. "This [PRODUCT] can actually [BENEFIT]!"
-c. "This is [PRODUCT] but also [DUAL FUNCTION]!"`;
+Hook HARUS powerful, menembus FYP, dan sesuai objective: ${targetObjective}!`
+    : `HOOK TEMPLATES (Choose one best for ${targetObjective}):
+a. [Problem] "Do you hate it when [PROBLEM] happens?"
+b. [Benefit] "Finally found a [PRODUCT] that actually [SOLUTION]!"
+c. [Secret] "I've been gatekeeping this [RESULT] secret for too long!"`;
 
   // Build detailed prompt for script generation
   const prompt = `Kamu adalah CREATIVE DIRECTOR untuk agensi pemasaran terkemuka.
-Buatlah cerita visual berkesinambungan untuk iklan produk UGC (User Generated Content) untuk social media (TikTok, Instagram Reels, YouTube Shorts).
+Buatlah cerita visual berkesinambungan untuk iklan produk UGC (User Generated Content).
 
 ${languageInstruction}
 
@@ -81,53 +92,52 @@ ${styleInstruction}
 
 ${hookTemplates}
 
+${customNote}
+
 IMPORTANT RULES:
 1. Visual Description (setting, action, productPlacement) = ALWAYS in English (untuk akurasi image generator)
-2. Dialogue/Dialog Model = WAJIB sesuai bahasa yang dipilih (${language === 'ID' ? 'Bahasa Indonesia KASUAL & GAUL' : 'English'})
-3. Marketing Copy Style = KASUAL, santai, gaul, dan menarik (sesuai target audiens)
-4. Durasi optimal: 15-30 detik
-5. Include 3 scenes dengan transisi yang jelas
+2. Dialogue/Dialog Model = WAJIB sesuai bahasa yang dipilih (${targetLanguage})
+3. Marketing Copy Style = ${targetTone} (Focus on ${targetObjective})
+4. Durasi optimal: ${targetDuration}
+5. Include 3-5 scenes (sesuai durasi) dengan transisi yang jelas
 
-MODEL PROFILE:
-- Look: ${modelProfile.lookDescription || modelProfile.appearance}
-- Skin Tone: ${modelProfile.skinTone || 'natural'}
-- Body Type: ${modelProfile.bodyType || 'average'}
-- Facial Features: ${modelProfile.facialFeatures || 'natural'}
-- Expression Style: ${modelProfile.expressionStyle || 'friendly'}
+MODEL PROFILE (IDENTITY LOCK):
+- Character: ${preferences?.characterProfile || modelProfile.appearance}
+- Outfit: ${preferences?.outfitStyle || modelProfile.outfitStyle || 'Casual'}
+- Background Preference: ${preferences?.backgroundStyle || 'Aesthetic Room'}
+- Lighting Preference: ${preferences?.lightingStyle || 'Natural Light'}
+- Framing Preference: ${preferences?.framing || 'Selfie'}
 
 PRODUCT:
 - Name: ${productProfile.name}
-- Category: ${productProfile.category || 'general'}
-- Colors: ${productProfile.colors.join(', ')}
+- Category: ${preferences?.productCategory || productProfile.category || 'General'}
 - Key Features: ${productProfile.keyFeatures.join(', ')}
-- Price Range: ${productProfile.priceRange || 'mid-range'}
+- Price Perception: ${preferences?.priceRange || productProfile.priceRange || 'Affordable'}
 
 BRAND NARRATIVE:
-- Voice: ${narrativeContext.brandVoice}
-- Target Audience: ${narrativeContext.targetAudience}
-- Product Story: ${narrativeContext.productStory || 'Quality product for everyday use'}
-- Cultural Context: ${narrativeContext.culturalContext || 'contemporary urban lifestyle'}
-- Emotional Tone: ${narrativeContext.emotionalTone || 'positive and engaging'}
+- Objective: ${targetObjective}
+- Tone: ${targetTone}
+- Target Platform: ${targetPlatform}
 
-Generate a 3-scene UGC script. Return ONLY valid JSON (no markdown, no code blocks, no explanation) with this exact structure:
+Generate a UGC script. Return ONLY valid JSON (no markdown) with this structure:
 {
   "title": "Script title",
-  "duration": 24,
-  "hook": "The powerful opening hook (${language === 'ID' ? 'dalam Bahasa Indonesia gaul' : 'in English'})",
-  "problemStatement": "The problem being addressed (${language === 'ID' ? 'Bahasa Indonesia' : 'English'})",
-  "solution": "How the product solves it (${language === 'ID' ? 'Bahasa Indonesia' : 'English'})",
-  "cta": "Call to action (${language === 'ID' ? 'Bahasa Indonesia' : 'English'})",
+  "duration": 30,
+  "hook": "The powerful opening hook",
+  "problemStatement": "The problem being addressed",
+  "solution": "How the product solves it",
+  "cta": "Call to action",
   "scenes": [
     {
       "sceneNumber": 1,
-      "setting": "Description of setting (ALWAYS IN ENGLISH)",
+      "setting": "Description of setting (ALWAYS IN ENGLISH, e.g. 'A living room with natural light')",
       "action": "What the model does (ALWAYS IN ENGLISH)",
-      "dialogue": "What the model SAYS - MUST BE IN ${language === 'ID' ? 'BAHASA INDONESIA KASUAL & GAUL' : 'ENGLISH'}",
+      "dialogue": "What the model SAYS (IN ${targetLanguage})",
       "productPlacement": "How product is shown (ALWAYS IN ENGLISH)",
       "emotionalBeat": "The emotional moment (ALWAYS IN ENGLISH)"
     }
   ],
-  "voiceoverText": "Optional narration (${language === 'ID' ? 'Bahasa Indonesia' : 'English'})"
+  "voiceoverText": "Optional narration"
 }`;
 
   try {
