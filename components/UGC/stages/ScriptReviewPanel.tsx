@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { useUGCStore } from '../../../store/ugcStore';
+import { generatePromptsFromScript } from '../../../services/ugcIntegration';
 
 const ScriptReviewPanel: React.FC = () => {
   const store = useUGCStore();
@@ -36,7 +37,26 @@ const ScriptReviewPanel: React.FC = () => {
   };
 
   const handleSaveEdit = () => {
-    if (editedScript) store.setGeneratedScript(editedScript);
+    if (editedScript) {
+      store.setGeneratedScript(editedScript);
+
+      const project = store.currentProject;
+      const modelProfile = project?.extractedContext.modelProfile;
+      const productProfile = project?.extractedContext.productProfile;
+
+      if (project && modelProfile && productProfile) {
+        store.clearPrompts();
+        const prompts = generatePromptsFromScript(
+          editedScript,
+          modelProfile,
+          productProfile,
+          project.settings.preferences,
+          project.generatedContent.visualStyleGuide
+        );
+        prompts.forEach(prompt => store.addPrompt(prompt));
+        store.resetGeneratedOutputs();
+      }
+    }
     setEditMode(false);
   };
 

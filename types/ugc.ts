@@ -40,6 +40,21 @@ export interface UGCPreferences {
   customNote?: string;
 }
 
+export const DEFAULT_UGC_PREFERENCES: UGCPreferences = {
+  characterProfile: 'Asian Female 20s',
+  outfitStyle: 'Casual T-Shirt',
+  backgroundStyle: 'Living Room',
+  framing: 'Selfie (Close Up)',
+  lightingStyle: 'Natural Window',
+  productCategory: 'Skincare',
+  priceRange: 'Affordable (100k-500k)',
+  platform: 'TikTok',
+  objective: 'Soft Selling',
+  brandTone: 'Friendly/Bestie',
+  language: 'ID (Bahasa Gaul)',
+  videoDuration: '30s (5 scenes)',
+};
+
 export interface UGCContentStyleInfo {
   id: UGCContentStyle;
   name: string;
@@ -294,9 +309,8 @@ export interface UGCProject {
   };
   
   qaResults: {
-    imageQA?: QAResult[];
+    imageQA: QAResult[];
     overallPassRate?: number;
-    [imageId: string]: QAResult | QAResult[] | number | undefined;
   };
   
   createdAt: number;

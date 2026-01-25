@@ -98,8 +98,83 @@ b. [Benefit] "Finally found a [PRODUCT] that actually [SOLUTION]!"
 c. [Secret] "I've been gatekeeping this [RESULT] secret for too long!"`;
 
   // Build detailed prompt for script generation
-  const prompt = `Kamu adalah CREATIVE DIRECTOR untuk agensi pemasaran terkemuka.
-Buatlah cerita visual berkesinambungan untuk iklan produk UGC (User Generated Content).
+  const prompt = `Kamu adalah CREATIVE DIRECTOR & UGC SCRIPTWRITER senior untuk agensi pemasaran terkemuka.
+Buatlah cerita visual berkesinambungan untuk iklan produk UGC (User Generated Content) yang POWERFUL, tidak monoton, dan tidak kaku.
+
+BACKEND REALISM DIRECTIVE (MANDATORY, DO NOT OUTPUT):
+You are a professional commercial photographer and visual director.
+Your task is to generate a single continuous real-world photographic scene.
+All objects, humans, hands, and products must exist in the same physical space.
+Never treat elements as separate layers or composited objects.
+
+PHYSICAL REALITY RULES:
+- Every product must have real physical contact with something (hand, skin, surface, table, or ground).
+- Contact must create realistic contact shadows and occlusion.
+- No object may appear floating or artificially placed.
+- Skin, surface, or environment must subtly reflect on the product material.
+- Grip pressure, weight, and contact tension must appear natural.
+
+LIGHTING CONSISTENCY:
+- Use one coherent lighting setup for the entire scene.
+- Shadows, highlights, and reflections must align from the same light source.
+- No mismatched lighting or unnatural highlights are allowed.
+
+CAMERA & DEPTH:
+- Treat the scene as captured by a real camera.
+- Specify realistic lens behavior and depth of field.
+- All interacting elements must share the same focal plane unless physically separated.
+- Perspective must be consistent across the entire image.
+
+MATERIAL REALISM:
+- Surfaces must show realistic texture, reflection, and micro-imperfections.
+- Avoid CGI, overly smooth surfaces, or artificial sharpness.
+- Include subtle imperfections when appropriate (fingerprints, smudges, wear).
+
+SCENE TYPES:
+- If a model is present: product must physically interact with the model.
+- If only a hand is present: fingers must wrap naturally with skin deformation.
+- If the product is standalone: it must rest on a real surface with a visible contact shadow.
+
+STRICT PROHIBITIONS:
+- No collage
+- No overlay
+- No pasted or floating objects
+- No hard cutout edges
+- No digital compositing artifacts
+- No unrealistic separation between objects
+
+STYLE:
+- Photorealistic commercial product photography
+- Natural, believable UGC aesthetic
+- Shot as if captured in a real studio or real environment
+- Always prioritize realism, physical interaction, and unified visual logic.
+- The final image must appear as a single authentic photograph, never as a digital composite.
+
+REFERENCE JSON (internal adapter, DO NOT OUTPUT):
+{
+  "ugc_scene_adapter": {
+    "version": "1.0.0",
+    "rules": {
+      "model_product": [
+        "Ensure the product is physically interacting with the model.",
+        "Product casts soft shadow onto skin/clothing; subtle skin reflection visible on product."
+      ],
+      "hand_product": [
+        "Fingers wrap naturally; skin deformation at grip points is visible.",
+        "Contact shadow and occlusion between fingers and product must be present.",
+        "Add subtle fingerprints/smudges on product surface when appropriate."
+      ],
+      "product_standalone": [
+        "Product rests on a real surface with a clear contact shadow under the base.",
+        "Surface has slight reflection near the base; reflections match the single light source."
+      ]
+    },
+    "anti_composite": [
+      "No collage, no overlay, no pasted look, no floating objects, no hard cutout edges.",
+      "One coherent lighting setup; consistent highlights/shadows/reflections."
+    ]
+  }
+}
 
 ${languageInstruction}
 
@@ -115,6 +190,9 @@ IMPORTANT RULES:
 3. Marketing Copy Style = ${targetTone} (Focus on ${targetObjective})
 4. Durasi optimal: ${targetDuration}
 5. Include 3-5 scenes (sesuai durasi) dengan transisi yang jelas
+6. Jangan repetitif: variasikan panjang kalimat, ritme, dan choice of words antar scene
+7. Hindari frasa generik/klise; gunakan detail spesifik dan vivid
+8. Setiap scene harus punya tujuan emosional yang berbeda, tidak datar
 
 MODEL PROFILE (IDENTITY LOCK):
 - Character: ${preferences?.characterProfile || modelProfile.appearance}

@@ -15,14 +15,11 @@ const QAResultsPanel: React.FC<QAResultsPanelProps> = ({ onContinue }) => {
   if (!store.currentProject) return null;
 
   const qaResultsObj = store.currentProject.qaResults;
-  const qaResults: QAResult[] = qaResultsObj.imageQA || 
-    Object.entries(qaResultsObj)
-      .filter(([key]) => key !== 'imageQA' && key !== 'overallPassRate')
-      .map(([_, value]) => value as QAResult);
+  const qaResults: QAResult[] = qaResultsObj.imageQA || [];
   
   const passedCount = qaResults.filter(r => r.overallStatus === 'passed').length;
-  const overallPassRate = qaResults.length > 0 
-    ? Math.round((passedCount / qaResults.length) * 100) 
+  const overallPassRate = qaResults.length > 0
+    ? Math.round((passedCount / qaResults.length) * 100)
     : (qaResultsObj.overallPassRate || 0);
 
   const images = store.currentProject.generatedContent.images;

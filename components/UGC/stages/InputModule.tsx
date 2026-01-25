@@ -1,8 +1,8 @@
 // components/UGC/stages/InputModule.tsx
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useUGCStore } from '../../../store/ugcStore';
-import { UploadedAsset, UGC_CONTENT_STYLES, NarrationLanguage, UGCContentStyle, UGCPreferences } from '../../../types/ugc';
+import { UploadedAsset, UGCPreferences, DEFAULT_UGC_PREFERENCES } from '../../../types/ugc';
 import { uploadFileToSupabaseGetUrl } from '../../../services/kieFileUpload';
 
 interface InputModuleProps {
@@ -17,20 +17,13 @@ const InputModule: React.FC<InputModuleProps> = ({ onStartGeneration }) => {
   if (!store.currentProject) return null;
 
   // Initialize preferences if not exist
-  const preferences = store.currentProject.settings.preferences || {
-    characterProfile: 'Asian Female 20s',
-    outfitStyle: 'Casual T-Shirt',
-    backgroundStyle: 'Living Room',
-    framing: 'Selfie (Close Up)',
-    lightingStyle: 'Natural Window',
-    productCategory: 'Skincare',
-    priceRange: 'Affordable (100k-500k)',
-    platform: 'TikTok',
-    objective: 'Soft Selling',
-    brandTone: 'Friendly/Bestie',
-    language: 'ID (Bahasa Gaul)', // Default ID per request
-    videoDuration: '30s (5 scenes)',
-  } as UGCPreferences;
+  const preferences = store.currentProject.settings.preferences || DEFAULT_UGC_PREFERENCES;
+
+  useEffect(() => {
+    if (!store.currentProject?.settings.preferences) {
+      store.updateSettings({ preferences: { ...DEFAULT_UGC_PREFERENCES } });
+    }
+  }, [store, store.currentProject?.settings.preferences]);
 
   const updatePreference = (key: keyof UGCPreferences, value: string) => {
     const newPreferences = { ...preferences, [key]: value };

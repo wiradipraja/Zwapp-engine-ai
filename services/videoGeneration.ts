@@ -3,6 +3,9 @@
 
 import { GeneratedImage, GeneratedVideo } from '../types/ugc';
 
+const BASE_URL = '/api/proxy';
+const JOBS_URL = `${BASE_URL}/jobs`;
+
 export interface VideoGenerationConfig {
   apiKey: string;
   resolution?: '720p' | '1080p' | '1440p';
@@ -45,7 +48,7 @@ export async function generateVideoWithVeo(
   try {
     // Create video generation request
     const response = await fetch(
-      'https://kie-api.com/v1/generate/veo-video',
+      `${BASE_URL}/generate/veo-video`,
       {
         method: 'POST',
         headers: {
@@ -128,7 +131,7 @@ async function pollVideoStatus(
   for (let i = 0; i < maxAttempts; i++) {
     try {
       const response = await fetch(
-        `https://kie-api.com/v1/jobs/${jobId}`,
+        `${JOBS_URL}/${jobId}`,
         {
           headers: {
             Authorization: `Bearer ${apiKey}`,
@@ -301,8 +304,8 @@ export async function getVideoStatus(
   videoUrl?: string;
 }> {
   try {
-    const response = await fetch(
-      `https://kie-api.com/v1/jobs/${jobId}`,
+      const response = await fetch(
+      `${JOBS_URL}/${jobId}`,
       {
         headers: {
           Authorization: `Bearer ${apiKey}`,
@@ -338,7 +341,7 @@ export async function cancelVideoGeneration(
 ): Promise<boolean> {
   try {
     const response = await fetch(
-      `https://kie-api.com/v1/jobs/${jobId}/cancel`,
+      `${JOBS_URL}/${jobId}/cancel`,
       {
         method: 'POST',
         headers: {
@@ -389,7 +392,7 @@ export async function mergeVideos(
 
   try {
     const response = await fetch(
-      'https://kie-api.com/v1/generate/merge-videos',
+      `${BASE_URL}/generate/merge-videos`,
       {
         method: 'POST',
         headers: {

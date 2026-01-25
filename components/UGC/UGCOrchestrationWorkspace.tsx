@@ -1,6 +1,6 @@
 // components/UGC/UGCOrchestrationWorkspace.tsx
 
-import React, { useState, useEffect } from 'react';
+import React, { useEffect } from 'react';
 import { useUGCStore } from '../../store/ugcStore';
 import { WorkflowStage } from '../../types/ugc';
 import {
@@ -22,39 +22,34 @@ import VideoGenerationPanel from './stages/VideoGenerationPanel';
 interface UGCOrchestrationWorkspaceProps {
   apiKey?: string;
   geminiApiKey?: string;
+  onOpenSettings?: () => void;
 }
+
+type VideoEngine = 'veo3' | 'kling' | 'runway' | 'pika';
 
 const UGCOrchestrationWorkspace: React.FC<UGCOrchestrationWorkspaceProps> = ({
   apiKey,
   geminiApiKey,
+  onOpenSettings,
 }) => {
   const store = useUGCStore();
-  const [showApiKeyModal, setShowApiKeyModal] = useState(false);
-  const [localGeminiKey, setLocalGeminiKey] = useState(geminiApiKey || '');
-  const [localKieKey, setLocalKieKey] = useState(apiKey || '');
+  const kieApiKey = apiKey || '';
+  const geminiKey = geminiApiKey || '';
 
   useEffect(() => {
-    const storedGeminiKey = localStorage.getItem('gemini_api_key') || geminiApiKey || '';
-    const storedKieKey = localStorage.getItem('kie_api_key') || apiKey || '';
-    
-    setLocalGeminiKey(storedGeminiKey);
-    setLocalKieKey(storedKieKey);
-    
-    if (storedGeminiKey || storedKieKey) {
-      store.setApiConfig({
-        geminiApiKey: storedGeminiKey,
-        kieApiKey: storedKieKey,
-        visionApiKey: '',
-      });
-    }
-  }, [apiKey, geminiApiKey]);
+    store.setApiConfig({
+      geminiApiKey: geminiKey,
+      kieApiKey: kieApiKey,
+      visionApiKey: '',
+    });
+  }, [kieApiKey, geminiKey, store]);
 
   const handleAnalyzeAndGenerate = async () => {
     if (!store.currentProject) return;
     
-    if (!localGeminiKey) {
-      setShowApiKeyModal(true);
+    if (!geminiKey) {
       store.setError('Gemini API Key diperlukan untuk generate script');
+      onOpenSettings?.();
       return;
     }
 
@@ -67,7 +62,7 @@ const UGCOrchestrationWorkspace: React.FC<UGCOrchestrationWorkspaceProps> = ({
       
       const { modelProfile, productProfile, narrativeContext } = await analyzeInputAssets(
         store.currentProject,
-        { kieApiKey: localKieKey, geminiApiKey: localGeminiKey },
+        { kieApiKey: kieApiKey, geminiApiKey: geminiKey },
         (msg, pct) => store.setProgress('ANALYSIS', pct, msg)
       );
 
@@ -82,7 +77,7 @@ const UGCOrchestrationWorkspace: React.FC<UGCOrchestrationWorkspaceProps> = ({
         modelProfile,
         productProfile,
         narrativeContext,
-        { kieApiKey: localKieKey, geminiApiKey: localGeminiKey },
+        { kieApiKey: kieApiKey, geminiApiKey: geminiKey },
         (msg, pct) => store.setProgress('SCRIPTING', pct, msg),
         { 
           language: projectSettings?.language || 'EN', 
@@ -111,8 +106,9 @@ const UGCOrchestrationWorkspace: React.FC<UGCOrchestrationWorkspaceProps> = ({
   const handleGenerateImages = async () => {
     if (!store.currentProject) return;
     
-    if (!localKieKey) {
+    if (!kieApiKey) {
       store.setError('KIE API Key diperlukan untuk generate images');
+      onOpenSettings?.();
       return;
     }
 
@@ -133,7 +129,7 @@ const UGCOrchestrationWorkspace: React.FC<UGCOrchestrationWorkspaceProps> = ({
 
       const images = await generateUGCImages(
         prompts, modelPhoto, productPhoto,
-        { kieApiKey: localKieKey, geminiApiKey: localGeminiKey },
+        { kieApiKey: kieApiKey, geminiApiKey: geminiKey },
         (msg, pct) => store.setProgress('GENERATING', pct, msg)
       );
 
@@ -164,15 +160,12 @@ const UGCOrchestrationWorkspace: React.FC<UGCOrchestrationWorkspaceProps> = ({
         images,
         store.currentProject.extractedContext.modelProfile!,
         store.currentProject.extractedContext.productProfile!,
-        { kieApiKey: localKieKey, geminiApiKey: localGeminiKey },
+        { kieApiKey: kieApiKey, geminiApiKey: geminiKey },
         (msg, pct) => store.setProgress('QA', pct, msg)
       );
 
-      qaResults.forEach(result => {
-        if (result.imageId) store.setQAResult(result.imageId, result);
-      });
-
       const passRate = calculateOverallPassRate(qaResults);
+      store.setQAResults(qaResults, passRate);
       store.setSuccessMessage(`QA Complete! Pass rate: ${passRate}%`);
       store.setLoading(false);
     } catch (error) {
@@ -182,11 +175,12 @@ const UGCOrchestrationWorkspace: React.FC<UGCOrchestrationWorkspaceProps> = ({
     }
   };
 
-  const handleGenerateVideo = async (engine: string = 'veo3') => {
+  const handleGenerateVideo = async (options?: { engine?: VideoEngine; resolution?: '720p' | '1080p' | '1440p'; frameRate?: 24 | 30 | 60 }) => {
     if (!store.currentProject) return;
 
-    if (!localKieKey) {
+    if (!kieApiKey) {
       store.setError('KIE API Key diperlukan untuk generate video');
+      onOpenSettings?.();
       return;
     }
 
@@ -201,31 +195,24 @@ const UGCOrchestrationWorkspace: React.FC<UGCOrchestrationWorkspaceProps> = ({
     store.setCurrentStage('VIDEO_GENERATION');
 
     try {
+      const engine = options?.engine || 'veo3';
       store.setProgress('VIDEO_GENERATION', 10, `Initializing ${engine.toUpperCase()}...`);
       
       const video = await generateUGCVideo(
         images,
-        { kieApiKey: localKieKey, geminiApiKey: localGeminiKey },
-        { resolution: '1080p', frameRate: 30, engine },
+        { kieApiKey: kieApiKey, geminiApiKey: geminiKey },
+        { resolution: options?.resolution || '1080p', frameRate: options?.frameRate || 30, engine },
         (msg, pct) => store.setProgress('VIDEO_GENERATION', pct, msg)
       );
 
       store.addGeneratedVideo(video);
-      store.setSuccessMessage(`Video generated successfully with ${engine.toUpperCase()}!`);
+      store.setSuccessMessage(`Video generated successfully with ${(options?.engine || 'veo3').toUpperCase()}!`);
       store.setLoading(false);
     } catch (error) {
       console.error('Video generation error:', error);
       store.setError(`Video generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
       store.setLoading(false);
     }
-  };
-
-  const handleSaveApiKeys = () => {
-    localStorage.setItem('gemini_api_key', localGeminiKey);
-    localStorage.setItem('kie_api_key', localKieKey);
-    store.setApiConfig({ geminiApiKey: localGeminiKey, kieApiKey: localKieKey, visionApiKey: '' });
-    setShowApiKeyModal(false);
-    store.setSuccessMessage('API Keys saved successfully!');
   };
 
   const stageOrder: WorkflowStage[] = [
@@ -259,7 +246,10 @@ const UGCOrchestrationWorkspace: React.FC<UGCOrchestrationWorkspaceProps> = ({
               <div className="absolute top-0 right-0 w-2 h-2 border-t-2 border-r-2 border-current opacity-50"></div>
               <div className="absolute bottom-0 left-0 w-2 h-2 border-b-2 border-l-2 border-current opacity-50"></div>
             </button>
-            <button className="relative font-bold uppercase tracking-wider py-3 px-6 bg-zinc-800 hover:bg-zinc-700 text-orange-500 border border-orange-500/30 transition-all">
+            <button
+              onClick={() => store.setError('Load project belum tersedia. Simpan/load akan ditambahkan di update berikutnya.')}
+              className="relative font-bold uppercase tracking-wider py-3 px-6 bg-zinc-800 hover:bg-zinc-700 text-orange-500 border border-orange-500/30 transition-all"
+            >
               <span className="flex items-center justify-center gap-2"><span>📂</span><span>LOAD PROJECT</span></span>
             </button>
           </div>
@@ -275,37 +265,6 @@ const UGCOrchestrationWorkspace: React.FC<UGCOrchestrationWorkspaceProps> = ({
     <div className="bg-zinc-900/80 border border-zinc-800 relative">
       <div className="absolute top-0 left-0 w-full h-1 bg-orange-600"></div>
 
-      {/* API Key Modal */}
-      {showApiKeyModal && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
-          <div className="bg-zinc-900 border border-zinc-700 p-6 max-w-md w-full mx-4 relative">
-            <div className="absolute top-0 left-0 w-full h-1 bg-orange-600"></div>
-            <div className="flex items-center gap-2 mb-6">
-              <div className="w-3 h-3 bg-orange-500 animate-pulse"></div>
-              <h3 className="text-lg font-bold uppercase tracking-widest text-white">API Configuration</h3>
-            </div>
-            <p className="text-sm text-zinc-500 font-mono mb-4">Enter your API keys to enable AI features</p>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-xs font-mono text-orange-500 mb-1 tracking-widest uppercase">Google Gemini API Key (FREE)</label>
-                <input type="password" value={localGeminiKey} onChange={(e) => setLocalGeminiKey(e.target.value)} placeholder="AIza..."
-                  className="w-full bg-zinc-950 border border-zinc-700 text-zinc-300 p-3 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 transition-colors font-mono text-sm" />
-                <p className="text-xs text-zinc-600 mt-1 font-mono">Get free API key at: aistudio.google.com</p>
-              </div>
-              <div>
-                <label className="block text-xs font-mono text-orange-500 mb-1 tracking-widest uppercase">KIE.AI API Key</label>
-                <input type="password" value={localKieKey} onChange={(e) => setLocalKieKey(e.target.value)} placeholder="Your KIE API key"
-                  className="w-full bg-zinc-950 border border-zinc-700 text-zinc-300 p-3 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 transition-colors font-mono text-sm" />
-              </div>
-            </div>
-            <div className="flex gap-3 mt-6">
-              <button onClick={() => setShowApiKeyModal(false)} className="flex-1 py-2 px-4 bg-zinc-800 hover:bg-zinc-700 text-zinc-400 border border-zinc-700 font-mono text-sm uppercase tracking-wider transition-colors">Cancel</button>
-              <button onClick={handleSaveApiKeys} className="flex-1 py-2 px-4 bg-orange-600 hover:bg-orange-500 text-black font-bold uppercase tracking-wider transition-colors">Save Keys</button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Header */}
       <div className="p-4 border-b border-zinc-800">
         <div className="flex items-center justify-between mb-4">
@@ -317,7 +276,7 @@ const UGCOrchestrationWorkspace: React.FC<UGCOrchestrationWorkspaceProps> = ({
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <button onClick={() => setShowApiKeyModal(true)} className="p-2 text-zinc-400 hover:text-orange-500 hover:bg-zinc-800 border border-transparent hover:border-zinc-700 transition-all" title="API Keys">
+            <button onClick={() => onOpenSettings?.()} className="p-2 text-zinc-400 hover:text-orange-500 hover:bg-zinc-800 border border-transparent hover:border-zinc-700 transition-all" title="Open Settings">
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"></path></svg>
             </button>
             <button onClick={() => store.resetProject()} className="p-2 text-zinc-400 hover:text-red-500 hover:bg-zinc-800 border border-transparent hover:border-red-900 transition-all" title="Exit Project">

@@ -371,9 +371,9 @@ function determineStatus(
   modelConsistency: { score: number },
   productPlacement: { score: number },
   hallucinations: { detected: boolean }
-): 'passed' | 'failed' | 'needs-review' {
+): 'passed' | 'failed' | 'needs_review' {
   if (hallucinations.detected) {
-    return 'needs-review';
+    return 'needs_review';
   }
 
   if (modelConsistency.score >= 85 && productPlacement.score >= 80) {
@@ -381,7 +381,7 @@ function determineStatus(
   }
 
   if (modelConsistency.score >= 70 && productPlacement.score >= 65) {
-    return 'needs-review';
+    return 'needs_review';
   }
 
   return 'failed';

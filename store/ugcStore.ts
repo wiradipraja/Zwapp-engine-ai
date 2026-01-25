@@ -19,6 +19,7 @@ import {
   NarrativeContext,
   NarrationLanguage,
   UGCContentStyle,
+  DEFAULT_UGC_PREFERENCES,
 } from '../types/ugc';
 
 // API Configuration for UGC services
@@ -88,6 +89,7 @@ interface UGCStoreState {
   
   // QA
   setQAResult: (imageId: string, result: QAResult) => void;
+  setQAResults: (results: QAResult[], overallPassRate?: number) => void;
   
   // Stage management
   setCurrentStage: (stage: WorkflowStage) => void;
@@ -101,6 +103,7 @@ interface UGCStoreState {
   // Project management
   resetProject: () => void;
   loadProject: (project: UGCProject) => void;
+  resetGeneratedOutputs: () => void;
 }
 
 export const useUGCStore = create<UGCStoreState>()(
@@ -132,6 +135,7 @@ export const useUGCStore = create<UGCStoreState>()(
         settings: {
           language: 'EN',
           contentStyle: 'selfie',
+          preferences: { ...DEFAULT_UGC_PREFERENCES },
         },
         inputAssets: {
           modelPhotos: [],
@@ -440,12 +444,32 @@ export const useUGCStore = create<UGCStoreState>()(
     setQAResult: (imageId, result) =>
       set((state) => {
         if (!state.currentProject) return {};
+        const existing = state.currentProject.qaResults.imageQA || [];
+        const updated = existing.some(r => r.imageId === imageId)
+          ? existing.map(r => (r.imageId === imageId ? result : r))
+          : [...existing, result];
+
         return {
           currentProject: {
             ...state.currentProject,
             qaResults: {
               ...state.currentProject.qaResults,
-              [imageId]: result,
+              imageQA: updated,
+            },
+            updatedAt: Date.now(),
+          },
+        };
+      }),
+
+    setQAResults: (results, overallPassRate) =>
+      set((state) => {
+        if (!state.currentProject) return {};
+        return {
+          currentProject: {
+            ...state.currentProject,
+            qaResults: {
+              imageQA: results,
+              overallPassRate: overallPassRate ?? state.currentProject.qaResults.overallPassRate ?? 0,
             },
             updatedAt: Date.now(),
           },
@@ -482,6 +506,39 @@ export const useUGCStore = create<UGCStoreState>()(
     
     resetProject: () => set({ currentProject: null, error: null, successMessage: null }),
     
-    loadProject: (project) => set({ currentProject: project }),
+    loadProject: (project) =>
+      set({
+        currentProject: {
+          ...project,
+          settings: {
+            ...project.settings,
+            preferences: project.settings.preferences || { ...DEFAULT_UGC_PREFERENCES },
+          },
+          qaResults: {
+            imageQA: project.qaResults?.imageQA || [],
+            overallPassRate: project.qaResults?.overallPassRate || 0,
+          },
+        },
+      }),
+
+    resetGeneratedOutputs: () =>
+      set((state) => {
+        if (!state.currentProject) return {};
+        return {
+          currentProject: {
+            ...state.currentProject,
+            generatedContent: {
+              ...state.currentProject.generatedContent,
+              images: [],
+              videos: [],
+            },
+            qaResults: {
+              imageQA: [],
+              overallPassRate: 0,
+            },
+            updatedAt: Date.now(),
+          },
+        };
+      }),
   }))
 );

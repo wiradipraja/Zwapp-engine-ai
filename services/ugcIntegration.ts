@@ -574,11 +574,17 @@ export async function generateUGCVideo(
     resolution?: '720p' | '1080p' | '1440p';
     frameRate?: 24 | 30 | 60;
     duration?: number;
-    engine?: string; // 'veo3' | 'kling' | 'runway' | 'pika'
+    engine?: 'veo3' | 'kling' | 'runway' | 'pika';
   },
   onProgress?: (message: string, percent: number) => void
 ): Promise<GeneratedVideo> {
   const engineName = options?.engine || 'veo3';
+  const styleByEngine: Record<'veo3' | 'kling' | 'runway' | 'pika', string> = {
+    veo3: 'smooth UGC transitions, natural movement, crisp social media realism',
+    kling: 'highly realistic motion, stable camera, documentary feel',
+    runway: 'creative cinematic motion, stylized transitions, editorial vibe',
+    pika: 'snappy social media transitions, lightweight motion, energetic pacing',
+  };
   onProgress?.(`Preparing images for ${engineName.toUpperCase()}...`, 10);
 
   try {
@@ -617,7 +623,7 @@ export async function generateUGCVideo(
         resolution: options?.resolution || '1080p',
         frameRate: options?.frameRate || 30,
         duration: options?.duration || approvedImages.length * 3,
-        style: 'smooth UGC transitions',
+        style: styleByEngine[engineName] || styleByEngine.veo3,
       }
     );
 

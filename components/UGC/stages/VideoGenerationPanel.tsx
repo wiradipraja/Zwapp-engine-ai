@@ -4,7 +4,11 @@ import React, { useState } from 'react';
 import { useUGCStore } from '../../../store/ugcStore';
 
 interface VideoGenerationPanelProps {
-  onGenerateVideo?: (engine: VideoEngine) => Promise<void>;
+  onGenerateVideo?: (options: {
+    engine: VideoEngine;
+    resolution: '720p' | '1080p' | '1440p';
+    frameRate: 24 | 30 | 60;
+  }) => Promise<void>;
 }
 
 type VideoEngine = 'veo3' | 'kling' | 'runway' | 'pika';
@@ -39,7 +43,11 @@ const VideoGenerationPanel: React.FC<VideoGenerationPanelProps> = ({ onGenerateV
 
   const handleGenerateVideo = async () => {
     if (onGenerateVideo) {
-      await onGenerateVideo(selectedEngine);
+      await onGenerateVideo({
+        engine: selectedEngine,
+        resolution,
+        frameRate,
+      });
     } else {
       store.setLoading(true);
       store.setProgress('VIDEO_GENERATION', 10, `Initializing ${VIDEO_ENGINES.find(e => e.id === selectedEngine)?.name}...`);

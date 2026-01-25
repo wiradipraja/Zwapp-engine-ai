@@ -43,7 +43,7 @@ const PromptEngineeringPanel: React.FC<PromptEngineeringPanelProps> = ({
     }
 
     // Default implementation
-    const kieApiKey = localStorage.getItem('kie_api_key') || '';
+    const kieApiKey = store.apiConfig?.kieApiKey || '';
     if (!kieApiKey) {
       store.setError('KIE API Key diperlukan untuk generate images');
       return;

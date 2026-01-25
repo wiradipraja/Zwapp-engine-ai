@@ -563,42 +563,49 @@ const AppContent: React.FC = () => {
 
         {/* Content */}
         <div className="flex">
-          {/* Left Panel - Dynamic Form */}
-          <div className={`w-96 min-h-[calc(100vh-4rem)] border-r overflow-y-auto ${isDark ? 'bg-zinc-950 border-zinc-800' : 'bg-white border-zinc-200'}`}>
-            <div className="p-4">
-              {/* Dynamic Form Based on Module */}
-              {renderActiveForm()}
+          {activeModule === 'ugc' ? (
+            <div className="flex-1 p-6">
+              <UGCOrchestrationWorkspace
+                apiKey={apiKey}
+                geminiApiKey={geminiApiKey}
+                onOpenSettings={() => setIsSettingsOpen(true)}
+              />
             </div>
-          </div>
-
-          {/* Right Panel - Output */}
-          <div className="flex-1 p-6">
-            {/* Show UGC Studio */}
-            {activeModule === 'ugc' ? (
-              <UGCOrchestrationWorkspace apiKey={apiKey} />
-            ) : (
-              <div className="flex flex-col items-center justify-center h-[calc(100vh-8rem)]">
-                {/* System Ready State */}
-                <div className={`w-24 h-24 border-2 ${isDark ? 'border-zinc-800' : 'border-zinc-300'} flex items-center justify-center mb-6`}>
-                  <svg className={`w-12 h-12 ${isDark ? 'text-zinc-700' : 'text-zinc-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
-                  </svg>
-                </div>
-                <h3 className={`text-xl font-mono tracking-widest mb-2 ${isDark ? 'text-zinc-500' : 'text-zinc-600'}`}>SYSTEM READY</h3>
-                <p className={`text-sm font-mono ${isDark ? 'text-zinc-700' : 'text-zinc-400'}`}>Awaiting Input Parameters...</p>
-
-                {/* Queue & Terminal Below */}
-                <div className="w-full max-w-2xl mt-12 space-y-4">
-                  <QueueList 
-                    tasks={tasks} 
-                    onSelectTask={setSelectedTaskId} 
-                    selectedTaskId={selectedTaskId} 
-                  />
-                  <StatusTerminal task={activeTask} logs={logs} />
+          ) : (
+            <>
+              {/* Left Panel - Dynamic Form */}
+              <div className={`w-96 min-h-[calc(100vh-4rem)] border-r overflow-y-auto ${isDark ? 'bg-zinc-950 border-zinc-800' : 'bg-white border-zinc-200'}`}>
+                <div className="p-4">
+                  {/* Dynamic Form Based on Module */}
+                  {renderActiveForm()}
                 </div>
               </div>
-            )}
-          </div>
+
+              {/* Right Panel - Output */}
+              <div className="flex-1 p-6">
+                <div className="flex flex-col items-center justify-center h-[calc(100vh-8rem)]">
+                  {/* System Ready State */}
+                  <div className={`w-24 h-24 border-2 ${isDark ? 'border-zinc-800' : 'border-zinc-300'} flex items-center justify-center mb-6`}>
+                    <svg className={`w-12 h-12 ${isDark ? 'text-zinc-700' : 'text-zinc-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
+                    </svg>
+                  </div>
+                  <h3 className={`text-xl font-mono tracking-widest mb-2 ${isDark ? 'text-zinc-500' : 'text-zinc-600'}`}>SYSTEM READY</h3>
+                  <p className={`text-sm font-mono ${isDark ? 'text-zinc-700' : 'text-zinc-400'}`}>Awaiting Input Parameters...</p>
+
+                  {/* Queue & Terminal Below */}
+                  <div className="w-full max-w-2xl mt-12 space-y-4">
+                    <QueueList 
+                      tasks={tasks} 
+                      onSelectTask={setSelectedTaskId} 
+                      selectedTaskId={selectedTaskId} 
+                    />
+                    <StatusTerminal task={activeTask} logs={logs} />
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
         </div>
       </div>
     </div>
