@@ -397,7 +397,7 @@ async function repairJsonWithModel(
     'Preserve all fields and values. Escape newlines inside strings and add missing commas if needed.';
 
   if (provider === 'kie') {
-    const response = await fetch('/api/proxy-gemini/gemini-3-flash/v1/chat/completions', {
+    const response = await fetch('https://api.kie.ai/gemini-3-flash/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -444,36 +444,50 @@ async function repairJsonWithModel(
     throw new Error('KIE JSON repair returned empty content');
   }
 
+  // Fallback - also use KIE AI for non-KIE providers (unified endpoint)
+  console.log('[JSON Repair] Using KIE AI endpoint for JSON repair');
   const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+    'https://api.kie.ai/gemini-3-flash/v1/chat/completions',
     {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        contents: [
+        config: {
+          model: 'gemini-3-flash',
+          stream: false,
+        },
+        messages: [
           {
-            parts: [{ text: `${repairInstruction}\n\n${raw}` }],
+            role: 'system',
+            content: [{ type: 'text', text: 'You are a strict JSON repair tool.' }],
+          },
+          {
+            role: 'user',
+            content: [{ type: 'text', text: `${repairInstruction}\n\n${raw}` }],
           },
         ],
-        generationConfig: {
-          temperature: 0,
-          maxOutputTokens: 2048,
-        },
+        stream: false,
+        temperature: 0,
       }),
     }
   );
 
   if (!response.ok) {
-    const error = await response.json();
+    const errorText = await response.text();
     throw new Error(
-      `Gemini JSON repair failed: ${error.error?.message || JSON.stringify(error)}`
+      `KIE JSON repair failed (${response.status}): ${errorText.substring(0, 200)}`
     );
   }
 
   const data = await response.json();
-  return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+  const msgContent = data?.choices?.[0]?.message?.content;
+  if (typeof msgContent === 'string') return msgContent;
+  if (Array.isArray(msgContent)) return msgContent.map((p: any) => p?.text || p?.content || '').join('');
+  if (msgContent?.text) return msgContent.text;
+  return '';
 }
 
 /**
@@ -723,14 +737,12 @@ IMPORTANT JSON RULES:
 - Do NOT include trailing commas.`;
 
   try {
-    const detectedProvider: 'google' | 'kie' = provider
-      ? provider
-      : apiKey?.startsWith('AIza')
-        ? 'google'
-        : 'kie';
+    // ALWAYS use KIE AI endpoint for Gemini - this ensures requests are logged in KIE dashboard
+    // KIE AI supports both KIE API keys and Google Gemini API keys
+    const detectedProvider: 'google' | 'kie' = 'kie';
 
     let content = '';
-    const resolvedModelName = detectedProvider === 'kie' ? 'kie-gemini-3-flash' : model;
+    const resolvedModelName = 'kie-gemini-3-flash';
 
     if (detectedProvider === 'kie') {
       console.log('[UGC Script] Using KIE Gemini Chat Completions');
@@ -755,7 +767,7 @@ IMPORTANT JSON RULES:
       }
 
       const response = await fetch(
-        '/api/proxy-gemini/gemini-3-flash/v1/chat/completions',
+        'https://api.kie.ai/gemini-3-flash/v1/chat/completions',
         {
           method: 'POST',
           headers: {
@@ -804,42 +816,8 @@ IMPORTANT JSON RULES:
       } else if (messageContent?.text) {
         content = messageContent.text;
       }
-    } else {
-      console.log('[UGC Script] Using Google Gemini GenerateContent');
-      // Call Gemini API (FREE)
-      const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            contents: [
-              {
-                parts: [{ text: prompt }],
-              },
-            ],
-            generationConfig: {
-              temperature,
-              maxOutputTokens: maxTokens,
-              topP: 0.95,
-              topK: 40,
-            },
-          }),
-        }
-      );
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(
-          `Gemini API Error: ${error.error?.message || JSON.stringify(error)}`
-        );
-      }
-
-      const data = await response.json();
-      content = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
     }
+    // Removed Google Gemini direct branch - now always uses KIE AI
 
     if (!content) {
       throw new Error('No content received from Gemini');
@@ -959,33 +937,48 @@ ${feedback}
 Please refine the script based on the feedback. Return ONLY valid JSON (no markdown, no code blocks) with the same structure as the current script.`;
 
   try {
+    // USE KIE AI ENDPOINT
+    console.log('[UGC Script] Refining script via KIE Gemini');
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+      'https://api.kie.ai/gemini-3-flash/v1/chat/completions',
       {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`,
         },
         body: JSON.stringify({
-          contents: [
+          config: {
+            model: 'gemini-3-flash',
+            brand_lock: true,
+            stream: false,
+          },
+          messages: [
             {
-              parts: [{ text: refinementPrompt }],
+              role: 'user',
+              content: [{ type: 'text', text: refinementPrompt }],
             },
           ],
-          generationConfig: {
-            temperature: 0.7,
-            maxOutputTokens: 2048,
-          },
+          stream: false,
         }),
       }
     );
 
     if (!response.ok) {
-      throw new Error('Failed to refine script');
+      const errorText = await response.text();
+      throw new Error(`Failed to refine script: ${errorText.substring(0, 200)}`);
     }
 
     const data = await response.json();
-    const content = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    const messageContent = data?.choices?.[0]?.message?.content;
+    let content = '';
+    if (typeof messageContent === 'string') {
+      content = messageContent;
+    } else if (Array.isArray(messageContent)) {
+      content = messageContent.map((p: any) => p?.text || p?.content || '').join('');
+    } else if (messageContent?.text) {
+      content = messageContent.text;
+    }
 
     if (!content) {
       throw new Error('No refinement content received');

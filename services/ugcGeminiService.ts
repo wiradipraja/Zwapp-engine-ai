@@ -261,30 +261,54 @@ OUTPUT FORMAT (JSON ONLY, NO MARKDOWN):
 Generate 5 scenes following the structure above. All dialogue MUST be in Bahasa Indonesia Gaul. All visual_prompt MUST be in English.`;
 
   try {
+    // USE KIE AI ENDPOINT - this ensures requests are logged in KIE dashboard
+    console.log('[UGC Gemini] Using KIE AI Gemini Chat Completions');
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+      'https://api.kie.ai/gemini-3-flash/v1/chat/completions',
       {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`,
+        },
         body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: {
-            temperature,
-            maxOutputTokens: maxTokens,
-            topP: 0.95,
-            topK: 40,
+          config: {
+            model: 'gemini-3-flash',
+            brand_lock: true,
+            stream: false,
+            include_thoughts: false,
+            reasoning_effort: 'high',
           },
+          messages: [
+            {
+              role: 'user',
+              content: [{ type: 'text', text: prompt }],
+            },
+          ],
+          stream: false,
+          include_thoughts: false,
+          reasoning_effort: 'high',
         }),
       }
     );
 
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(`Gemini API Error: ${error.error?.message || JSON.stringify(error)}`);
+      const errorText = await response.text();
+      throw new Error(`KIE Gemini API Error (${response.status}): ${errorText.substring(0, 200)}`);
     }
 
     const data = await response.json();
-    const content = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    
+    // Extract content from KIE chat completions format
+    let content = '';
+    const messageContent = data?.choices?.[0]?.message?.content;
+    if (typeof messageContent === 'string') {
+      content = messageContent;
+    } else if (Array.isArray(messageContent)) {
+      content = messageContent.map((part: any) => part?.text || part?.content || '').join('');
+    } else if (messageContent?.text) {
+      content = messageContent.text;
+    }
 
     if (!content) {
       throw new Error('No content received from Gemini');
@@ -375,20 +399,45 @@ SCENE CONTEXT:
 
 Generate a single paragraph visual prompt in ENGLISH that describes exactly what the image should look like. Include model pose, expression, product placement, background, and lighting. Keep it under 200 words.`;
 
+  // USE KIE AI ENDPOINT
+  console.log('[UGC Gemini] Generating visual prompt via KIE Gemini');
   const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+    'https://api.kie.ai/gemini-3-flash/v1/chat/completions',
     {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+      },
       body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.7, maxOutputTokens: 500 },
+        config: {
+          model: 'gemini-3-flash',
+          stream: false,
+        },
+        messages: [
+          {
+            role: 'user',
+            content: [{ type: 'text', text: prompt }],
+          },
+        ],
+        stream: false,
       }),
     }
   );
 
-  if (!response.ok) throw new Error('Failed to generate visual prompt');
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Failed to generate visual prompt: ${errorText.substring(0, 200)}`);
+  }
 
   const data = await response.json();
-  return data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
+  const messageContent = data?.choices?.[0]?.message?.content;
+  if (typeof messageContent === 'string') {
+    return messageContent.trim();
+  } else if (Array.isArray(messageContent)) {
+    return messageContent.map((p: any) => p?.text || p?.content || '').join('').trim();
+  } else if (messageContent?.text) {
+    return messageContent.text.trim();
+  }
+  return '';
 }
