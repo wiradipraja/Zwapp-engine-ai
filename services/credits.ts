@@ -68,6 +68,13 @@ export const CREDIT_ERROR_CODES: Record<number, string> = {
  * Fetch user's current credit balance from KIE.AI
  * Primary endpoint: GET /api/v1/chat/credit (based on PRD)
  * Uses Vercel proxy to avoid CORS issues (in production and dev)
+ * 
+ * Reference Python code:
+ * headers = {
+ *   'Accept': 'application/json',
+ *   'Authorization': 'Bearer <token>'
+ * }
+ * response = requests.request("GET", url, headers=headers, data=payload)
  */
 export const fetchUserCredits = async (apiKey: string): Promise<number> => {
   if (!apiKey || apiKey.trim() === '') {
@@ -77,13 +84,15 @@ export const fetchUserCredits = async (apiKey: string): Promise<number> => {
 
   try {
     // Primary endpoint: chat/credit - Official KIE.AI credit endpoint (PRD)
+    // Headers match exact Python reference: Accept + Authorization only
     try {
       const response = await fetch('/api/proxy/chat/credit', {
         method: 'GET',
         headers: {
-          'Authorization': `Bearer ${apiKey}`,
           'Accept': 'application/json',
+          'Authorization': `Bearer ${apiKey}`,
         },
+        // No body/payload for GET request (matches Python: data=payload where payload={})
       });
       
       if (response.ok) {

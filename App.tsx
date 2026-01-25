@@ -62,6 +62,9 @@ const AppContent: React.FC = () => {
   // UI State
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  
+  // Credit refresh trigger - increment to force credit balance refresh
+  const [creditRefreshTrigger, setCreditRefreshTrigger] = useState(0);
 
   // Toast notifications
   const toast = useToast();
@@ -269,6 +272,12 @@ const AppContent: React.FC = () => {
                 if (newState !== t.state) {
                     const stateEmoji = newState === 'success' ? '✓' : newState === 'fail' ? '✗' : '⏳';
                     addLog(`${stateEmoji} Task ${t.taskId.slice(-4)}: ${t.state} → ${newState}${update.data.failMsg ? ` (${update.data.failMsg})` : ''}`);
+                    
+                    // Trigger credit refresh when task completes (success or fail)
+                    if (newState === 'success' || newState === 'fail') {
+                        console.log('[App] Task completed, triggering credit refresh');
+                        setCreditRefreshTrigger(prev => prev + 1);
+                    }
                 }
 
                 return {
@@ -474,6 +483,7 @@ const AppContent: React.FC = () => {
         userEmail={session?.user?.email}
         apiConnected={!!apiKey}
         apiKey={apiKey}
+        creditRefreshTrigger={creditRefreshTrigger}
       />
 
       {/* Main Content Area - Fixed margin for collapsed sidebar, sidebar expands over content on hover */}

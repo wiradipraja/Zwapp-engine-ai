@@ -51,6 +51,8 @@ interface SidebarProps {
   userEmail?: string;
   apiConnected: boolean;
   apiKey?: string;
+  /** Trigger to refresh credits - increment this value to force refresh */
+  creditRefreshTrigger?: number;
 }
 
 const Sidebar: React.FC<SidebarProps> = ({
@@ -63,6 +65,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   userEmail,
   apiConnected,
   apiKey,
+  creditRefreshTrigger = 0,
 }) => {
   const { theme, toggleTheme } = useTheme();
   const isDark = theme === 'dark';
@@ -73,36 +76,56 @@ const Sidebar: React.FC<SidebarProps> = ({
   const [creditBalance, setCreditBalance] = useState<number | null>(null);
   const [isLoadingCredits, setIsLoadingCredits] = useState(false);
   const [creditError, setCreditError] = useState<string | null>(null);
+  const [lastRefreshTime, setLastRefreshTime] = useState<number>(0);
 
   // Fetch credits when apiKey changes or on mount
-  const refreshCredits = useCallback(async () => {
+  const refreshCredits = useCallback(async (force: boolean = false) => {
     if (!apiKey || apiKey.trim() === '') {
       setCreditBalance(null);
       return;
     }
 
+    // Prevent rapid repeated calls (debounce 2 seconds) unless forced
+    const now = Date.now();
+    if (!force && now - lastRefreshTime < 2000) {
+      console.log('[Credits] Skipping refresh - too soon');
+      return;
+    }
+
     setIsLoadingCredits(true);
     setCreditError(null);
+    setLastRefreshTime(now);
     
     try {
       const credits = await fetchUserCredits(apiKey);
       setCreditBalance(credits);
+      console.log('[Credits] Balance updated:', credits);
     } catch (error) {
       console.error('[Sidebar] Failed to fetch credits:', error);
       setCreditError('Failed to load');
     } finally {
       setIsLoadingCredits(false);
     }
-  }, [apiKey]);
+  }, [apiKey, lastRefreshTime]);
 
-  // Initial fetch and periodic refresh
+  // Initial fetch and periodic refresh (every 30 seconds for better responsiveness)
   useEffect(() => {
-    refreshCredits();
+    refreshCredits(true);
     
-    // Refresh credits every 60 seconds
-    const intervalId = setInterval(refreshCredits, 60000);
+    // Refresh credits every 30 seconds
+    const intervalId = setInterval(() => refreshCredits(false), 30000);
     return () => clearInterval(intervalId);
-  }, [refreshCredits]);
+  }, [apiKey]); // Only depend on apiKey, not refreshCredits to avoid infinite loop
+
+  // Refresh when external trigger changes (e.g., after task completion)
+  useEffect(() => {
+    if (creditRefreshTrigger > 0) {
+      console.log('[Credits] External refresh triggered');
+      // Small delay to allow backend to update credit balance
+      const timeoutId = setTimeout(() => refreshCredits(true), 1500);
+      return () => clearTimeout(timeoutId);
+    }
+  }, [creditRefreshTrigger]);
 
   // Get credit display color based on balance
   const getCreditColor = () => {
@@ -482,7 +505,7 @@ const Sidebar: React.FC<SidebarProps> = ({
           className={`flex items-center gap-2 rounded cursor-pointer transition-colors ${
             isDark ? 'bg-zinc-900 hover:bg-zinc-800' : 'bg-zinc-100 hover:bg-zinc-200'
           } ${sidebarExpanded ? 'px-3 py-2' : 'p-2 justify-center'}`}
-          onClick={refreshCredits}
+          onClick={() => refreshCredits(true)}
           title={!sidebarExpanded ? `Credits: ${creditBalance !== null ? formatCreditsShort(creditBalance) : 'N/A'}` : 'Click to refresh'}
         >
           {isLoadingCredits ? (
