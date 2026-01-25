@@ -18,19 +18,18 @@ export const uploadFileToSupabaseGetUrl = async (
   uploadPath: string = 'uploads'
 ): Promise<string> => {
   try {
+    // Check if user is authenticated
     const user = await supabase.auth.getUser();
-    if (!user.data.user) {
-      throw new Error('Authentication required for upload');
-    }
-
-    // 1. Generate unique filename
+    
+    // Generate unique filename (use anonymous prefix if no user)
     const fileExt = file.name.split('.').pop();
-    const fileName = `${user.data.user.id}/${Date.now()}_${Math.random().toString(36).substring(2, 15)}.${fileExt}`;
+    const userId = user.data.user?.id || 'anonymous';
+    const fileName = `${userId}/${Date.now()}_${Math.random().toString(36).substring(2, 15)}.${fileExt}`;
     const filePath = `${uploadPath}/${fileName}`;
 
     console.log('[Upload] Uploading to Supabase:', filePath);
 
-    // 2. Upload to Supabase 'kie-assets' bucket
+    // Upload to Supabase 'kie-assets' bucket (should allow public uploads)
     const { data, error: uploadError } = await supabase.storage
       .from('kie-assets')
       .upload(filePath, file, {
@@ -39,10 +38,11 @@ export const uploadFileToSupabaseGetUrl = async (
       });
 
     if (uploadError) {
+      console.error('[Upload] Supabase error:', uploadError);
       throw uploadError;
     }
 
-    // 3. Get Public URL from Supabase
+    // Get Public URL from Supabase
     const { data: urlData } = supabase.storage
       .from('kie-assets')
       .getPublicUrl(filePath);

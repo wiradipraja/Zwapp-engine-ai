@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { useUGCStore } from '../../../store/ugcStore';
 import { UploadedAsset, UGC_CONTENT_STYLES, NarrationLanguage, UGCContentStyle, UGCPreferences } from '../../../types/ugc';
+import { uploadFileToSupabaseGetUrl } from '../../../services/kieFileUpload';
 
 interface InputModuleProps {
   onStartGeneration?: () => Promise<void>;
@@ -36,24 +37,45 @@ const InputModule: React.FC<InputModuleProps> = ({ onStartGeneration }) => {
     store.updateSettings({ preferences: newPreferences });
   };
 
-  const handleFileDrop = (files: File[], type: 'model' | 'product') => {
-    files.forEach((file) => {
-      const asset: UploadedAsset = {
-        id: crypto.randomUUID(),
-        fileName: file.name,
-        supabaseUrl: URL.createObjectURL(file),
-        supabasePath: `${type}s/${file.name}`,
-        size: file.size,
-        uploadedAt: Date.now(),
-        type,
-      };
-      if (type === 'model') {
-        store.addModelPhotos([asset]);
-      } else {
-        store.addProductPhotos([asset]);
+  const [uploadingFiles, setUploadingFiles] = useState<Record<string, boolean>>({});
+
+  const handleFileDrop = async (files: File[], type: 'model' | 'product') => {
+    for (const file of files) {
+      const tempId = crypto.randomUUID();
+      
+      // Show uploading state with preview
+      const previewUrl = URL.createObjectURL(file);
+      setUploadingFiles(prev => ({ ...prev, [tempId]: true }));
+      
+      try {
+        // Upload to Supabase to get public URL (required for KIE.AI API)
+        const publicUrl = await uploadFileToSupabaseGetUrl(file, `ugc/${type}s`);
+        
+        const asset: UploadedAsset = {
+          id: tempId,
+          fileName: file.name,
+          supabaseUrl: publicUrl, // Now a real public HTTPS URL
+          supabasePath: `ugc/${type}s/${file.name}`,
+          size: file.size,
+          uploadedAt: Date.now(),
+          type,
+        };
+        
+        if (type === 'model') {
+          store.addModelPhotos([asset]);
+        } else {
+          store.addProductPhotos([asset]);
+        }
+        
+        store.setSuccessMessage(`Uploaded ${file.name}`);
+      } catch (error) {
+        console.error('Upload error:', error);
+        store.setError(`Failed to upload ${file.name}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      } finally {
+        setUploadingFiles(prev => ({ ...prev, [tempId]: false }));
+        URL.revokeObjectURL(previewUrl);
       }
-    });
-    store.setSuccessMessage(`Uploaded ${files.length} ${type} photo(s)`);
+    }
   };
 
   const handleDrop = (e: React.DragEvent<HTMLDivElement>, type: 'model' | 'product') => {
@@ -132,8 +154,17 @@ const InputModule: React.FC<InputModuleProps> = ({ onStartGeneration }) => {
                 id="model-upload"
               />
               <label htmlFor="model-upload" className="cursor-pointer block">
-                <div className="text-2xl mb-2">📸</div>
-                <p className="text-zinc-600 text-xs mt-1">Ref Identity Photo</p>
+                {Object.values(uploadingFiles).some(v => v) ? (
+                  <>
+                    <div className="text-2xl mb-2 animate-pulse">⏳</div>
+                    <p className="text-orange-500 text-xs mt-1">Uploading...</p>
+                  </>
+                ) : (
+                  <>
+                    <div className="text-2xl mb-2">📸</div>
+                    <p className="text-zinc-600 text-xs mt-1">Ref Identity Photo</p>
+                  </>
+                )}
               </label>
 
               {store.currentProject.inputAssets.modelPhotos.length > 0 && (

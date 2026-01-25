@@ -58,10 +58,25 @@ export async function generateScriptWithGemini(
   const targetLanguage = preferences?.language?.includes('ID') ? 'ID' : (language === 'ID' ? 'ID' : 'EN');
   
   const languageInstruction = targetLanguage === 'ID' 
-    ? `BAHASA WAJIB: Semua dialogue/dialog model HARUS dalam Bahasa Indonesia (Style: ${targetTone}).
-Contoh style bahasa: "Gue", "Lo", "Banget", "Sumpah", "Worth it".
-JANGAN gunakan bahasa Inggris untuk dialogue. Visual description tetap dalam English.`
-    : `LANGUAGE: All dialogue must be written in English. Use tone: ${targetTone}.`;
+    ? `⚠️ CRITICAL LANGUAGE REQUIREMENT - BAHASA INDONESIA WAJIB ⚠️
+
+SEMUA dialogue, hook, problemStatement, solution, cta, dan voiceOver HARUS ditulis dalam BAHASA INDONESIA GAUL.
+
+Gaya bahasa yang WAJIB digunakan:
+- Gunakan "gue" bukan "saya" atau "aku"
+- Gunakan "lo" bukan "kamu" atau "anda"  
+- Gunakan kata-kata gaul: "banget", "sih", "deh", "dong", "nih", "gak", "udah", "beneran", "worth it"
+- Tone: ${targetTone}
+
+CONTOH DIALOGUE YANG BENAR:
+- "Guys, gue akhirnya nemu produk yang beneran works!"
+- "Sumpah ini worth it banget sih!"
+- "Lo harus cobain deh, gak bakal nyesel!"
+
+❌ DILARANG menggunakan bahasa Inggris untuk dialogue/hook/cta
+✅ Visual description (setting, action, productPlacement) tetap dalam English`
+    : `LANGUAGE REQUIREMENT: All dialogue, hook, problemStatement, solution, cta, and voiceOver must be written in ENGLISH.
+Tone: ${targetTone}. Keep it conversational and relatable.`;
   
   // Style instruction
   const styleInstruction = `CONTENT STYLE: ${styleInfo.name}
