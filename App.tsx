@@ -50,7 +50,6 @@ const AppContent: React.FC = () => {
 
   // App State
   const [apiKey, setApiKey] = useState('');
-  const [geminiApiKey, setGeminiApiKey] = useState('');
   const [tasks, setTasks] = useState<LocalTask[]>([]);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [logs, setLogs] = useState<string[]>([]);
@@ -102,10 +101,6 @@ const AppContent: React.FC = () => {
     if (storedKey) {
         setApiKey(storedKey);
     }
-    const storedGeminiKey = localStorage.getItem('gemini_api_key');
-    if (storedGeminiKey) {
-        setGeminiApiKey(storedGeminiKey);
-    }
 
     return () => subscription.unsubscribe();
   }, []);
@@ -148,14 +143,10 @@ const AppContent: React.FC = () => {
     }
   };
 
-  const handleSaveApiKey = (kieKey: string, geminiKey: string) => {
+  const handleSaveApiKey = (kieKey: string) => {
       setApiKey(kieKey);
       localStorage.setItem('kie_api_key', kieKey);
-      if (geminiKey) {
-        setGeminiApiKey(geminiKey);
-        localStorage.setItem('gemini_api_key', geminiKey);
-      }
-      addLog('System Configuration Updated: API Keys Saved.');
+      addLog('System Configuration Updated: API Key Saved.');
   };
 
   const handleLogout = async () => {
@@ -502,7 +493,6 @@ const AppContent: React.FC = () => {
         onClose={() => setIsSettingsOpen(false)} 
         onSave={handleSaveApiKey}
         currentKey={apiKey}
-        currentGeminiKey={geminiApiKey}
       />
 
       {/* Sidebar - Narrow icon-based */}
@@ -567,7 +557,6 @@ const AppContent: React.FC = () => {
             <div className="flex-1 p-6">
               <UGCOrchestrationWorkspace
                 apiKey={apiKey}
-                geminiApiKey={geminiApiKey}
                 onOpenSettings={() => setIsSettingsOpen(true)}
               />
             </div>

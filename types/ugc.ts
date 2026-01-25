@@ -109,6 +109,7 @@ export interface UploadedAsset {
 export interface InputAssets {
   modelPhotos: UploadedAsset[];
   productPhotos: UploadedAsset[];
+  productName?: string;
   narrativeLinks: string[];
   moodboardImages?: UploadedAsset[];
 }

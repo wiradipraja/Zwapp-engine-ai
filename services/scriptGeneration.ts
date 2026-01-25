@@ -743,6 +743,10 @@ IMPORTANT JSON RULES:
 
     let content = '';
     const resolvedModelName = 'kie-gemini-3-flash';
+    
+    // Debug: Log API key format (masked)
+    const keyPrefix = apiKey?.substring(0, 8) || 'EMPTY';
+    console.log(`[UGC Script] API Key prefix: ${keyPrefix}... (length: ${apiKey?.length || 0})`);
 
     if (detectedProvider === 'kie') {
       console.log('[UGC Script] Using KIE Gemini Chat Completions');
@@ -801,10 +805,12 @@ IMPORTANT JSON RULES:
 
       if (!response.ok) {
         const errorText = await response.text();
+        console.error('[UGC Script] KIE API Error Response:', errorText);
         throw new Error(`KIE Gemini Chat Error (${response.status}): ${errorText.substring(0, 200)}`);
       }
 
       const data = await response.json();
+      console.log('[UGC Script] KIE API Response:', JSON.stringify(data).substring(0, 500));
       const messageContent = data?.choices?.[0]?.message?.content;
 
       if (typeof messageContent === 'string') {
@@ -816,10 +822,14 @@ IMPORTANT JSON RULES:
       } else if (messageContent?.text) {
         content = messageContent.text;
       }
+      
+      console.log('[UGC Script] Extracted content length:', content?.length || 0);
+      console.log('[UGC Script] Content preview:', content?.substring(0, 200) || 'EMPTY');
     }
     // Removed Google Gemini direct branch - now always uses KIE AI
 
     if (!content) {
+      console.error('[UGC Script] No content extracted from response');
       throw new Error('No content received from Gemini');
     }
 

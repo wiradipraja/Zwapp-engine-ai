@@ -118,7 +118,7 @@ const PromptEngineeringPanel: React.FC<PromptEngineeringPanelProps> = ({
         prompt,
         modelPhoto!,
         productPhoto!,
-        { kieApiKey, geminiApiKey: '' },
+        { kieApiKey },
         (msg, pct) => store.setProgress('GENERATING', pct, msg)
       );
 

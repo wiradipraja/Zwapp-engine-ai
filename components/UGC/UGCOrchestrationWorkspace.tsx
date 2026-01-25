@@ -21,7 +21,6 @@ import VideoGenerationPanel from './stages/VideoGenerationPanel';
 
 interface UGCOrchestrationWorkspaceProps {
   apiKey?: string;
-  geminiApiKey?: string;
   onOpenSettings?: () => void;
 }
 
@@ -29,27 +28,24 @@ type VideoEngine = 'veo3' | 'kling' | 'runway' | 'pika';
 
 const UGCOrchestrationWorkspace: React.FC<UGCOrchestrationWorkspaceProps> = ({
   apiKey,
-  geminiApiKey,
   onOpenSettings,
 }) => {
   const store = useUGCStore();
   const setApiConfig = useUGCStore((state) => state.setApiConfig);
   const kieApiKey = apiKey || '';
-  const geminiKey = geminiApiKey || apiKey || '';
 
   useEffect(() => {
     setApiConfig({
-      geminiApiKey: geminiKey,
       kieApiKey: kieApiKey,
       visionApiKey: '',
     });
-  }, [kieApiKey, geminiKey, setApiConfig]);
+  }, [kieApiKey, setApiConfig]);
 
   const handleAnalyzeAndGenerate = async () => {
     if (!store.currentProject) return;
     
-    if (!geminiKey) {
-      store.setError('Gemini API Key diperlukan untuk generate script');
+    if (!kieApiKey) {
+      store.setError('KIE API Key diperlukan untuk generate script');
       onOpenSettings?.();
       return;
     }
@@ -64,7 +60,7 @@ const UGCOrchestrationWorkspace: React.FC<UGCOrchestrationWorkspaceProps> = ({
       
       const { modelProfile, productProfile, narrativeContext } = await analyzeInputAssets(
         store.currentProject,
-        { kieApiKey: kieApiKey, geminiApiKey: geminiKey },
+        { kieApiKey: kieApiKey },
         (msg, pct) => store.setProgress('ANALYSIS', pct, msg)
       );
 
@@ -80,7 +76,7 @@ const UGCOrchestrationWorkspace: React.FC<UGCOrchestrationWorkspaceProps> = ({
         modelProfile,
         productProfile,
         narrativeContext,
-        { kieApiKey: kieApiKey, geminiApiKey: geminiKey },
+        { kieApiKey: kieApiKey },
         (msg, pct) => store.setProgress('SCRIPTING', pct, msg),
         { 
           language: projectSettings?.language || 'EN', 
@@ -137,7 +133,7 @@ const UGCOrchestrationWorkspace: React.FC<UGCOrchestrationWorkspaceProps> = ({
 
       const images = await generateUGCImages(
         prompts, modelPhoto, productPhoto,
-        { kieApiKey: kieApiKey, geminiApiKey: geminiKey },
+        { kieApiKey: kieApiKey },
         (msg, pct) => store.setProgress('GENERATING', pct, msg)
       );
 
@@ -171,7 +167,7 @@ const UGCOrchestrationWorkspace: React.FC<UGCOrchestrationWorkspaceProps> = ({
         images,
         store.currentProject.extractedContext.modelProfile!,
         store.currentProject.extractedContext.productProfile!,
-        { kieApiKey: kieApiKey, geminiApiKey: geminiKey },
+        { kieApiKey: kieApiKey },
         (msg, pct) => store.setProgress('QA', pct, msg)
       );
 
@@ -216,7 +212,7 @@ const UGCOrchestrationWorkspace: React.FC<UGCOrchestrationWorkspaceProps> = ({
       
       const video = await generateUGCVideo(
         images,
-        { kieApiKey: kieApiKey, geminiApiKey: geminiKey },
+        { kieApiKey: kieApiKey },
         {
           resolution: options?.resolution || '1080p',
           frameRate: options?.frameRate || 24,

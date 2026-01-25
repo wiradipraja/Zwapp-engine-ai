@@ -79,7 +79,6 @@ function inferProductCategory(name: string): string {
 
 export interface UGCServiceConfig {
   kieApiKey: string;
-  geminiApiKey: string;
   visionApiKey?: string;
 }
 
@@ -295,7 +294,8 @@ export async function generateUGCScript(
       fullProductProfile,
       fullNarrativeContext,
       {
-        apiKey: config.geminiApiKey,
+        // Use KIE API key for KIE AI endpoint (api.kie.ai)
+        apiKey: config.kieApiKey,
         model: 'gemini-2.5-flash',
         temperature: 0.7,
         language,
