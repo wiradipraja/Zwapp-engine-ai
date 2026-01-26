@@ -19,6 +19,8 @@ export const GrokImageToVideoForm: React.FC<GrokImageToVideoFormProps> = ({ onSu
     prompt: '',
     image_urls: [],
     mode: 'normal',
+    task_id: '',
+    index: 0,
   });
 
   const [previewUrl, setPreviewUrl] = useState('');
@@ -50,11 +52,28 @@ export const GrokImageToVideoForm: React.FC<GrokImageToVideoFormProps> = ({ onSu
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (formData.image_urls?.length === 0 || formData.image_urls?.[0]?.startsWith('data:')) {
-      setUploadError('WAITING FOR UPLOAD...');
+    const hasTaskSource = !!formData.task_id;
+    const hasImageSource = (formData.image_urls?.length || 0) > 0 && !formData.image_urls?.[0]?.startsWith('data:');
+
+    if (!hasTaskSource && !hasImageSource) {
+      setUploadError('Provide image upload or task_id.');
       return;
     }
-    onSubmit(formData);
+
+    if (hasTaskSource && hasImageSource) {
+      setUploadError('Use either task_id or image upload, not both.');
+      return;
+    }
+
+    const payload: GrokImageToVideoInput = {
+      prompt: formData.prompt,
+      mode: formData.mode,
+      task_id: formData.task_id || undefined,
+      index: formData.task_id ? formData.index : undefined,
+      image_urls: formData.task_id ? undefined : formData.image_urls,
+    };
+
+    onSubmit(payload);
   };
 
   return (
@@ -88,6 +107,38 @@ export const GrokImageToVideoForm: React.FC<GrokImageToVideoFormProps> = ({ onSu
         {formData.image_urls && formData.image_urls.length > 0 && !formData.image_urls[0]?.startsWith('data:') && (
           <p className="text-green-500 text-xs font-mono mt-1">✓ Image uploaded</p>
         )}
+      </div>
+
+      <div className={`p-3 border ${isDark ? 'border-zinc-800 bg-zinc-900/40' : 'border-zinc-200 bg-zinc-50'}`}>
+        <label className={`block text-xs font-mono mb-2 ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>
+          GROK TASK SOURCE (OPTIONAL)
+        </label>
+        <input
+          value={formData.task_id || ''}
+          onChange={(e) => handleChange('task_id', e.target.value)}
+          placeholder="task_id from Grok image generation"
+          className={`w-full px-3 py-2 rounded-lg text-xs border ${
+            isDark ? 'bg-zinc-900 border-zinc-700 text-zinc-200' : 'bg-white border-zinc-200'
+          }`}
+        />
+        <div className="mt-2 flex gap-2">
+          <input
+            type="number"
+            min={0}
+            max={5}
+            value={formData.index ?? 0}
+            onChange={(e) => handleChange('index', Number(e.target.value))}
+            className={`w-24 px-3 py-2 rounded-lg text-xs border ${
+              isDark ? 'bg-zinc-900 border-zinc-700 text-zinc-200' : 'bg-white border-zinc-200'
+            }`}
+          />
+          <span className="text-[10px] text-zinc-500 flex items-center">
+            Index 0–5 (only when using task_id)
+          </span>
+        </div>
+        <p className={`text-[10px] mt-2 ${isDark ? 'text-zinc-500' : 'text-zinc-500'}`}>
+          Use either uploaded image or task_id. Spicy mode works only with task_id.
+        </p>
       </div>
 
       <div>
@@ -142,7 +193,7 @@ export const GrokImageToVideoForm: React.FC<GrokImageToVideoFormProps> = ({ onSu
 
       <Button
         type="submit"
-        disabled={isLoading || !formData.image_urls || formData.image_urls.length === 0 || isUploading}
+        disabled={isLoading || isUploading}
         className="w-full"
       >
         {isLoading ? 'GENERATING...' : 'GENERATE VIDEO'}
