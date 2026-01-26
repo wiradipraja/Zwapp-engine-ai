@@ -28,6 +28,7 @@ export interface SpaceNodeData {
   instructions?: string;
   model?: string;
   aspectRatio?: string;
+  imageMode?: 'auto' | 't2i' | 'i2i';
   assetType?: SpaceAssetType;
   assetSource?: 'local' | 'supabase';
   assetUrl?: string;

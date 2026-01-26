@@ -52,7 +52,15 @@ const defaultNodeData = (type: SpaceNodeType): SpaceNodeData => {
     case 'script':
       return { label: 'Script', title: 'Script', status: 'idle', prompt: '' };
     case 'image':
-      return { label: 'Image', title: 'Image', status: 'idle', prompt: '', model: 'google/nano-banana', aspectRatio: '1:1' };
+      return {
+        label: 'Image',
+        title: 'Image',
+        status: 'idle',
+        prompt: '',
+        model: 'google/nano-banana',
+        aspectRatio: '1:1',
+        imageMode: 'auto',
+      };
     case 'video':
       return { label: 'Video', title: 'Video', status: 'idle', prompt: '', model: 'veo3_fast', aspectRatio: '16:9' };
     case 'upload':
@@ -562,44 +570,106 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
     setSelectedEdgeId(selectedEdges[0]?.id ?? null);
   }, []);
 
-  const resolveIncomingOutputs = (nodeId: string) => {
-    const incomingEdges = edges.filter((edge) => edge.target === nodeId);
-    return incomingEdges
-      .map((edge) => nodes.find((node) => node.id === edge.source))
-      .filter((node): node is Node<SpaceNodeData> => !!node)
-      .map((node) => node.data.output)
-      .filter((output): output is SpaceNodeOutput => !!output);
+  const getUpstreamNodes = (nodeId: string) => {
+    const visited = new Set<string>();
+    const result: Array<Node<SpaceNodeData>> = [];
+    const queue: string[] = [nodeId];
+
+    while (queue.length > 0) {
+      const current = queue.shift() as string;
+      edges.forEach((edge) => {
+        if (edge.target !== current) return;
+        const sourceId = edge.source;
+        if (visited.has(sourceId)) return;
+        visited.add(sourceId);
+        const node = nodes.find((item) => item.id === sourceId);
+        if (node) {
+          result.push(node);
+          queue.push(sourceId);
+        }
+      });
+    }
+
+    return result;
   };
 
-  const resolveIncomingTextOutputs = (nodeId: string) => {
-    return resolveIncomingOutputs(nodeId)
-      .filter((output) => output.text)
-      .map((output) => ({
-        text: output.text as string,
-        kind: output.metadata?.kind as string | undefined,
-      }));
+  const getPresetSnippet = (kind: 'camera' | 'motion' | 'angle', presetId?: string) => {
+    if (kind === 'camera') {
+      return cameraPresets.find((item) => item.id === presetId)?.snippet || cameraPresets[0].snippet;
+    }
+    if (kind === 'motion') {
+      return motionPresets.find((item) => item.id === presetId)?.snippet || motionPresets[0].snippet;
+    }
+    return anglePresets.find((item) => item.id === presetId)?.snippet || anglePresets[0].snippet;
+  };
+
+  const collectTextInputs = (nodeId: string) => {
+    const items: Array<{ text: string; kind: string }> = [];
+    const current = nodes.find((item) => item.id === nodeId);
+    if (current?.data.prompt?.trim()) {
+      items.push({ text: current.data.prompt.trim(), kind: 'prompt' });
+    }
+
+    const upstream = getUpstreamNodes(nodeId);
+    upstream.forEach((node) => {
+      if (node.type === 'prompt') {
+        const text = node.data.output?.text || node.data.prompt || '';
+        if (text.trim()) items.push({ text, kind: 'prompt' });
+        return;
+      }
+      if (node.type === 'script') {
+        const text = node.data.output?.text || '';
+        if (text.trim()) items.push({ text, kind: 'script' });
+        return;
+      }
+      if (node.type === 'camera') {
+        const text = node.data.output?.text || getPresetSnippet('camera', node.data.presetId);
+        if (text.trim()) items.push({ text, kind: 'camera_preset' });
+        return;
+      }
+      if (node.type === 'motion') {
+        const text = node.data.output?.text || getPresetSnippet('motion', node.data.presetId);
+        if (text.trim()) items.push({ text, kind: 'motion_preset' });
+        return;
+      }
+      if (node.type === 'angle') {
+        const text = node.data.output?.text || getPresetSnippet('angle', node.data.presetId);
+        if (text.trim()) items.push({ text, kind: 'angle_preset' });
+        return;
+      }
+    });
+
+    return items;
   };
 
   const resolveTextInput = (nodeId: string) => {
-    const node = nodes.find((item) => item.id === nodeId);
-    const direct = node?.data.prompt?.trim();
-    const incoming = resolveIncomingTextOutputs(nodeId)
-      .filter((item) => item.kind !== 'camera_preset' && item.kind !== 'motion_preset' && item.kind !== 'angle_preset')
-      .map((item) => item.text);
-    return [direct, ...incoming].filter(Boolean).join('\n\n');
+    const inputs = collectTextInputs(nodeId).filter(
+      (item) => item.kind !== 'camera_preset' && item.kind !== 'motion_preset' && item.kind !== 'angle_preset'
+    );
+    return inputs.map((item) => item.text).filter(Boolean).join('\n\n');
   };
 
-  const resolveImageInputs = (nodeId: string) => {
-    return resolveIncomingOutputs(nodeId)
-      .filter((output) => output.contentType === 'image' && output.url)
-      .map((output) => output.url as string);
+  const resolveReferenceImages = (nodeId: string) => {
+    const upstream = getUpstreamNodes(nodeId);
+    const urls: string[] = [];
+
+    upstream.forEach((node) => {
+      if (node.type === 'upload' && node.data.assetUrl) {
+        urls.push(node.data.assetUrl);
+        return;
+      }
+      if (node.data.output?.contentType === 'image' && node.data.output.url) {
+        urls.push(node.data.output.url);
+      }
+    });
+
+    return Array.from(new Set(urls));
   };
 
   const resolveUploadReferences = (nodeId: string) => {
-    const incomingEdges = edges.filter((edge) => edge.target === nodeId);
-    const uploadNodes = incomingEdges
-      .map((edge) => nodes.find((node) => node.id === edge.source))
-      .filter((node): node is Node<SpaceNodeData> => !!node && node.type === 'upload')
+    const upstream = getUpstreamNodes(nodeId);
+    const uploadNodes = upstream
+      .filter((node) => node.type === 'upload')
       .filter((node) => !!node.data.assetUrl);
 
     const subjectUrls: string[] = [];
@@ -638,25 +708,26 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
   };
 
   const buildImagePrompt = (nodeId: string) => {
-    const textInputs = resolveIncomingTextOutputs(nodeId);
-    const coreTexts = [
-      nodes.find((item) => item.id === nodeId)?.data.prompt?.trim() || '',
-      ...textInputs.filter((item) => item.kind !== 'camera_preset' && item.kind !== 'motion_preset' && item.kind !== 'angle_preset').map((item) => item.text),
-    ].filter(Boolean);
+    const textInputs = collectTextInputs(nodeId);
+    const coreTexts = textInputs
+      .filter((item) => item.kind !== 'camera_preset' && item.kind !== 'motion_preset' && item.kind !== 'angle_preset')
+      .map((item) => item.text)
+      .filter(Boolean);
     const presetTexts = textInputs
       .filter((item) => item.kind === 'camera_preset' || item.kind === 'angle_preset')
-      .map((item) => item.text);
+      .map((item) => item.text)
+      .filter(Boolean);
     const { subjectUrls, objectUrls } = resolveUploadReferences(nodeId);
     const identityText = buildIdentityLockText(subjectUrls, objectUrls);
     return [coreTexts.join('\n\n'), identityText, presetTexts.join('\n\n')].filter(Boolean).join('\n\n');
   };
 
   const buildVideoPrompt = (nodeId: string) => {
-    const textInputs = resolveIncomingTextOutputs(nodeId);
-    const coreTexts = [
-      nodes.find((item) => item.id === nodeId)?.data.prompt?.trim() || '',
-      ...textInputs.filter((item) => item.kind !== 'camera_preset' && item.kind !== 'motion_preset' && item.kind !== 'angle_preset').map((item) => item.text),
-    ].filter(Boolean);
+    const textInputs = collectTextInputs(nodeId);
+    const coreTexts = textInputs
+      .filter((item) => item.kind !== 'camera_preset' && item.kind !== 'motion_preset' && item.kind !== 'angle_preset')
+      .map((item) => item.text)
+      .filter(Boolean);
     const motionText = textInputs.filter((item) => item.kind === 'motion_preset').map((item) => item.text);
     const angleText = textInputs.filter((item) => item.kind === 'angle_preset').map((item) => item.text);
     return [coreTexts.join('\n\n'), motionText.join('\n\n'), angleText.join('\n\n')].filter(Boolean).join('\n\n');
@@ -793,9 +864,9 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
           throw new Error('Prompt is required for image generation.');
         }
 
-        const incomingImages = resolveImageInputs(nodeId);
+        const incomingImages = resolveReferenceImages(nodeId);
         const { subjectUrls, objectUrls } = resolveUploadReferences(nodeId);
-        const orderedReferenceImages = [...subjectUrls, ...objectUrls];
+        const orderedReferenceImages = Array.from(new Set([...subjectUrls, ...objectUrls, ...incomingImages]));
         const imageSize = (node.data.aspectRatio as NanoBananaGenInput['image_size']) || '1:1';
         let model = 'google/nano-banana';
         let payload: NanoBananaGenInput | NanoBananaEditInput = {
@@ -804,11 +875,24 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
           image_size: imageSize,
         };
 
-        if (incomingImages.length > 0) {
+        if (node.data.imageMode === 't2i') {
+          model = 'google/nano-banana';
+        } else if (node.data.imageMode === 'i2i') {
+          if (orderedReferenceImages.length === 0) {
+            throw new Error('Force Image→Image requires at least one reference image.');
+          }
           model = 'google/nano-banana-edit';
           payload = {
             prompt,
-            image_urls: (orderedReferenceImages.length > 0 ? orderedReferenceImages : incomingImages).slice(0, 4),
+            image_urls: orderedReferenceImages.slice(0, 4),
+            output_format: 'png',
+            image_size: imageSize,
+          };
+        } else if (orderedReferenceImages.length > 0) {
+          model = 'google/nano-banana-edit';
+          payload = {
+            prompt,
+            image_urls: orderedReferenceImages.slice(0, 4),
             output_format: 'png',
             image_size: imageSize,
           };
@@ -841,7 +925,7 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
           throw new Error('Prompt is required for video generation.');
         }
 
-        const images = resolveImageInputs(nodeId);
+        const images = resolveReferenceImages(nodeId);
         let taskId = '';
         if (node.data.model?.startsWith('veo3')) {
           let input: Veo3Input;
@@ -1170,6 +1254,23 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
 
                 {selectedNode.type === 'image' && (
                   <>
+                    <div className="flex gap-2">
+                      {(['auto', 't2i', 'i2i'] as const).map((mode) => (
+                        <button
+                          key={mode}
+                          onClick={() => updateNodeData(selectedNode.id, { imageMode: mode })}
+                          className={`flex-1 px-2 py-2 rounded-lg text-[10px] border ${
+                            selectedNode.data.imageMode === mode
+                              ? 'border-emerald-500/60 text-emerald-200'
+                              : isDark
+                              ? 'border-zinc-800 text-zinc-400'
+                              : 'border-zinc-200 text-zinc-600'
+                          }`}
+                        >
+                          {mode === 'auto' ? 'Auto' : mode === 't2i' ? 'Force T2I' : 'Force I2I'}
+                        </button>
+                      ))}
+                    </div>
                     <select
                       value={selectedNode.data.aspectRatio || '1:1'}
                       onChange={(e) => updateNodeData(selectedNode.id, { aspectRatio: e.target.value })}
@@ -1184,7 +1285,11 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
                       <option value="4:3">4:3</option>
                     </select>
                     <div className="text-[10px] text-zinc-500">
-                      {resolveImageInputs(selectedNode.id).length > 0
+                      {selectedNode.data.imageMode === 't2i'
+                        ? 'Forced Text→Image mode.'
+                        : selectedNode.data.imageMode === 'i2i'
+                        ? 'Forced Image→Image mode.'
+                        : resolveReferenceImages(selectedNode.id).length > 0
                         ? 'Reference images detected — running Image→Image (Nano Banana Edit).'
                         : 'No reference images connected — running Text→Image.'}
                     </div>
