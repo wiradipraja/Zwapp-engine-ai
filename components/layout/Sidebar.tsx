@@ -26,7 +26,8 @@ export type ModuleType =
   | 'veo3-reference-to-video'
   | 'ugc'
   | 'spaces'
-  | 'grok-image-to-video';
+  | 'grok-image-to-video'
+  | 'grok-text-to-image';
 
 interface SubMenuItem {
   id: ModuleType;
@@ -174,6 +175,7 @@ const Sidebar: React.FC<SidebarProps> = ({
         </svg>
       ),
       subItems: [
+        { id: 'grok-text-to-image', label: 'Text→Image' },
         { id: 'grok-image-to-video', label: 'Image→Video' },
       ],
     },
@@ -213,7 +215,7 @@ const Sidebar: React.FC<SidebarProps> = ({
       case 'veo3':
         return ['veo3-text-to-video', 'veo3-image-to-video', 'veo3-reference-to-video'].includes(module);
       case 'grok':
-        return module === 'grok-image-to-video';
+        return ['grok-text-to-image', 'grok-image-to-video'].includes(module);
       default:
         return false;
     }

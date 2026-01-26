@@ -31,6 +31,11 @@ import type {
 import type {
   NanoBananaEditInput,
   NanoBananaGenInput,
+  Flux2ProTextInput,
+  Flux2FlexTextInput,
+  GrokTextToImageInput,
+  QwenTextToImageInput,
+  ZImageInput,
   Veo3ImageToVideoInput,
   Veo3Input,
   Veo3TextToVideoInput,
@@ -235,12 +240,12 @@ const SpaceNodeCard: React.FC<NodeProps<SpaceNodeData>> = ({ data, type, selecte
         <img
           src={output.url}
           alt="preview"
-          className="mt-2 h-24 w-full rounded-lg object-cover border border-white/10"
+          className="mt-2 w-full h-auto rounded-lg object-contain border border-white/10"
         />
       )}
 
       {output?.url && output.contentType === 'video' && (
-        <video className="mt-2 h-24 w-full rounded-lg border border-white/10 object-cover" src={output.url} />
+        <video className="mt-2 w-full h-auto rounded-lg border border-white/10 object-contain" src={output.url} />
       )}
 
       {data.error && (
@@ -366,6 +371,8 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
   const isDark = theme === 'dark';
   const flowWrapperRef = useRef<HTMLDivElement | null>(null);
   const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance | null>(null);
+  const clipboardRef = useRef<{ nodes: Array<Node<SpaceNodeData>>; edges: Edge[] } | null>(null);
+  const pasteCountRef = useRef(0);
 
   const [nodes, setNodes, onNodesChange] = useNodesState<SpaceNodeData>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
@@ -379,6 +386,7 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
 
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
+  const [selectedNodeIds, setSelectedNodeIds] = useState<string[]>([]);
   const selectedNode = useMemo(
     () => nodes.find((node) => node.id === selectedNodeId) || null,
     [nodes, selectedNodeId]
@@ -387,6 +395,8 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
     () => edges.find((edge) => edge.id === selectedEdgeId) || null,
     [edges, selectedEdgeId]
   );
+  const selectedImageModel = selectedNode?.type === 'image' ? (selectedNode.data.model || 'google/nano-banana') : 'google/nano-banana';
+  const selectedImageSupportsRefs = selectedNode?.type === 'image' ? selectedImageModel === 'google/nano-banana' : false;
 
   const [logs, setLogs] = useState<string[]>([]);
   const [outputPreview, setOutputPreview] = useState<SpaceNodeOutput | null>(null);
@@ -455,6 +465,9 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
     }
     setActiveSpace(space);
     setSpaceName(space.name);
+    setSelectedNodeId(null);
+    setSelectedEdgeId(null);
+    setSelectedNodeIds([]);
     setIsDirty(false);
     addLog(`Loaded space: ${space.name}`);
   };
@@ -510,6 +523,9 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
     setEdges(flow.edges);
     setActiveSpace(null);
     setSpaceName(DEFAULT_SPACE_NAME);
+    setSelectedNodeId(null);
+    setSelectedEdgeId(null);
+    setSelectedNodeIds([]);
     setIsDirty(true);
     addLog('New space created.');
   };
@@ -585,7 +601,97 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
   const onSelectionChange = useCallback(({ nodes: selectedNodes, edges: selectedEdges }: { nodes: Node[]; edges: Edge[] }) => {
     setSelectedNodeId(selectedNodes[0]?.id ?? null);
     setSelectedEdgeId(selectedEdges[0]?.id ?? null);
+    setSelectedNodeIds(selectedNodes.map((node) => node.id));
   }, []);
+
+  const cloneNodeDataForPaste = useCallback((node: Node<SpaceNodeData>) => {
+    const data = JSON.parse(JSON.stringify(node.data)) as SpaceNodeData;
+    const resetOutputTypes = ['prompt', 'script', 'image', 'video'];
+    if (resetOutputTypes.includes(node.type || '')) {
+      data.status = 'idle';
+      data.output = undefined;
+      data.error = undefined;
+    }
+    if (node.type === 'upload' && !data.assetUrl) {
+      data.status = 'idle';
+      data.output = undefined;
+      data.error = undefined;
+    }
+    data.updatedAt = Date.now();
+    return data;
+  }, []);
+
+  const copySelection = useCallback(() => {
+    if (selectedNodeIds.length === 0) return;
+    const selectedSet = new Set(selectedNodeIds);
+    const nodesToCopy = nodes.filter((node) => selectedSet.has(node.id));
+    if (nodesToCopy.length === 0) return;
+    const edgesToCopy = edges.filter((edge) => selectedSet.has(edge.source) && selectedSet.has(edge.target));
+    clipboardRef.current = { nodes: nodesToCopy, edges: edgesToCopy };
+    pasteCountRef.current = 0;
+    addLog(`Copied ${nodesToCopy.length} node(s).`);
+  }, [addLog, edges, nodes, selectedNodeIds]);
+
+  const pasteSelection = useCallback(() => {
+    const clipboard = clipboardRef.current;
+    if (!clipboard || clipboard.nodes.length === 0) return;
+    pasteCountRef.current += 1;
+    const offset = 40 * pasteCountRef.current;
+    const idMap = new Map<string, string>();
+    const newNodes = clipboard.nodes.map((node) => {
+      const newId = crypto.randomUUID();
+      idMap.set(node.id, newId);
+      const data = cloneNodeDataForPaste(node);
+      return {
+        ...node,
+        id: newId,
+        position: { x: node.position.x + offset, y: node.position.y + offset },
+        data,
+        selected: true,
+      };
+    });
+    const newEdges = clipboard.edges.map((edge) => ({
+      ...edge,
+      id: crypto.randomUUID(),
+      source: idMap.get(edge.source) || edge.source,
+      target: idMap.get(edge.target) || edge.target,
+      selected: true,
+    }));
+
+    setNodes((prev) => prev.map((node) => ({ ...node, selected: false })).concat(newNodes));
+    setEdges((prev) => prev.map((edge) => ({ ...edge, selected: false })).concat(newEdges));
+    setSelectedNodeId(newNodes[0]?.id ?? null);
+    setSelectedEdgeId(null);
+    setSelectedNodeIds(newNodes.map((node) => node.id));
+    markDirty();
+    addLog(`Pasted ${newNodes.length} node(s).`);
+  }, [addLog, cloneNodeDataForPaste, markDirty, setEdges, setNodes]);
+
+  useEffect(() => {
+    const isEditableTarget = (target: EventTarget | null) => {
+      if (!target || !(target instanceof HTMLElement)) return false;
+      const tag = target.tagName.toLowerCase();
+      if (tag === 'input' || tag === 'textarea' || tag === 'select') return true;
+      return target.isContentEditable;
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (!(event.ctrlKey || event.metaKey)) return;
+      if (isEditableTarget(event.target)) return;
+      const key = event.key.toLowerCase();
+      if (key === 'c') {
+        event.preventDefault();
+        copySelection();
+      }
+      if (key === 'v') {
+        event.preventDefault();
+        pasteSelection();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [copySelection, pasteSelection]);
 
   const getUpstreamNodes = (nodeId: string) => {
     const visited = new Set<string>();
@@ -774,7 +880,7 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
     return lines.join('\n');
   };
 
-  const buildImagePrompt = (nodeId: string) => {
+  const buildImagePrompt = (nodeId: string, includeIdentity: boolean) => {
     const textInputs = collectTextInputs(nodeId);
     const coreTexts = textInputs
       .filter((item) => item.kind !== 'camera_preset' && item.kind !== 'motion_preset' && item.kind !== 'angle_preset')
@@ -785,7 +891,7 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
       .map((item) => item.text)
       .filter(Boolean);
     const { subjectUrls, objectUrls } = resolveUploadReferences(nodeId);
-    const identityText = buildIdentityLockText(subjectUrls, objectUrls);
+    const identityText = includeIdentity ? buildIdentityLockText(subjectUrls, objectUrls) : '';
     return [coreTexts.join('\n\n'), identityText, presetTexts.join('\n\n')].filter(Boolean).join('\n\n');
   };
 
@@ -798,6 +904,51 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
     const motionText = textInputs.filter((item) => item.kind === 'motion_preset').map((item) => item.text);
     const angleText = textInputs.filter((item) => item.kind === 'angle_preset').map((item) => item.text);
     return [coreTexts.join('\n\n'), motionText.join('\n\n'), angleText.join('\n\n')].filter(Boolean).join('\n\n');
+  };
+
+  const normalizeAspectRatio = (value?: string) => value || '1:1';
+
+  const mapQwenImageSize = (ratio: string): QwenTextToImageInput['image_size'] => {
+    switch (ratio) {
+      case '9:16':
+        return 'portrait_16_9';
+      case '3:4':
+      case '2:3':
+        return 'portrait_4_3';
+      case '16:9':
+        return 'landscape_16_9';
+      case '4:3':
+      case '3:2':
+        return 'landscape_4_3';
+      default:
+        return 'square_hd';
+    }
+  };
+
+  const mapZImageAspect = (ratio: string): ZImageInput['aspect_ratio'] => {
+    const allowed: ZImageInput['aspect_ratio'][] = ['1:1', '4:3', '3:4', '16:9', '9:16'];
+    if (allowed.includes(ratio as ZImageInput['aspect_ratio'])) {
+      return ratio as ZImageInput['aspect_ratio'];
+    }
+    return ratio.startsWith('2:') || ratio === '3:4' ? '3:4' : '4:3';
+  };
+
+  const mapFluxAspect = (ratio: string): Flux2ProTextInput['aspect_ratio'] => {
+    const allowed: Flux2ProTextInput['aspect_ratio'][] = ['1:1', '4:3', '3:4', '16:9', '9:16', '3:2', '2:3', 'auto'];
+    if (allowed.includes(ratio as Flux2ProTextInput['aspect_ratio'])) {
+      return ratio as Flux2ProTextInput['aspect_ratio'];
+    }
+    return ratio.startsWith('2:') ? '2:3' : '3:2';
+  };
+
+  const mapGrokAspect = (ratio: string): GrokTextToImageInput['aspect_ratio'] => {
+    const allowed: GrokTextToImageInput['aspect_ratio'][] = ['2:3', '3:2', '1:1', '9:16', '16:9'];
+    if (allowed.includes(ratio as GrokTextToImageInput['aspect_ratio'])) {
+      return ratio as GrokTextToImageInput['aspect_ratio'];
+    }
+    if (ratio === '4:3') return '3:2';
+    if (ratio === '3:4') return '2:3';
+    return '1:1';
   };
 
   const extractResultUrl = (resultJson: any, data: any): string => {
@@ -947,47 +1098,93 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
       }
 
       if (node.type === 'image') {
-        const prompt = buildImagePrompt(nodeId);
-        if (!prompt) {
-          throw new Error('Prompt is required for image generation.');
-        }
-
         const incomingImages = resolveReferenceImages(nodeId);
         const { subjectUrls, objectUrls } = resolveUploadReferences(nodeId);
         const orderedReferenceImages = Array.from(new Set([...subjectUrls, ...objectUrls, ...incomingImages]));
         const normalizedReferenceImages = await normalizeReferenceImages(orderedReferenceImages);
-        const imageSize = (node.data.aspectRatio as NanoBananaGenInput['image_size']) || '1:1';
-        let model = 'google/nano-banana';
-        let payload: NanoBananaGenInput | NanoBananaEditInput = {
-          prompt,
-          output_format: 'png',
-          image_size: imageSize,
-        };
+        const hasReferences = normalizedReferenceImages.length > 0;
+        const selectedModel = node.data.model || 'google/nano-banana';
+        const baseModel = selectedModel === 'google/nano-banana-edit' ? 'google/nano-banana' : selectedModel;
+        const imageMode = node.data.imageMode || 'auto';
+        const supportsReferences = baseModel === 'google/nano-banana';
 
-        if (node.data.imageMode === 't2i') {
-          model = 'google/nano-banana';
-        } else if (node.data.imageMode === 'i2i') {
-          if (normalizedReferenceImages.length === 0) {
-            throw new Error('Force Image→Image requires at least one reference image.');
+        if (imageMode === 'i2i' && !supportsReferences) {
+          throw new Error('Image→Image is only supported with Nano Banana in workspace.');
+        }
+        if (imageMode === 'i2i' && !hasReferences) {
+          throw new Error('Force Image→Image requires at least one reference image.');
+        }
+
+        if (imageMode === 't2i' && hasReferences) {
+          addLog('References ignored (Force Text→Image).');
+        }
+        if (imageMode === 'auto' && hasReferences && !supportsReferences) {
+          addLog('Reference images detected but selected model is text-only. Using Text→Image.');
+        }
+
+        const useReferences = supportsReferences && (imageMode === 'i2i' || (imageMode === 'auto' && hasReferences));
+        const prompt = buildImagePrompt(nodeId, useReferences);
+        if (!prompt) {
+          throw new Error('Prompt is required for image generation.');
+        }
+
+        const aspectRatio = normalizeAspectRatio(node.data.aspectRatio);
+        let model = baseModel;
+        let payload: NanoBananaGenInput | NanoBananaEditInput | QwenTextToImageInput | ZImageInput | Flux2ProTextInput | Flux2FlexTextInput | GrokTextToImageInput;
+
+        if (baseModel === 'google/nano-banana') {
+          const imageSize = (aspectRatio as NanoBananaGenInput['image_size']) || '1:1';
+          if (useReferences) {
+            model = 'google/nano-banana-edit';
+            payload = {
+              prompt,
+              image_urls: normalizedReferenceImages.slice(0, 4),
+              output_format: 'png',
+              image_size: imageSize,
+            };
+          } else {
+            model = 'google/nano-banana';
+            payload = {
+              prompt,
+              output_format: 'png',
+              image_size: imageSize,
+            };
           }
-          model = 'google/nano-banana-edit';
+        } else if (baseModel === 'qwen/text-to-image') {
           payload = {
             prompt,
-            image_urls: normalizedReferenceImages.slice(0, 4),
+            image_size: mapQwenImageSize(aspectRatio),
             output_format: 'png',
-            image_size: imageSize,
           };
-        } else if (normalizedReferenceImages.length > 0) {
-          model = 'google/nano-banana-edit';
+        } else if (baseModel === 'z-image') {
           payload = {
             prompt,
-            image_urls: normalizedReferenceImages.slice(0, 4),
+            aspect_ratio: mapZImageAspect(aspectRatio),
+          };
+        } else if (baseModel === 'flux-2/pro-text-to-image' || baseModel === 'flux-2/flex-text-to-image') {
+          payload = {
+            prompt,
+            aspect_ratio: mapFluxAspect(aspectRatio),
+            resolution: '1K',
+          };
+        } else if (baseModel === 'grok-imagine/text-to-image') {
+          payload = {
+            prompt,
+            aspect_ratio: mapGrokAspect(aspectRatio),
+          };
+        } else {
+          model = 'google/nano-banana';
+          payload = {
+            prompt,
             output_format: 'png',
-            image_size: imageSize,
+            image_size: (aspectRatio as NanoBananaGenInput['image_size']) || '1:1',
           };
         }
 
-        addLog(`Image references: ${normalizedReferenceImages.length}`);
+        if (useReferences) {
+          addLog(`Image references: ${normalizedReferenceImages.length}`);
+        }
+        addLog(`Image model: ${model}`);
         const response = await createTask(apiKey, model, payload);
         if (!response || response.code !== 200 || !response.data?.taskId) {
           throw new Error(response?.msg || 'Task creation failed.');
@@ -1139,11 +1336,13 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
     setNodes((prev) => prev.filter((node) => node.id !== nodeId));
     setEdges((prev) => prev.filter((edge) => edge.source !== nodeId && edge.target !== nodeId));
     setSelectedNodeId(null);
+    setSelectedNodeIds([]);
     markDirty();
   };
 
   const disconnectNode = (nodeId: string) => {
     setEdges((prev) => prev.filter((edge) => edge.source !== nodeId && edge.target !== nodeId));
+    setSelectedEdgeId(null);
     markDirty();
   };
 
@@ -1313,6 +1512,7 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
             onNodesDelete={() => {
               markDirty();
               setSelectedNodeId(null);
+              setSelectedNodeIds([]);
             }}
             onEdgesDelete={() => {
               markDirty();
@@ -1328,6 +1528,7 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
             onPaneClick={() => {
               setSelectedNodeId(null);
               setSelectedEdgeId(null);
+              setSelectedNodeIds([]);
             }}
             deleteKeyCode={['Backspace', 'Delete']}
             defaultEdgeOptions={{ type: 'smoothstep', style: { strokeWidth: 1.5, stroke: '#64748b' } }}
@@ -1423,6 +1624,27 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
                       ))}
                     </div>
                     <select
+                      value={selectedNode.data.model || 'google/nano-banana'}
+                      onChange={(e) => {
+                        const nextModel = e.target.value;
+                        const patch: Partial<SpaceNodeData> = { model: nextModel };
+                        if (nextModel !== 'google/nano-banana' && selectedNode.data.imageMode === 'i2i') {
+                          patch.imageMode = 't2i';
+                        }
+                        updateNodeData(selectedNode.id, patch);
+                      }}
+                      className={`w-full px-3 py-2 rounded-lg text-xs border ${
+                        isDark ? 'bg-zinc-900 border-zinc-800 text-zinc-200' : 'bg-white border-zinc-200'
+                      }`}
+                    >
+                      <option value="google/nano-banana">Nano Banana (T2I/I2I)</option>
+                      <option value="qwen/text-to-image">Qwen Text→Image</option>
+                      <option value="z-image">Z-Image Text→Image</option>
+                      <option value="flux-2/pro-text-to-image">Flux 2 Pro Text→Image</option>
+                      <option value="flux-2/flex-text-to-image">Flux 2 Flex Text→Image</option>
+                      <option value="grok-imagine/text-to-image">Grok Imagine Text→Image</option>
+                    </select>
+                    <select
                       value={selectedNode.data.aspectRatio || '1:1'}
                       onChange={(e) => updateNodeData(selectedNode.id, { aspectRatio: e.target.value })}
                       className={`w-full px-3 py-2 rounded-lg text-xs border ${
@@ -1434,15 +1656,21 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
                       <option value="16:9">16:9</option>
                       <option value="3:4">3:4</option>
                       <option value="4:3">4:3</option>
+                      <option value="2:3">2:3</option>
+                      <option value="3:2">3:2</option>
                     </select>
                     <div className="text-[10px] text-zinc-500">
                       {selectedNode.data.imageMode === 't2i'
                         ? 'Forced Text→Image mode.'
                         : selectedNode.data.imageMode === 'i2i'
-                        ? 'Forced Image→Image mode.'
-                        : resolveReferenceImages(selectedNode.id).length > 0
+                        ? selectedImageSupportsRefs
+                          ? 'Forced Image→Image mode.'
+                          : 'Image→Image is only supported with Nano Banana.'
+                        : selectedImageSupportsRefs && resolveReferenceImages(selectedNode.id).length > 0
                         ? 'Reference images detected — running Image→Image (Nano Banana Edit).'
-                        : 'No reference images connected — running Text→Image.'}
+                        : selectedImageSupportsRefs
+                        ? 'No reference images connected — running Text→Image.'
+                        : 'Selected model runs Text→Image only.'}
                     </div>
                     <select
                       value={selectedNode.data.videoFrameRole || 'none'}
@@ -1711,10 +1939,10 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
                 </div>
 
                 {selectedNode.data.output?.url && selectedNode.data.output.contentType === 'image' && (
-                  <img src={selectedNode.data.output.url} className="w-full rounded-lg border border-zinc-800" />
+                  <img src={selectedNode.data.output.url} className="w-full h-auto object-contain rounded-lg border border-zinc-800" />
                 )}
                 {selectedNode.data.output?.url && selectedNode.data.output.contentType === 'video' && (
-                  <video controls className="w-full rounded-lg border border-zinc-800" src={selectedNode.data.output.url} />
+                  <video controls className="w-full h-auto object-contain rounded-lg border border-zinc-800" src={selectedNode.data.output.url} />
                 )}
                 {selectedNode.data.output?.text && (
                   <pre className="text-[10px] whitespace-pre-wrap text-zinc-300">{selectedNode.data.output.text}</pre>
@@ -1751,10 +1979,10 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
             </div>
             <div className="w-64 border-l border-white/10 p-3">
               {outputPreview?.url && outputPreview.contentType === 'image' && (
-                <img src={outputPreview.url} className="w-full h-24 object-cover rounded-lg" />
+                <img src={outputPreview.url} className="w-full h-auto max-h-32 object-contain rounded-lg" />
               )}
               {outputPreview?.url && outputPreview.contentType === 'video' && (
-                <video src={outputPreview.url} className="w-full h-24 object-cover rounded-lg" />
+                <video src={outputPreview.url} className="w-full h-auto max-h-32 object-contain rounded-lg" />
               )}
               {outputPreview?.text && (
                 <div className="text-[10px] text-zinc-400 line-clamp-6 whitespace-pre-wrap">

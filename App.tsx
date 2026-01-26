@@ -4,7 +4,7 @@ import { createTask, queryTask } from './services/api';
 import { supabase, signOut } from './services/supabase';
 import { generateVeo3Video } from './services/veo3Generation';
 import { fetchUserCredits, formatCreditsShort } from './services/credits';
-import { MotionControlInput, NanoBananaInput, ImageEditInput, ZImageInput, Flux2Input, Flux2ProTextInput, Flux2ProImageInput, Flux2FlexTextInput, Flux2FlexImageInput, QwenTextToImageInput, Sora2CharactersInput, Sora2TextToVideoInput, Sora2ImageToVideoInput, Sora2ProTextToVideoInput, Sora2ProImageToVideoInput, Veo3TextToVideoInput, Veo3ImageToVideoInput, Veo3ReferenceToVideoInput, Veo3Input, GrokImageToVideoInput, LocalTask } from './types';
+import { MotionControlInput, NanoBananaInput, ImageEditInput, ZImageInput, Flux2Input, Flux2ProTextInput, Flux2ProImageInput, Flux2FlexTextInput, Flux2FlexImageInput, QwenTextToImageInput, Sora2CharactersInput, Sora2TextToVideoInput, Sora2ImageToVideoInput, Sora2ProTextToVideoInput, Sora2ProImageToVideoInput, Veo3TextToVideoInput, Veo3ImageToVideoInput, Veo3ReferenceToVideoInput, Veo3Input, GrokImageToVideoInput, GrokTextToImageInput, LocalTask } from './types';
 import { TaskForm } from './components/TaskForm';
 import { NanoBananaGenForm } from './components/NanoBananaGenForm';
 import { NanoBananaEditForm } from './components/NanoBananaEditForm';
@@ -25,6 +25,7 @@ import { Veo3TextToVideoForm } from './components/Veo3TextToVideoForm';
 import { Veo3ImageToVideoForm } from './components/Veo3ImageToVideoForm';
 import { Veo3ReferenceToVideoForm } from './components/Veo3ReferenceToVideoForm';
 import { GrokImageToVideoForm } from './components/GrokImageToVideoForm';
+import { GrokTextToImageForm } from './components/GrokTextToImageForm';
 import { StatusTerminal } from './components/StatusTerminal';
 import { QueueList } from './components/QueueList';
 import { AuthForm } from './components/AuthForm';
@@ -167,7 +168,7 @@ const AppContent: React.FC = () => {
       setSession(null);
   };
 
-  const handleCreateTask = async (input: MotionControlInput | NanoBananaInput | ImageEditInput | ZImageInput | Flux2Input | QwenTextToImageInput | Sora2CharactersInput | Sora2TextToVideoInput | Sora2ImageToVideoInput | Sora2ProTextToVideoInput | Sora2ProImageToVideoInput | Veo3Input | GrokImageToVideoInput) => {
+  const handleCreateTask = async (input: MotionControlInput | NanoBananaInput | ImageEditInput | ZImageInput | Flux2Input | QwenTextToImageInput | Sora2CharactersInput | Sora2TextToVideoInput | Sora2ImageToVideoInput | Sora2ProTextToVideoInput | Sora2ProImageToVideoInput | Veo3Input | GrokImageToVideoInput | GrokTextToImageInput) => {
     if (!apiKey) {
         setIsSettingsOpen(true);
         addLog('ERROR: API Key missing. Please configure in Settings.', true);
@@ -200,6 +201,7 @@ const AppContent: React.FC = () => {
     else if (activeModule === 'veo3-image-to-video') modelName = 'veo3/image-to-video';
     else if (activeModule === 'veo3-reference-to-video') modelName = 'veo3/reference-to-video';
     else if (activeModule === 'grok-image-to-video') modelName = 'grok-imagine/image-to-video';
+    else if (activeModule === 'grok-text-to-image') modelName = 'grok-imagine/text-to-image';
 
     addLog(`Initiating generation sequence [${modelName}]...`);
     
@@ -369,7 +371,7 @@ const AppContent: React.FC = () => {
       setExpandedSection('flux');
     } else if (['sora2-characters', 'sora2-text-to-video', 'sora2-image-to-video', 'sora2-pro-text-to-video', 'sora2-pro-image-to-video'].includes(module)) {
       setExpandedSection('sora2');
-    } else if (module === 'grok-image-to-video') {
+    } else if (['grok-image-to-video', 'grok-text-to-image'].includes(module)) {
       setExpandedSection('grok');
     } else if (['veo3-text-to-video', 'veo3-image-to-video', 'veo3-reference-to-video'].includes(module)) {
       setExpandedSection('veo3');
@@ -419,6 +421,8 @@ const AppContent: React.FC = () => {
         return <Veo3ReferenceToVideoForm onSubmit={handleCreateTask} isLoading={isSubmitting} />;
       case 'grok-image-to-video':
         return <GrokImageToVideoForm onSubmit={handleCreateTask} isLoading={isSubmitting} apiKey={apiKey} />;
+      case 'grok-text-to-image':
+        return <GrokTextToImageForm onSubmit={handleCreateTask} isLoading={isSubmitting} />;
       case 'ugc':
         return null; // UGC has its own workspace in the right panel
       case 'spaces':
@@ -457,6 +461,7 @@ const AppContent: React.FC = () => {
       'ugc': 'UGC AI Studio',
       'spaces': 'Spaces Studio',
       'grok-image-to-video': 'Grok Image→Video',
+      'grok-text-to-image': 'Grok Text→Image',
       'landing': 'Home',
     };
     return titles[activeModule] || 'Workspace';
