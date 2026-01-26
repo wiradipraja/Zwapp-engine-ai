@@ -43,20 +43,44 @@ interface SpacesWorkspaceProps {
 }
 
 const DEFAULT_SPACE_NAME = 'New Space';
-const FLOW_VERSION = '1.0';
+const FLOW_VERSION = '1.1';
 
 const defaultNodeData = (type: SpaceNodeType): SpaceNodeData => {
   switch (type) {
     case 'prompt':
-      return { label: 'Prompt', status: 'idle', prompt: '' };
+      return { label: 'Prompt', title: 'Prompt', status: 'idle', prompt: '' };
     case 'script':
-      return { label: 'Script', status: 'idle', prompt: '' };
+      return { label: 'Script', title: 'Script', status: 'idle', prompt: '' };
     case 'image':
-      return { label: 'Image', status: 'idle', prompt: '', model: 'google/nano-banana', aspectRatio: '1:1' };
+      return { label: 'Image', title: 'Image', status: 'idle', prompt: '', model: 'google/nano-banana', aspectRatio: '1:1' };
     case 'video':
-      return { label: 'Video', status: 'idle', prompt: '', model: 'veo3_fast', aspectRatio: '16:9' };
+      return { label: 'Video', title: 'Video', status: 'idle', prompt: '', model: 'veo3_fast', aspectRatio: '16:9' };
     case 'upload':
-      return { label: 'Upload', status: 'idle', assetType: 'image', assetSource: 'local' };
+      return { label: 'Upload', title: 'Upload', status: 'idle', assetType: 'image', assetSource: 'local', assetRole: 'auto' };
+    case 'camera':
+      return {
+        label: 'Camera',
+        title: 'Camera Preset',
+        status: 'success',
+        presetId: 'ugc',
+        output: { contentType: 'text', text: cameraPresets[0].snippet, metadata: { kind: 'camera_preset' } },
+      };
+    case 'motion':
+      return {
+        label: 'Motion',
+        title: 'Motion Preset',
+        status: 'success',
+        presetId: 'static',
+        output: { contentType: 'text', text: motionPresets[0].snippet, metadata: { kind: 'motion_preset' } },
+      };
+    case 'angle':
+      return {
+        label: 'Angle',
+        title: 'Angle Preset',
+        status: 'success',
+        presetId: 'eye',
+        output: { contentType: 'text', text: anglePresets[0].snippet, metadata: { kind: 'angle_preset' } },
+      };
     default:
       return { label: 'Node', status: 'idle' };
   }
@@ -86,37 +110,81 @@ const buildDefaultFlow = (): SpaceFlowData => {
   };
 };
 
-const accentByType = (type?: string) => {
-  switch (type) {
-    case 'prompt':
-      return 'text-amber-400 border-amber-500/40 bg-amber-500/10';
-    case 'script':
-      return 'text-emerald-400 border-emerald-500/40 bg-emerald-500/10';
-    case 'image':
-      return 'text-fuchsia-400 border-fuchsia-500/40 bg-fuchsia-500/10';
-    case 'video':
-      return 'text-cyan-400 border-cyan-500/40 bg-cyan-500/10';
-    case 'upload':
-      return 'text-blue-400 border-blue-500/40 bg-blue-500/10';
-    default:
-      return 'text-zinc-400 border-zinc-700 bg-zinc-900/30';
-  }
+const cameraPresets = [
+  {
+    id: 'ugc',
+    label: 'UGC Phone',
+    description: 'Handheld phone camera, casual, natural light.',
+    snippet: 'Handheld phone camera, natural lighting, candid UGC realism, slight motion blur, real skin texture.',
+  },
+  {
+    id: 'cinematic',
+    label: 'Cinematic',
+    description: 'Filmic lighting, shallow depth, dramatic mood.',
+    snippet: 'Cinematic lighting, shallow depth of field, filmic contrast, soft roll-off highlights.',
+  },
+  {
+    id: 'studio',
+    label: 'Studio',
+    description: 'Clean studio, product focus, softbox.',
+    snippet: 'Studio softbox lighting, clean backdrop, product-focused composition, crisp detail.',
+  },
+  {
+    id: 'lifestyle',
+    label: 'Lifestyle',
+    description: 'Natural lifestyle scene, warm tone.',
+    snippet: 'Lifestyle photography, natural window light, warm tones, candid everyday scene.',
+  },
+];
+
+const motionPresets = [
+  { id: 'static', label: 'Static', description: 'Tripod, minimal motion.', snippet: 'Static tripod shot, minimal camera movement, stable framing.' },
+  { id: 'slow-pan', label: 'Slow Pan', description: 'Gentle horizontal pan.', snippet: 'Slow horizontal pan, smooth cinematic movement.' },
+  { id: 'push-in', label: 'Push In', description: 'Subtle dolly forward.', snippet: 'Slow push-in, subtle dolly movement toward subject.' },
+  { id: 'handheld', label: 'Handheld', description: 'Natural handheld feel.', snippet: 'Handheld camera, natural micro-shake, authentic UGC feel.' },
+];
+
+const anglePresets = [
+  { id: 'eye', label: 'Eye Level', description: 'Neutral, natural angle.', snippet: 'Eye-level camera angle, neutral perspective.' },
+  { id: 'low', label: 'Low Angle', description: 'Slightly below subject.', snippet: 'Low-angle shot, subject feels taller and more dominant.' },
+  { id: 'high', label: 'High Angle', description: 'Slightly above subject.', snippet: 'High-angle shot, camera slightly above subject.' },
+  { id: 'overhead', label: 'Overhead', description: 'Top-down flatlay.', snippet: 'Overhead top-down angle, flatlay composition.' },
+];
+
+const getAnglePreview = (id: string) => {
+  const svg = (() => {
+    switch (id) {
+      case 'low':
+        return `<svg xmlns='http://www.w3.org/2000/svg' width='120' height='60'><rect width='120' height='60' fill='#0f172a'/><circle cx='60' cy='42' r='10' fill='#38bdf8'/><line x1='10' y1='50' x2='60' y2='42' stroke='#94a3b8' stroke-width='2'/></svg>`;
+      case 'high':
+        return `<svg xmlns='http://www.w3.org/2000/svg' width='120' height='60'><rect width='120' height='60' fill='#0f172a'/><circle cx='60' cy='18' r='10' fill='#38bdf8'/><line x1='10' y1='10' x2='60' y2='18' stroke='#94a3b8' stroke-width='2'/></svg>`;
+      case 'overhead':
+        return `<svg xmlns='http://www.w3.org/2000/svg' width='120' height='60'><rect width='120' height='60' fill='#0f172a'/><circle cx='60' cy='30' r='12' fill='#38bdf8'/><circle cx='60' cy='30' r='22' stroke='#94a3b8' stroke-width='2' fill='none'/></svg>`;
+      default:
+        return `<svg xmlns='http://www.w3.org/2000/svg' width='120' height='60'><rect width='120' height='60' fill='#0f172a'/><circle cx='60' cy='30' r='10' fill='#38bdf8'/><line x1='10' y1='30' x2='60' y2='30' stroke='#94a3b8' stroke-width='2'/></svg>`;
+    }
+  })();
+  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
 };
 
 const SpaceNodeCard: React.FC<NodeProps<SpaceNodeData>> = ({ data, type, selected }) => {
-  const accent = accentByType(type);
+  const { theme } = useTheme();
+  const isDark = theme === 'dark';
   const output = data.output;
   const status = data.status || 'idle';
 
   return (
     <div
       className={`min-w-[180px] max-w-[220px] rounded-xl border px-3 py-2 shadow-lg backdrop-blur ${
-        selected ? 'border-white/40' : 'border-white/10'
-      } ${accent}`}
+        selected ? (isDark ? 'border-zinc-400' : 'border-zinc-500') : isDark ? 'border-zinc-800' : 'border-zinc-200'
+      } ${isDark ? 'bg-zinc-900/70 text-zinc-100' : 'bg-white text-zinc-800'}`}
     >
       <Handle type="target" position={Position.Left} className="!bg-zinc-400/70" />
       <div className="flex items-center justify-between">
-        <span className="text-[10px] uppercase tracking-widest font-mono">{data.label}</span>
+        <div className="flex flex-col">
+          <span className="text-[11px] font-semibold tracking-wide">{data.title || data.label}</span>
+          <span className="text-[9px] uppercase tracking-widest text-zinc-400">{data.label}</span>
+        </div>
         <span
           className={`text-[10px] font-mono ${
             status === 'running'
@@ -133,7 +201,7 @@ const SpaceNodeCard: React.FC<NodeProps<SpaceNodeData>> = ({ data, type, selecte
       </div>
 
       {output?.text && (
-        <div className="mt-2 text-[10px] text-zinc-100/80 line-clamp-4 whitespace-pre-wrap">
+        <div className="mt-2 text-[10px] text-zinc-300 line-clamp-4 whitespace-pre-wrap">
           {output.text}
         </div>
       )}
@@ -297,7 +365,7 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
 
   const [logs, setLogs] = useState<string[]>([]);
   const [outputPreview, setOutputPreview] = useState<SpaceNodeOutput | null>(null);
-  const [outputsCollapsed, setOutputsCollapsed] = useState(false);
+  const [outputsCollapsed, setOutputsCollapsed] = useState(true);
 
   const [assetModalOpen, setAssetModalOpen] = useState(false);
   const [assetModalKind, setAssetModalKind] = useState<'image' | 'video'>('image');
@@ -310,6 +378,9 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
       image: SpaceNodeCard,
       video: SpaceNodeCard,
       upload: SpaceNodeCard,
+      camera: SpaceNodeCard,
+      motion: SpaceNodeCard,
+      angle: SpaceNodeCard,
     }),
     []
   );
@@ -470,7 +541,17 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
 
   const onConnect = useCallback(
     (connection: Connection) => {
-      setEdges((eds) => addEdge({ ...connection, animated: true }, eds));
+      setEdges((eds) =>
+        addEdge(
+          {
+            ...connection,
+            type: 'smoothstep',
+            animated: false,
+            style: { strokeWidth: 1.5, stroke: '#64748b' },
+          },
+          eds
+        )
+      );
       markDirty();
     },
     [setEdges, markDirty]
@@ -490,18 +571,93 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
       .filter((output): output is SpaceNodeOutput => !!output);
   };
 
-  const resolveTextInput = (nodeId: string, fallback?: string) => {
+  const resolveIncomingTextOutputs = (nodeId: string) => {
+    return resolveIncomingOutputs(nodeId)
+      .filter((output) => output.text)
+      .map((output) => ({
+        text: output.text as string,
+        kind: output.metadata?.kind as string | undefined,
+      }));
+  };
+
+  const resolveTextInput = (nodeId: string) => {
     const node = nodes.find((item) => item.id === nodeId);
     const direct = node?.data.prompt?.trim();
-    if (direct) return direct;
-    const incoming = resolveIncomingOutputs(nodeId).find((output) => output.text);
-    return incoming?.text || fallback || '';
+    const incoming = resolveIncomingTextOutputs(nodeId)
+      .filter((item) => item.kind !== 'camera_preset' && item.kind !== 'motion_preset' && item.kind !== 'angle_preset')
+      .map((item) => item.text);
+    return [direct, ...incoming].filter(Boolean).join('\n\n');
   };
 
   const resolveImageInputs = (nodeId: string) => {
     return resolveIncomingOutputs(nodeId)
       .filter((output) => output.contentType === 'image' && output.url)
       .map((output) => output.url as string);
+  };
+
+  const resolveUploadReferences = (nodeId: string) => {
+    const incomingEdges = edges.filter((edge) => edge.target === nodeId);
+    const uploadNodes = incomingEdges
+      .map((edge) => nodes.find((node) => node.id === edge.source))
+      .filter((node): node is Node<SpaceNodeData> => !!node && node.type === 'upload')
+      .filter((node) => !!node.data.assetUrl);
+
+    const subjectUrls: string[] = [];
+    const objectUrls: string[] = [];
+
+    uploadNodes.forEach((node) => {
+      const role = node.data.assetRole || 'auto';
+      const url = node.data.assetUrl as string;
+      if (role === 'subject') {
+        subjectUrls.push(url);
+      } else if (role === 'object') {
+        objectUrls.push(url);
+      } else if (subjectUrls.length === 0) {
+        subjectUrls.push(url);
+      } else {
+        objectUrls.push(url);
+      }
+    });
+
+    return { subjectUrls, objectUrls };
+  };
+
+  const buildIdentityLockText = (subjectUrls: string[], objectUrls: string[]) => {
+    const lines: string[] = [];
+    if (subjectUrls.length > 0) {
+      lines.push(
+        'Use the SAME person from the reference image. Preserve facial identity, age, skin tone, hairstyle, and body proportions.'
+      );
+    }
+    if (objectUrls.length > 0) {
+      lines.push(
+        'Use the SAME object(s) from the reference image. Preserve shape, color, logo/branding, and material details.'
+      );
+    }
+    return lines.join('\n');
+  };
+
+  const buildImagePrompt = (nodeId: string) => {
+    const textInputs = resolveIncomingTextOutputs(nodeId);
+    const coreTexts = [
+      nodes.find((item) => item.id === nodeId)?.data.prompt?.trim() || '',
+      ...textInputs.filter((item) => item.kind !== 'camera_preset' && item.kind !== 'motion_preset' && item.kind !== 'angle_preset').map((item) => item.text),
+    ].filter(Boolean);
+    const presetTexts = textInputs.filter((item) => item.kind === 'camera_preset').map((item) => item.text);
+    const { subjectUrls, objectUrls } = resolveUploadReferences(nodeId);
+    const identityText = buildIdentityLockText(subjectUrls, objectUrls);
+    return [coreTexts.join('\n\n'), identityText, presetTexts.join('\n\n')].filter(Boolean).join('\n\n');
+  };
+
+  const buildVideoPrompt = (nodeId: string) => {
+    const textInputs = resolveIncomingTextOutputs(nodeId);
+    const coreTexts = [
+      nodes.find((item) => item.id === nodeId)?.data.prompt?.trim() || '',
+      ...textInputs.filter((item) => item.kind !== 'camera_preset' && item.kind !== 'motion_preset' && item.kind !== 'angle_preset').map((item) => item.text),
+    ].filter(Boolean);
+    const motionText = textInputs.filter((item) => item.kind === 'motion_preset').map((item) => item.text);
+    const angleText = textInputs.filter((item) => item.kind === 'angle_preset').map((item) => item.text);
+    return [coreTexts.join('\n\n'), motionText.join('\n\n'), angleText.join('\n\n')].filter(Boolean).join('\n\n');
   };
 
   const extractResultUrl = (resultJson: any, data: any): string => {
@@ -569,7 +725,7 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
         const text = node.data.prompt?.trim() || '';
         updateNodeData(nodeId, {
           status: 'success',
-          output: { contentType: 'text', text },
+          output: { contentType: 'text', text, metadata: { kind: 'prompt' } },
         });
         return;
       }
@@ -585,7 +741,7 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
         const text = await generateTextWithGemini(prompt, { apiKey: googleApiKey });
         updateNodeData(nodeId, {
           status: 'success',
-          output: { contentType: 'text', text },
+          output: { contentType: 'text', text, metadata: { kind: 'script' } },
         });
         return;
       }
@@ -602,13 +758,42 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
         return;
       }
 
+      if (node.type === 'camera') {
+        const preset = cameraPresets.find((item) => item.id === node.data.presetId) || cameraPresets[0];
+        updateNodeData(nodeId, {
+          status: 'success',
+          output: { contentType: 'text', text: preset.snippet, metadata: { kind: 'camera_preset' } },
+        });
+        return;
+      }
+
+      if (node.type === 'motion') {
+        const preset = motionPresets.find((item) => item.id === node.data.presetId) || motionPresets[0];
+        updateNodeData(nodeId, {
+          status: 'success',
+          output: { contentType: 'text', text: preset.snippet, metadata: { kind: 'motion_preset' } },
+        });
+        return;
+      }
+
+      if (node.type === 'angle') {
+        const preset = anglePresets.find((item) => item.id === node.data.presetId) || anglePresets[0];
+        updateNodeData(nodeId, {
+          status: 'success',
+          output: { contentType: 'text', text: preset.snippet, metadata: { kind: 'angle_preset' } },
+        });
+        return;
+      }
+
       if (node.type === 'image') {
-        const prompt = resolveTextInput(nodeId);
+        const prompt = buildImagePrompt(nodeId);
         if (!prompt) {
           throw new Error('Prompt is required for image generation.');
         }
 
         const incomingImages = resolveImageInputs(nodeId);
+        const { subjectUrls, objectUrls } = resolveUploadReferences(nodeId);
+        const orderedReferenceImages = [...subjectUrls, ...objectUrls];
         const imageSize = (node.data.aspectRatio as NanoBananaGenInput['image_size']) || '1:1';
         let model = 'google/nano-banana';
         let payload: NanoBananaGenInput | NanoBananaEditInput = {
@@ -621,7 +806,7 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
           model = 'google/nano-banana-edit';
           payload = {
             prompt,
-            image_urls: incomingImages.slice(0, 2),
+            image_urls: (orderedReferenceImages.length > 0 ? orderedReferenceImages : incomingImages).slice(0, 4),
             output_format: 'png',
             image_size: imageSize,
           };
@@ -649,7 +834,7 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
       }
 
       if (node.type === 'video') {
-        const prompt = resolveTextInput(nodeId);
+        const prompt = buildVideoPrompt(nodeId);
         if (!prompt) {
           throw new Error('Prompt is required for video generation.');
         }
@@ -862,11 +1047,11 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
         <div className={`w-56 border-r ${isDark ? 'border-zinc-800 bg-zinc-950' : 'border-zinc-200 bg-white'}`}>
           <div className="px-4 py-4 space-y-3">
             <h4 className="text-xs font-mono text-zinc-500 uppercase tracking-widest">Nodes</h4>
-            {(['prompt', 'script', 'image', 'video', 'upload'] as SpaceNodeType[]).map((type) => (
+            {(['prompt', 'script', 'image', 'video', 'upload', 'camera', 'motion', 'angle'] as SpaceNodeType[]).map((type) => (
               <button
                 key={type}
                 onClick={() => addNode(type)}
-                className={`w-full text-left px-3 py-2 rounded-lg text-xs border ${
+                className={`w-full text-left px-3 py-2 rounded-lg text-[11px] border ${
                   isDark ? 'border-zinc-800 text-zinc-200 hover:bg-zinc-900' : 'border-zinc-200 text-zinc-700 hover:bg-zinc-50'
                 }`}
               >
@@ -908,6 +1093,8 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
               setSelectedEdgeId(null);
             }}
             deleteKeyCode={['Backspace', 'Delete']}
+            defaultEdgeOptions={{ type: 'smoothstep', style: { strokeWidth: 1.5, stroke: '#64748b' } }}
+            connectionLineStyle={{ stroke: '#94a3b8', strokeWidth: 1.5 }}
             fitView
             className={isDark ? 'bg-zinc-900/60' : 'bg-zinc-50'}
           >
@@ -958,11 +1145,20 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
               <div className="space-y-3">
                 <div className="text-xs text-zinc-400">Type: {selectedNode.type}</div>
 
+                <input
+                  value={selectedNode.data.title || ''}
+                  onChange={(e) => updateNodeData(selectedNode.id, { title: e.target.value })}
+                  placeholder="Node title"
+                  className={`w-full px-3 py-2 rounded-lg text-xs border ${
+                    isDark ? 'bg-zinc-900 border-zinc-800 text-zinc-200' : 'bg-white border-zinc-200'
+                  }`}
+                />
+
                 {(selectedNode.type === 'prompt' || selectedNode.type === 'script' || selectedNode.type === 'image' || selectedNode.type === 'video') && (
                   <textarea
                     value={selectedNode.data.prompt || ''}
                     onChange={(e) => updateNodeData(selectedNode.id, { prompt: e.target.value })}
-                    rows={6}
+                    rows={5}
                     placeholder="Write your prompt..."
                     className={`w-full px-3 py-2 rounded-lg text-xs border ${
                       isDark ? 'bg-zinc-900 border-zinc-800 text-zinc-200' : 'bg-white border-zinc-200'
@@ -1034,6 +1230,19 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
                       <option value="image">Image</option>
                       <option value="video">Video</option>
                     </select>
+                    <select
+                      value={selectedNode.data.assetRole || 'auto'}
+                      onChange={(e) =>
+                        updateNodeData(selectedNode.id, { assetRole: e.target.value as 'auto' | 'subject' | 'object' })
+                      }
+                      className={`w-full px-3 py-2 rounded-lg text-xs border ${
+                        isDark ? 'bg-zinc-900 border-zinc-800 text-zinc-200' : 'bg-white border-zinc-200'
+                      }`}
+                    >
+                      <option value="auto">Role: Auto</option>
+                      <option value="subject">Role: Subject</option>
+                      <option value="object">Role: Object</option>
+                    </select>
                     <input
                       type="file"
                       accept={selectedNode.data.assetType === 'video' ? 'video/*' : 'image/*'}
@@ -1061,6 +1270,100 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
                       </div>
                     )}
                   </>
+                )}
+
+                {selectedNode.type === 'camera' && (
+                  <div className="space-y-2">
+                    {cameraPresets.map((preset) => (
+                      <button
+                        key={preset.id}
+                        onClick={() =>
+                          updateNodeData(selectedNode.id, {
+                            presetId: preset.id,
+                            status: 'success',
+                            output: { contentType: 'text', text: preset.snippet, metadata: { kind: 'camera_preset' } },
+                          })
+                        }
+                        className={`w-full text-left px-3 py-2 rounded-lg text-xs border ${
+                          selectedNode.data.presetId === preset.id
+                            ? 'border-emerald-500/50 text-emerald-200'
+                            : isDark
+                            ? 'border-zinc-800 text-zinc-300'
+                            : 'border-zinc-200 text-zinc-700'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="font-semibold">{preset.label}</span>
+                          <span className="text-[10px] text-zinc-500">Image</span>
+                        </div>
+                        <div className="text-[10px] text-zinc-500">{preset.description}</div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {selectedNode.type === 'motion' && (
+                  <div className="space-y-2">
+                    {motionPresets.map((preset) => (
+                      <button
+                        key={preset.id}
+                        onClick={() =>
+                          updateNodeData(selectedNode.id, {
+                            presetId: preset.id,
+                            status: 'success',
+                            output: { contentType: 'text', text: preset.snippet, metadata: { kind: 'motion_preset' } },
+                          })
+                        }
+                        className={`w-full text-left px-3 py-2 rounded-lg text-xs border ${
+                          selectedNode.data.presetId === preset.id
+                            ? 'border-emerald-500/50 text-emerald-200'
+                            : isDark
+                            ? 'border-zinc-800 text-zinc-300'
+                            : 'border-zinc-200 text-zinc-700'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="font-semibold">{preset.label}</span>
+                          <span className="text-[10px] text-zinc-500">Motion</span>
+                        </div>
+                        <div className="mt-1 h-8 rounded-md border border-zinc-800 bg-zinc-900/60 relative overflow-hidden">
+                          <div className="absolute inset-y-0 w-10 bg-white/10 animate-pulse" />
+                        </div>
+                        <div className="text-[10px] text-zinc-500 mt-1">{preset.description}</div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {selectedNode.type === 'angle' && (
+                  <div className="space-y-2">
+                    {anglePresets.map((preset) => (
+                      <button
+                        key={preset.id}
+                        onClick={() =>
+                          updateNodeData(selectedNode.id, {
+                            presetId: preset.id,
+                            status: 'success',
+                            output: { contentType: 'text', text: preset.snippet, metadata: { kind: 'angle_preset' } },
+                          })
+                        }
+                        className={`w-full text-left px-3 py-2 rounded-lg text-xs border ${
+                          selectedNode.data.presetId === preset.id
+                            ? 'border-emerald-500/50 text-emerald-200'
+                            : isDark
+                            ? 'border-zinc-800 text-zinc-300'
+                            : 'border-zinc-200 text-zinc-700'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="font-semibold">{preset.label}</span>
+                          <span className="text-[10px] text-zinc-500">Angle</span>
+                        </div>
+                        <img src={getAnglePreview(preset.id)} className="mt-2 w-full h-12 object-cover rounded-md border border-zinc-800" />
+                        <div className="text-[10px] text-zinc-500 mt-1">{preset.description}</div>
+                      </button>
+                    ))}
+                  </div>
                 )}
 
                 <div className="flex gap-2">

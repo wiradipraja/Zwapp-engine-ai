@@ -1,8 +1,17 @@
 import type { Edge, Node, Viewport } from 'reactflow';
 
-export type SpaceNodeType = 'prompt' | 'script' | 'image' | 'video' | 'upload';
+export type SpaceNodeType =
+  | 'prompt'
+  | 'script'
+  | 'image'
+  | 'video'
+  | 'upload'
+  | 'camera'
+  | 'motion'
+  | 'angle';
 export type SpaceNodeStatus = 'idle' | 'running' | 'success' | 'error';
 export type SpaceAssetType = 'image' | 'video';
+export type SpaceAssetRole = 'auto' | 'subject' | 'object';
 
 export interface SpaceNodeOutput {
   contentType: 'text' | 'image' | 'video' | 'asset';
@@ -13,6 +22,7 @@ export interface SpaceNodeOutput {
 
 export interface SpaceNodeData {
   label: string;
+  title?: string;
   status: SpaceNodeStatus;
   prompt?: string;
   instructions?: string;
@@ -22,6 +32,8 @@ export interface SpaceNodeData {
   assetSource?: 'local' | 'supabase';
   assetUrl?: string;
   assetName?: string;
+  assetRole?: SpaceAssetRole;
+  presetId?: string;
   output?: SpaceNodeOutput;
   error?: string;
   updatedAt?: number;
