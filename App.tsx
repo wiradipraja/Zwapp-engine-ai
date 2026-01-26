@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import 'reactflow/dist/style.css';
 import { createTask, queryTask } from './services/api';
 import { supabase, signOut } from './services/supabase';
 import { generateVeo3Video } from './services/veo3Generation';
@@ -28,6 +29,7 @@ import { QueueList } from './components/QueueList';
 import { AuthForm } from './components/AuthForm';
 import { SettingsModal } from './components/SettingsModal';
 import UGCOrchestrationWorkspace from './components/UGC/UGCOrchestrationWorkspace';
+import SpacesWorkspace from './components/Spaces/SpacesWorkspace';
 import Sidebar, { MenuSection, ModuleType } from './components/layout/Sidebar';
 import PublicLanding from './components/layout/PublicLanding';
 import Toast, { useToast, ToastMessage } from './components/ui/Toast';
@@ -413,6 +415,8 @@ const AppContent: React.FC = () => {
         return <Veo3ReferenceToVideoForm onSubmit={handleCreateTask} isLoading={isSubmitting} />;
       case 'ugc':
         return null; // UGC has its own workspace in the right panel
+      case 'spaces':
+        return null; // Spaces has its own workspace in the right panel
       default:
         return (
           <div className="text-center text-zinc-500 py-8">
@@ -445,6 +449,7 @@ const AppContent: React.FC = () => {
       'veo3-image-to-video': 'Veo 3.1 Image→Video',
       'veo3-reference-to-video': 'Veo 3.1 Reference→Video',
       'ugc': 'UGC AI Studio',
+      'spaces': 'Spaces Studio',
       'landing': 'Home',
     };
     return titles[activeModule] || 'Workspace';
@@ -566,6 +571,14 @@ const AppContent: React.FC = () => {
           {activeModule === 'ugc' ? (
             <div className="flex-1 p-6">
               <UGCOrchestrationWorkspace
+                apiKey={apiKey}
+                googleApiKey={googleApiKey}
+                onOpenSettings={() => setIsSettingsOpen(true)}
+              />
+            </div>
+          ) : activeModule === 'spaces' ? (
+            <div className="flex-1">
+              <SpacesWorkspace
                 apiKey={apiKey}
                 googleApiKey={googleApiKey}
                 onOpenSettings={() => setIsSettingsOpen(true)}
