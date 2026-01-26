@@ -28,7 +28,13 @@ import type {
   SpaceNodeType,
   SpaceRecord,
 } from '../../types/spaces';
-import type { NanoBananaGenInput, Veo3ImageToVideoInput, Veo3Input, Veo3TextToVideoInput } from '../../types';
+import type {
+  NanoBananaEditInput,
+  NanoBananaGenInput,
+  Veo3ImageToVideoInput,
+  Veo3Input,
+  Veo3TextToVideoInput,
+} from '../../types';
 
 interface SpacesWorkspaceProps {
   apiKey: string;
@@ -279,13 +285,19 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
   const selectedNode = useMemo(
     () => nodes.find((node) => node.id === selectedNodeId) || null,
     [nodes, selectedNodeId]
   );
+  const selectedEdge = useMemo(
+    () => edges.find((edge) => edge.id === selectedEdgeId) || null,
+    [edges, selectedEdgeId]
+  );
 
   const [logs, setLogs] = useState<string[]>([]);
   const [outputPreview, setOutputPreview] = useState<SpaceNodeOutput | null>(null);
+  const [outputsCollapsed, setOutputsCollapsed] = useState(false);
 
   const [assetModalOpen, setAssetModalOpen] = useState(false);
   const [assetModalKind, setAssetModalKind] = useState<'image' | 'video'>('image');
@@ -464,8 +476,9 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
     [setEdges, markDirty]
   );
 
-  const onSelectionChange = useCallback(({ nodes: selected }: { nodes: Node[] }) => {
-    setSelectedNodeId(selected[0]?.id ?? null);
+  const onSelectionChange = useCallback(({ nodes: selectedNodes, edges: selectedEdges }: { nodes: Node[]; edges: Edge[] }) => {
+    setSelectedNodeId(selectedNodes[0]?.id ?? null);
+    setSelectedEdgeId(selectedEdges[0]?.id ?? null);
   }, []);
 
   const resolveIncomingOutputs = (nodeId: string) => {
@@ -595,13 +608,26 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
           throw new Error('Prompt is required for image generation.');
         }
 
-        const payload: NanoBananaGenInput = {
+        const incomingImages = resolveImageInputs(nodeId);
+        const imageSize = (node.data.aspectRatio as NanoBananaGenInput['image_size']) || '1:1';
+        let model = 'google/nano-banana';
+        let payload: NanoBananaGenInput | NanoBananaEditInput = {
           prompt,
           output_format: 'png',
-          image_size: (node.data.aspectRatio as NanoBananaGenInput['image_size']) || '1:1',
+          image_size: imageSize,
         };
 
-        const response = await createTask(apiKey, 'google/nano-banana', payload);
+        if (incomingImages.length > 0) {
+          model = 'google/nano-banana-edit';
+          payload = {
+            prompt,
+            image_urls: incomingImages.slice(0, 2),
+            output_format: 'png',
+            image_size: imageSize,
+          };
+        }
+
+        const response = await createTask(apiKey, model, payload);
         const taskId = response.data.taskId;
         const resultUrl = await pollTaskForResult(taskId);
         let storedUrl = resultUrl;
@@ -687,6 +713,25 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
     }
   };
 
+  const deleteNode = (nodeId: string) => {
+    setNodes((prev) => prev.filter((node) => node.id !== nodeId));
+    setEdges((prev) => prev.filter((edge) => edge.source !== nodeId && edge.target !== nodeId));
+    setSelectedNodeId(null);
+    markDirty();
+  };
+
+  const disconnectNode = (nodeId: string) => {
+    setEdges((prev) => prev.filter((edge) => edge.source !== nodeId && edge.target !== nodeId));
+    markDirty();
+  };
+
+  const cutSelectedEdge = () => {
+    if (!selectedEdgeId) return;
+    setEdges((prev) => prev.filter((edge) => edge.id !== selectedEdgeId));
+    setSelectedEdgeId(null);
+    markDirty();
+  };
+
   const handleAssetSelect = (asset: SupabaseAsset) => {
     if (!assetModalTarget) return;
     updateNodeData(assetModalTarget, {
@@ -741,7 +786,7 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
   }
 
   return (
-    <div className="flex-1 flex flex-col h-[calc(100vh-4rem)]">
+    <div className="flex-1 flex flex-col min-h-[calc(100vh-4rem)]">
       <AssetLibraryModal
         isOpen={assetModalOpen}
         kind={assetModalKind}
@@ -843,10 +888,26 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
               onEdgesChange(changes);
               markDirty();
             }}
+            onNodesDelete={() => {
+              markDirty();
+              setSelectedNodeId(null);
+            }}
+            onEdgesDelete={() => {
+              markDirty();
+              setSelectedEdgeId(null);
+            }}
             onConnect={onConnect}
             onInit={setReactFlowInstance}
             nodeTypes={nodeTypes}
             onSelectionChange={onSelectionChange}
+            onEdgeClick={(_, edge) => {
+              setSelectedEdgeId(edge.id);
+            }}
+            onPaneClick={() => {
+              setSelectedNodeId(null);
+              setSelectedEdgeId(null);
+            }}
+            deleteKeyCode={['Backspace', 'Delete']}
             fitView
             className={isDark ? 'bg-zinc-900/60' : 'bg-zinc-50'}
           >
@@ -881,6 +942,18 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
               <div className="text-xs text-zinc-500">Select a node to edit.</div>
             )}
 
+            {!selectedNode && selectedEdge && (
+              <div className="space-y-3">
+                <div className="text-xs text-zinc-400">Edge selected</div>
+                <button
+                  onClick={cutSelectedEdge}
+                  className="px-3 py-2 rounded-lg text-xs border border-amber-500/40 text-amber-300"
+                >
+                  Cut Connection
+                </button>
+              </div>
+            )}
+
             {selectedNode && (
               <div className="space-y-3">
                 <div className="text-xs text-zinc-400">Type: {selectedNode.type}</div>
@@ -898,19 +971,26 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
                 )}
 
                 {selectedNode.type === 'image' && (
-                  <select
-                    value={selectedNode.data.aspectRatio || '1:1'}
-                    onChange={(e) => updateNodeData(selectedNode.id, { aspectRatio: e.target.value })}
-                    className={`w-full px-3 py-2 rounded-lg text-xs border ${
-                      isDark ? 'bg-zinc-900 border-zinc-800 text-zinc-200' : 'bg-white border-zinc-200'
-                    }`}
-                  >
-                    <option value="1:1">1:1</option>
-                    <option value="9:16">9:16</option>
-                    <option value="16:9">16:9</option>
-                    <option value="3:4">3:4</option>
-                    <option value="4:3">4:3</option>
-                  </select>
+                  <>
+                    <select
+                      value={selectedNode.data.aspectRatio || '1:1'}
+                      onChange={(e) => updateNodeData(selectedNode.id, { aspectRatio: e.target.value })}
+                      className={`w-full px-3 py-2 rounded-lg text-xs border ${
+                        isDark ? 'bg-zinc-900 border-zinc-800 text-zinc-200' : 'bg-white border-zinc-200'
+                      }`}
+                    >
+                      <option value="1:1">1:1</option>
+                      <option value="9:16">9:16</option>
+                      <option value="16:9">16:9</option>
+                      <option value="3:4">3:4</option>
+                      <option value="4:3">4:3</option>
+                    </select>
+                    <div className="text-[10px] text-zinc-500">
+                      {resolveImageInputs(selectedNode.id).length > 0
+                        ? 'Reference images detected — running Image→Image (Nano Banana Edit).'
+                        : 'No reference images connected — running Text→Image.'}
+                    </div>
+                  </>
                 )}
 
                 {selectedNode.type === 'video' && (
@@ -983,12 +1063,26 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
                   </>
                 )}
 
-                <button
-                  onClick={() => runNode(selectedNode.id)}
-                  className="px-3 py-2 rounded-lg text-xs bg-emerald-500 text-white"
-                >
-                  Run Node
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => runNode(selectedNode.id)}
+                    className="px-3 py-2 rounded-lg text-xs bg-emerald-500 text-white"
+                  >
+                    Run Node
+                  </button>
+                  <button
+                    onClick={() => disconnectNode(selectedNode.id)}
+                    className="px-3 py-2 rounded-lg text-xs border border-amber-500/40 text-amber-300"
+                  >
+                    Cut Links
+                  </button>
+                  <button
+                    onClick={() => deleteNode(selectedNode.id)}
+                    className="px-3 py-2 rounded-lg text-xs border border-red-500/40 text-red-300"
+                  >
+                    Delete Node
+                  </button>
+                </div>
 
                 {selectedNode.data.output?.url && selectedNode.data.output.contentType === 'image' && (
                   <img src={selectedNode.data.output.url} className="w-full rounded-lg border border-zinc-800" />
@@ -1005,36 +1099,48 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
         </div>
       </div>
 
-      <div className={`h-40 border-t ${isDark ? 'border-zinc-800 bg-black/40' : 'border-zinc-200 bg-white'}`}>
+      <div className={`${outputsCollapsed ? 'h-12' : 'h-40'} border-t ${isDark ? 'border-zinc-800 bg-black/40' : 'border-zinc-200 bg-white'}`}>
         <div className="flex items-center justify-between px-4 py-2 border-b border-white/10">
           <span className="text-xs text-zinc-500 uppercase tracking-widest font-mono">Outputs</span>
-          <span className="text-[10px] text-zinc-500">{logs.length} logs</span>
-        </div>
-        <div className="flex h-[calc(100%-32px)]">
-          <div className="flex-1 overflow-y-auto px-4 py-2 text-[10px] font-mono text-zinc-400">
-            {logs.map((log, idx) => (
-              <div key={idx} className="py-0.5">
-                {log}
-              </div>
-            ))}
-          </div>
-          <div className="w-64 border-l border-white/10 p-3">
-            {outputPreview?.url && outputPreview.contentType === 'image' && (
-              <img src={outputPreview.url} className="w-full h-24 object-cover rounded-lg" />
-            )}
-            {outputPreview?.url && outputPreview.contentType === 'video' && (
-              <video src={outputPreview.url} className="w-full h-24 object-cover rounded-lg" />
-            )}
-            {outputPreview?.text && (
-              <div className="text-[10px] text-zinc-400 line-clamp-6 whitespace-pre-wrap">
-                {outputPreview.text}
-              </div>
-            )}
-            {!outputPreview && (
-              <div className="text-[10px] text-zinc-500">Select a node to preview output.</div>
-            )}
+          <div className="flex items-center gap-3">
+            <span className="text-[10px] text-zinc-500">{logs.length} logs</span>
+            <button
+              onClick={() => setOutputsCollapsed((prev) => !prev)}
+              className={`text-[10px] px-2 py-1 rounded border ${
+                isDark ? 'border-zinc-700 text-zinc-300' : 'border-zinc-300 text-zinc-600'
+              }`}
+            >
+              {outputsCollapsed ? 'Expand' : 'Collapse'}
+            </button>
           </div>
         </div>
+        {!outputsCollapsed && (
+          <div className="flex h-[calc(100%-32px)]">
+            <div className="flex-1 overflow-y-auto px-4 py-2 text-[10px] font-mono text-zinc-400">
+              {logs.map((log, idx) => (
+                <div key={idx} className="py-0.5">
+                  {log}
+                </div>
+              ))}
+            </div>
+            <div className="w-64 border-l border-white/10 p-3">
+              {outputPreview?.url && outputPreview.contentType === 'image' && (
+                <img src={outputPreview.url} className="w-full h-24 object-cover rounded-lg" />
+              )}
+              {outputPreview?.url && outputPreview.contentType === 'video' && (
+                <video src={outputPreview.url} className="w-full h-24 object-cover rounded-lg" />
+              )}
+              {outputPreview?.text && (
+                <div className="text-[10px] text-zinc-400 line-clamp-6 whitespace-pre-wrap">
+                  {outputPreview.text}
+                </div>
+              )}
+              {!outputPreview && (
+                <div className="text-[10px] text-zinc-500">Select a node to preview output.</div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
