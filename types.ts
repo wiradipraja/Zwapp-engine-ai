@@ -166,6 +166,12 @@ export interface GrokImageToVideoInput {
   mode?: 'fun' | 'normal' | 'spicy';
 }
 
+// Grok Image To Image
+export interface GrokImageToImageInput {
+  prompt?: string;
+  image_urls: string[];
+}
+
 // Grok Text To Image
 export interface GrokTextToImageInput {
   prompt: string;
@@ -222,7 +228,7 @@ export type Veo3Input = Veo3TextToVideoInput | Veo3ImageToVideoInput | Veo3Refer
 
 export interface CreateTaskRequest {
   model: string; 
-  input: MotionControlInput | NanoBananaInput | ImageEditInput | ZImageInput | Flux2Input | Sora2Input | GrokImageToVideoInput | GrokTextToImageInput;
+  input: MotionControlInput | NanoBananaInput | ImageEditInput | ZImageInput | Flux2Input | Sora2Input | GrokImageToVideoInput | GrokImageToImageInput | GrokTextToImageInput;
   callBackUrl?: string;
 }
 

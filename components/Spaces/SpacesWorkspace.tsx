@@ -33,6 +33,7 @@ import type {
   NanoBananaGenInput,
   Flux2ProTextInput,
   Flux2FlexTextInput,
+  GrokImageToImageInput,
   GrokTextToImageInput,
   QwenTextToImageInput,
   ZImageInput,
@@ -396,7 +397,7 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
     [edges, selectedEdgeId]
   );
   const selectedImageModel = selectedNode?.type === 'image' ? (selectedNode.data.model || 'google/nano-banana') : 'google/nano-banana';
-  const selectedImageSupportsRefs = selectedNode?.type === 'image' ? selectedImageModel === 'google/nano-banana' : false;
+  const selectedImageCaps = selectedNode?.type === 'image' ? getImageModelCapabilities(selectedImageModel) : { t2i: true, i2i: false };
 
   const [logs, setLogs] = useState<string[]>([]);
   const [outputPreview, setOutputPreview] = useState<SpaceNodeOutput | null>(null);
@@ -951,6 +952,17 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
     return '1:1';
   };
 
+  function getImageModelCapabilities(model: string) {
+    switch (model) {
+      case 'google/nano-banana':
+        return { t2i: true, i2i: true };
+      case 'grok-imagine/image-to-image':
+        return { t2i: false, i2i: true };
+      default:
+        return { t2i: true, i2i: false };
+    }
+  }
+
   const extractResultUrl = (resultJson: any, data: any): string => {
     if (data?.imageUrl) return data.imageUrl;
     if (data?.image_url) return data.image_url;
@@ -1106,23 +1118,30 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
         const selectedModel = node.data.model || 'google/nano-banana';
         const baseModel = selectedModel === 'google/nano-banana-edit' ? 'google/nano-banana' : selectedModel;
         const imageMode = node.data.imageMode || 'auto';
-        const supportsReferences = baseModel === 'google/nano-banana';
+        const caps = getImageModelCapabilities(baseModel);
 
-        if (imageMode === 'i2i' && !supportsReferences) {
-          throw new Error('Image→Image is only supported with Nano Banana in workspace.');
+        if (!caps.i2i && imageMode === 'i2i') {
+          throw new Error('Selected model does not support Image→Image.');
+        }
+        if (!caps.t2i && imageMode === 't2i') {
+          throw new Error('Selected model does not support Text→Image.');
+        }
+        if (caps.i2i && !caps.t2i && !hasReferences) {
+          throw new Error('Image→Image requires at least one reference image.');
         }
         if (imageMode === 'i2i' && !hasReferences) {
           throw new Error('Force Image→Image requires at least one reference image.');
         }
-
         if (imageMode === 't2i' && hasReferences) {
           addLog('References ignored (Force Text→Image).');
         }
-        if (imageMode === 'auto' && hasReferences && !supportsReferences) {
+        if (imageMode === 'auto' && hasReferences && !caps.i2i) {
           addLog('Reference images detected but selected model is text-only. Using Text→Image.');
         }
 
-        const useReferences = supportsReferences && (imageMode === 'i2i' || (imageMode === 'auto' && hasReferences));
+        const useReferences =
+          (caps.i2i && !caps.t2i) ||
+          (caps.i2i && (imageMode === 'i2i' || (imageMode === 'auto' && hasReferences)));
         const prompt = buildImagePrompt(nodeId, useReferences);
         if (!prompt) {
           throw new Error('Prompt is required for image generation.');
@@ -1130,7 +1149,7 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
 
         const aspectRatio = normalizeAspectRatio(node.data.aspectRatio);
         let model = baseModel;
-        let payload: NanoBananaGenInput | NanoBananaEditInput | QwenTextToImageInput | ZImageInput | Flux2ProTextInput | Flux2FlexTextInput | GrokTextToImageInput;
+        let payload: NanoBananaGenInput | NanoBananaEditInput | QwenTextToImageInput | ZImageInput | Flux2ProTextInput | Flux2FlexTextInput | GrokTextToImageInput | GrokImageToImageInput;
 
         if (baseModel === 'google/nano-banana') {
           const imageSize = (aspectRatio as NanoBananaGenInput['image_size']) || '1:1';
@@ -1171,6 +1190,17 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
           payload = {
             prompt,
             aspect_ratio: mapGrokAspect(aspectRatio),
+          };
+        } else if (baseModel === 'grok-imagine/image-to-image') {
+          if (!hasReferences) {
+            throw new Error('Grok Image→Image requires a reference image.');
+          }
+          if (normalizedReferenceImages.length > 1) {
+            addLog('Grok Image→Image supports one image. Using the first reference.');
+          }
+          payload = {
+            prompt,
+            image_urls: normalizedReferenceImages.slice(0, 1),
           };
         } else {
           model = 'google/nano-banana';
@@ -1627,9 +1657,16 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
                       value={selectedNode.data.model || 'google/nano-banana'}
                       onChange={(e) => {
                         const nextModel = e.target.value;
+                        const nextCaps = getImageModelCapabilities(nextModel);
                         const patch: Partial<SpaceNodeData> = { model: nextModel };
-                        if (nextModel !== 'google/nano-banana' && selectedNode.data.imageMode === 'i2i') {
+                        if (!nextCaps.i2i && selectedNode.data.imageMode === 'i2i') {
                           patch.imageMode = 't2i';
+                        }
+                        if (!nextCaps.t2i && selectedNode.data.imageMode === 't2i') {
+                          patch.imageMode = 'i2i';
+                        }
+                        if (nextCaps.i2i && !nextCaps.t2i) {
+                          patch.imageMode = 'i2i';
                         }
                         updateNodeData(selectedNode.id, patch);
                       }}
@@ -1642,6 +1679,7 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
                       <option value="z-image">Z-Image Text→Image</option>
                       <option value="flux-2/pro-text-to-image">Flux 2 Pro Text→Image</option>
                       <option value="flux-2/flex-text-to-image">Flux 2 Flex Text→Image</option>
+                      <option value="grok-imagine/image-to-image">Grok Imagine Image→Image</option>
                       <option value="grok-imagine/text-to-image">Grok Imagine Text→Image</option>
                     </select>
                     <select
@@ -1661,16 +1699,18 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
                     </select>
                     <div className="text-[10px] text-zinc-500">
                       {selectedNode.data.imageMode === 't2i'
-                        ? 'Forced Text→Image mode.'
+                        ? selectedImageCaps.t2i
+                          ? 'Forced Text→Image mode.'
+                          : 'Selected model does not support Text→Image.'
                         : selectedNode.data.imageMode === 'i2i'
-                        ? selectedImageSupportsRefs
+                        ? selectedImageCaps.i2i
                           ? 'Forced Image→Image mode.'
-                          : 'Image→Image is only supported with Nano Banana.'
-                        : selectedImageSupportsRefs && resolveReferenceImages(selectedNode.id).length > 0
-                        ? 'Reference images detected — running Image→Image (Nano Banana Edit).'
-                        : selectedImageSupportsRefs
-                        ? 'No reference images connected — running Text→Image.'
-                        : 'Selected model runs Text→Image only.'}
+                          : 'Selected model does not support Image→Image.'
+                        : selectedImageCaps.i2i && resolveReferenceImages(selectedNode.id).length > 0
+                        ? 'Reference images detected — running Image→Image.'
+                        : selectedImageCaps.i2i && !selectedImageCaps.t2i
+                        ? 'Model requires a reference image.'
+                        : 'Text-only mode.'}
                     </div>
                     <select
                       value={selectedNode.data.videoFrameRole || 'none'}
