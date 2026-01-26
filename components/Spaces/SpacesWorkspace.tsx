@@ -643,7 +643,9 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
       nodes.find((item) => item.id === nodeId)?.data.prompt?.trim() || '',
       ...textInputs.filter((item) => item.kind !== 'camera_preset' && item.kind !== 'motion_preset' && item.kind !== 'angle_preset').map((item) => item.text),
     ].filter(Boolean);
-    const presetTexts = textInputs.filter((item) => item.kind === 'camera_preset').map((item) => item.text);
+    const presetTexts = textInputs
+      .filter((item) => item.kind === 'camera_preset' || item.kind === 'angle_preset')
+      .map((item) => item.text);
     const { subjectUrls, objectUrls } = resolveUploadReferences(nodeId);
     const identityText = buildIdentityLockText(subjectUrls, objectUrls);
     return [coreTexts.join('\n\n'), identityText, presetTexts.join('\n\n')].filter(Boolean).join('\n\n');
