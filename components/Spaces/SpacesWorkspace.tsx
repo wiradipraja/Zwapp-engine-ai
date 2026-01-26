@@ -603,6 +603,13 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
     return anglePresets.find((item) => item.id === presetId)?.snippet || anglePresets[0].snippet;
   };
 
+  const isSupportedImageUrl = (url: string) => {
+    if (!url) return false;
+    if (url.startsWith('data:image/')) return true;
+    const clean = url.split('?')[0].toLowerCase();
+    return clean.endsWith('.png') || clean.endsWith('.jpg') || clean.endsWith('.jpeg') || clean.endsWith('.webp');
+  };
+
   const collectTextInputs = (nodeId: string) => {
     const items: Array<{ text: string; kind: string }> = [];
     const current = nodes.find((item) => item.id === nodeId);
@@ -654,7 +661,7 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
     const urls: string[] = [];
 
     upstream.forEach((node) => {
-      if (node.type === 'upload' && node.data.assetUrl) {
+      if (node.type === 'upload' && node.data.assetUrl && node.data.assetType === 'image') {
         urls.push(node.data.assetUrl);
         return;
       }
@@ -664,6 +671,23 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
     });
 
     return Array.from(new Set(urls));
+  };
+
+  const normalizeReferenceImages = async (urls: string[]) => {
+    const normalized: string[] = [];
+    for (const url of urls) {
+      if (isSupportedImageUrl(url)) {
+        normalized.push(url);
+        continue;
+      }
+      try {
+        const uploaded = await uploadOutputUrlToSupabase(url, 'image');
+        normalized.push(uploaded);
+      } catch (error: any) {
+        addLog(`Reference image not supported, skip: ${error.message}`);
+      }
+    }
+    return Array.from(new Set(normalized));
   };
 
   const resolveUploadReferences = (nodeId: string) => {
@@ -867,6 +891,7 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
         const incomingImages = resolveReferenceImages(nodeId);
         const { subjectUrls, objectUrls } = resolveUploadReferences(nodeId);
         const orderedReferenceImages = Array.from(new Set([...subjectUrls, ...objectUrls, ...incomingImages]));
+        const normalizedReferenceImages = await normalizeReferenceImages(orderedReferenceImages);
         const imageSize = (node.data.aspectRatio as NanoBananaGenInput['image_size']) || '1:1';
         let model = 'google/nano-banana';
         let payload: NanoBananaGenInput | NanoBananaEditInput = {
@@ -878,26 +903,27 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
         if (node.data.imageMode === 't2i') {
           model = 'google/nano-banana';
         } else if (node.data.imageMode === 'i2i') {
-          if (orderedReferenceImages.length === 0) {
+          if (normalizedReferenceImages.length === 0) {
             throw new Error('Force Image→Image requires at least one reference image.');
           }
           model = 'google/nano-banana-edit';
           payload = {
             prompt,
-            image_urls: orderedReferenceImages.slice(0, 4),
+            image_urls: normalizedReferenceImages.slice(0, 4),
             output_format: 'png',
             image_size: imageSize,
           };
-        } else if (orderedReferenceImages.length > 0) {
+        } else if (normalizedReferenceImages.length > 0) {
           model = 'google/nano-banana-edit';
           payload = {
             prompt,
-            image_urls: orderedReferenceImages.slice(0, 4),
+            image_urls: normalizedReferenceImages.slice(0, 4),
             output_format: 'png',
             image_size: imageSize,
           };
         }
 
+        addLog(`Image references: ${normalizedReferenceImages.length}`);
         const response = await createTask(apiKey, model, payload);
         if (!response || response.code !== 200 || !response.data?.taskId) {
           throw new Error(response?.msg || 'Task creation failed.');
