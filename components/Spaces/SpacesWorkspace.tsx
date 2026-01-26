@@ -1359,7 +1359,7 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
                       >
                         <div className="flex items-center justify-between">
                           <span className="font-semibold">{preset.label}</span>
-                          <span className="text-[10px] text-zinc-500">Angle</span>
+                          <span className="text-[10px] text-zinc-500">Angle (Image + Video)</span>
                         </div>
                         <img src={getAnglePreview(preset.id)} className="mt-2 w-full h-12 object-cover rounded-md border border-zinc-800" />
                         <div className="text-[10px] text-zinc-500 mt-1">{preset.description}</div>
