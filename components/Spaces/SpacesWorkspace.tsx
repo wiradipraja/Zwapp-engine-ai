@@ -899,6 +899,9 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
         }
 
         const response = await createTask(apiKey, model, payload);
+        if (!response || response.code !== 200 || !response.data?.taskId) {
+          throw new Error(response?.msg || 'Task creation failed.');
+        }
         const taskId = response.data.taskId;
         const resultUrl = await pollTaskForResult(taskId);
         let storedUrl = resultUrl;
@@ -953,6 +956,9 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
           const response = await createTask(apiKey, 'sora-2-text-to-video', {
             prompt,
           });
+          if (!response || response.code !== 200 || !response.data?.taskId) {
+            throw new Error(response?.msg || 'Task creation failed.');
+          }
           taskId = response.data.taskId;
         }
 
