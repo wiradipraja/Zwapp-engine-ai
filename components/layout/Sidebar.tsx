@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
 
-export type MenuSection = 'home' | 'video' | 'nano-banana' | 'qwen' | 'flux' | 'sora2' | 'veo3' | 'ugc' | 'settings';
+export type MenuSection = 'home' | 'video' | 'nano-banana' | 'qwen' | 'flux' | 'sora2' | 'veo3' | 'grok' | 'ugc' | 'settings';
 export type ModuleType = 
   | 'landing'
   | 'motion-control' 
@@ -25,7 +25,8 @@ export type ModuleType =
   | 'veo3-image-to-video'
   | 'veo3-reference-to-video'
   | 'ugc'
-  | 'spaces';
+  | 'spaces'
+  | 'grok-image-to-video';
 
 interface SubMenuItem {
   id: ModuleType;
@@ -164,6 +165,19 @@ const Sidebar: React.FC<SidebarProps> = ({
       ],
     },
     {
+      id: 'grok-image-to-video',
+      label: 'GROK',
+      section: 'grok',
+      icon: (
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M12 3l3 6 6 .5-4.5 4 1.2 6.5L12 17l-5.7 3 1.2-6.5L3 9.5 9 9l3-6z" />
+        </svg>
+      ),
+      subItems: [
+        { id: 'grok-image-to-video', label: 'Image→Video' },
+      ],
+    },
+    {
       id: 'ugc',
       label: 'UGC',
       icon: (
@@ -198,6 +212,8 @@ const Sidebar: React.FC<SidebarProps> = ({
         return ['sora2-characters', 'sora2-text-to-video', 'sora2-image-to-video', 'sora2-pro-text-to-video', 'sora2-pro-image-to-video'].includes(module);
       case 'veo3':
         return ['veo3-text-to-video', 'veo3-image-to-video', 'veo3-reference-to-video'].includes(module);
+      case 'grok':
+        return module === 'grok-image-to-video';
       default:
         return false;
     }

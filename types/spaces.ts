@@ -29,6 +29,8 @@ export interface SpaceNodeData {
   model?: string;
   aspectRatio?: string;
   imageMode?: 'auto' | 't2i' | 'i2i';
+  videoMode?: 'auto' | 't2v' | 'i2v-single' | 'i2v-reference';
+  videoFrameRole?: 'none' | 'start' | 'end';
   assetType?: SpaceAssetType;
   assetSource?: 'local' | 'supabase';
   assetUrl?: string;

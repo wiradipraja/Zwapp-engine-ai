@@ -157,6 +157,15 @@ export interface Sora2ProImageToVideoInput {
 
 export type Sora2Input = Sora2CharactersInput | Sora2TextToVideoInput | Sora2ImageToVideoInput | Sora2ProTextToVideoInput | Sora2ProImageToVideoInput;
 
+// ==================== GROK IMAGE TO VIDEO ====================
+export interface GrokImageToVideoInput {
+  image_urls?: string[]; // one external image url
+  task_id?: string;
+  index?: number;
+  prompt?: string;
+  mode?: 'fun' | 'normal' | 'spicy';
+}
+
 // ==================== VEO 3.1 API Types ====================
 // According to KIE.AI API Documentation
 // Endpoint: POST https://api.kie.ai/api/v1/veo/generate
@@ -207,7 +216,7 @@ export type Veo3Input = Veo3TextToVideoInput | Veo3ImageToVideoInput | Veo3Refer
 
 export interface CreateTaskRequest {
   model: string; 
-  input: MotionControlInput | NanoBananaInput | ImageEditInput | ZImageInput | FlexImageInput | Flux2Input;
+  input: MotionControlInput | NanoBananaInput | ImageEditInput | ZImageInput | FlexImageInput | Flux2Input | Sora2Input | GrokImageToVideoInput;
   callBackUrl?: string;
 }
 

@@ -60,11 +60,28 @@ const defaultNodeData = (type: SpaceNodeType): SpaceNodeData => {
         model: 'google/nano-banana',
         aspectRatio: '1:1',
         imageMode: 'auto',
+        videoFrameRole: 'none',
       };
     case 'video':
-      return { label: 'Video', title: 'Video', status: 'idle', prompt: '', model: 'veo3_fast', aspectRatio: '16:9' };
+      return {
+        label: 'Video',
+        title: 'Video',
+        status: 'idle',
+        prompt: '',
+        model: 'veo3_fast',
+        aspectRatio: '16:9',
+        videoMode: 'auto',
+      };
     case 'upload':
-      return { label: 'Upload', title: 'Upload', status: 'idle', assetType: 'image', assetSource: 'local', assetRole: 'auto' };
+      return {
+        label: 'Upload',
+        title: 'Upload',
+        status: 'idle',
+        assetType: 'image',
+        assetSource: 'local',
+        assetRole: 'auto',
+        videoFrameRole: 'none',
+      };
     case 'camera':
       return {
         label: 'Camera',
@@ -716,6 +733,32 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
     return { subjectUrls, objectUrls };
   };
 
+  const resolveVideoFrames = (nodeId: string) => {
+    const upstream = getUpstreamNodes(nodeId);
+    const frames: Array<{ url: string; role: 'start' | 'end' | 'none' }> = [];
+
+    upstream.forEach((node) => {
+      if (node.type === 'upload' && node.data.assetUrl && node.data.assetType === 'image') {
+        frames.push({ url: node.data.assetUrl, role: node.data.videoFrameRole || 'none' });
+        return;
+      }
+      if (node.data.output?.contentType === 'image' && node.data.output.url) {
+        frames.push({ url: node.data.output.url, role: node.data.videoFrameRole || 'none' });
+      }
+    });
+
+    const uniqueFrames = Array.from(new Map(frames.map((frame) => [frame.url, frame])).values());
+    const start = uniqueFrames.find((frame) => frame.role === 'start');
+    const end = uniqueFrames.find((frame) => frame.role === 'end');
+    const remaining = uniqueFrames.filter((frame) => frame.role === 'none');
+
+    return {
+      list: uniqueFrames.map((frame) => frame.url),
+      start: start?.url || remaining[0]?.url || uniqueFrames[0]?.url,
+      end: end?.url || remaining[1]?.url || uniqueFrames[1]?.url || remaining[0]?.url || uniqueFrames[0]?.url,
+    };
+  };
+
   const buildIdentityLockText = (subjectUrls: string[], objectUrls: string[]) => {
     const lines: string[] = [];
     if (subjectUrls.length > 0) {
@@ -791,19 +834,40 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
     return '';
   };
 
-  const pollTaskForResult = async (taskId: string) => {
+  const queryVeoTask = async (taskId: string) => {
+    try {
+      const response = await fetch(`/api/proxy/veo/recordInfo?taskId=${encodeURIComponent(taskId)}`, {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+        },
+      });
+      if (!response.ok) return null;
+      return response.json();
+    } catch (_error) {
+      return null;
+    }
+  };
+
+  const pollTaskForResult = async (taskId: string, provider: 'jobs' | 'veo' = 'jobs') => {
     for (let attempt = 0; attempt < 60; attempt += 1) {
-      const result = await queryTask(apiKey, taskId);
-      const data = result.data;
-      if (data.state === 'success') {
-        const url = extractResultUrl(data.resultJson, data);
+      const result = provider === 'veo' ? await queryVeoTask(taskId) : await queryTask(apiKey, taskId);
+      const data = result?.data;
+      if (!data) {
+        await new Promise((resolve) => setTimeout(resolve, 3000));
+        continue;
+      }
+
+      const state = data.state || data.status;
+      if (state === 'success') {
+        const url = extractResultUrl(data.resultJson || data.result, data);
         if (!url) {
           throw new Error('Task succeeded but no output URL found.');
         }
         return url;
       }
-      if (data.state === 'fail') {
-        throw new Error(data.failMsg || 'Generation failed.');
+      if (state === 'fail' || state === 'failed' || state === 'error') {
+        throw new Error(data.failMsg || data.errorMsg || 'Generation failed.');
       }
       await new Promise((resolve) => setTimeout(resolve, 3000));
     }
@@ -929,7 +993,7 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
           throw new Error(response?.msg || 'Task creation failed.');
         }
         const taskId = response.data.taskId;
-        const resultUrl = await pollTaskForResult(taskId);
+        const resultUrl = await pollTaskForResult(taskId, 'jobs');
         let storedUrl = resultUrl;
         try {
           storedUrl = await uploadOutputUrlToSupabase(resultUrl, 'image');
@@ -954,20 +1018,22 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
           throw new Error('Prompt is required for video generation.');
         }
 
-        const images = resolveReferenceImages(nodeId);
+        const frameInfo = resolveVideoFrames(nodeId);
+        const images = frameInfo.list;
         let taskId = '';
         if (node.data.model?.startsWith('veo3')) {
           let input: Veo3Input;
-          if (images.length > 0) {
-            const imageInput: Veo3ImageToVideoInput = {
-              prompt,
-              imageUrls: images.slice(0, 2),
-              generationType: 'FIRST_AND_LAST_FRAMES_2_VIDEO',
-              aspect_ratio: (node.data.aspectRatio as Veo3ImageToVideoInput['aspect_ratio']) || '16:9',
-              model: node.data.model as Veo3ImageToVideoInput['model'],
-            };
-            input = imageInput;
-          } else {
+          const videoMode = node.data.videoMode || 'auto';
+          const hasImages = images.length > 0;
+          const shouldUseImage =
+            videoMode === 'i2v-single' ||
+            videoMode === 'i2v-reference' ||
+            (videoMode === 'auto' && hasImages);
+          const shouldUseTwo =
+            videoMode === 'i2v-reference' ||
+            (videoMode === 'auto' && images.length > 1);
+
+          if (videoMode === 't2v' || !shouldUseImage) {
             const textInput: Veo3TextToVideoInput = {
               prompt,
               generationType: 'TEXT_2_VIDEO',
@@ -975,24 +1041,77 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
               model: node.data.model as Veo3TextToVideoInput['model'],
             };
             input = textInput;
+          } else {
+            const urlList = shouldUseTwo
+              ? [frameInfo.start, frameInfo.end].filter(Boolean)
+              : [frameInfo.start].filter(Boolean);
+            if (urlList.length === 0) {
+              throw new Error('Image→Video requires at least one frame.');
+            }
+            const imageInput: Veo3ImageToVideoInput = {
+              prompt,
+              imageUrls: urlList as string[],
+              generationType: 'FIRST_AND_LAST_FRAMES_2_VIDEO',
+              aspect_ratio: (node.data.aspectRatio as Veo3ImageToVideoInput['aspect_ratio']) || '16:9',
+              model: node.data.model as Veo3ImageToVideoInput['model'],
+            };
+            input = imageInput;
           }
           const response = await generateVeo3Video(input);
+          if (!response || response.code !== 200 || !response.data?.taskId) {
+            throw new Error(response?.msg || 'Task creation failed.');
+          }
           taskId = response.data?.taskId || '';
-        } else {
-          const response = await createTask(apiKey, 'sora-2-text-to-video', {
+        } else if (node.data.model === 'grok-imagine/image-to-video') {
+          const videoMode = node.data.videoMode || 'auto';
+          if (videoMode === 't2v') {
+            throw new Error('Grok Image→Video requires a reference image.');
+          }
+          if (!frameInfo.start) {
+            throw new Error('Grok Image→Video requires at least one image.');
+          }
+          if (videoMode === 'i2v-reference' && frameInfo.end && frameInfo.end !== frameInfo.start) {
+            addLog('Grok supports single reference image. Using start frame only.');
+          }
+          const response = await createTask(apiKey, 'grok-imagine/image-to-video', {
+            image_urls: [frameInfo.start],
             prompt,
+            mode: 'normal',
           });
           if (!response || response.code !== 200 || !response.data?.taskId) {
             throw new Error(response?.msg || 'Task creation failed.');
           }
           taskId = response.data.taskId;
+        } else {
+          const videoMode = node.data.videoMode || 'auto';
+          const useImages = (videoMode === 'i2v-single' || videoMode === 'i2v-reference' || (videoMode === 'auto' && frameInfo.start));
+          if (useImages && frameInfo.start) {
+            const aspect = node.data.aspectRatio === '9:16' ? 'portrait' : 'landscape';
+            const response = await createTask(apiKey, 'sora-2-image-to-video', {
+              prompt,
+              image_urls: [frameInfo.start],
+              aspect_ratio: aspect,
+            });
+            if (!response || response.code !== 200 || !response.data?.taskId) {
+              throw new Error(response?.msg || 'Task creation failed.');
+            }
+            taskId = response.data.taskId;
+          } else {
+            const response = await createTask(apiKey, 'sora-2-text-to-video', {
+              prompt,
+            });
+            if (!response || response.code !== 200 || !response.data?.taskId) {
+              throw new Error(response?.msg || 'Task creation failed.');
+            }
+            taskId = response.data.taskId;
+          }
         }
 
         if (!taskId) {
           throw new Error('Failed to create video task.');
         }
 
-        const resultUrl = await pollTaskForResult(taskId);
+        const resultUrl = await pollTaskForResult(taskId, node.data.model?.startsWith('veo3') ? 'veo' : 'jobs');
         let storedUrl = resultUrl;
         try {
           storedUrl = await uploadOutputUrlToSupabase(resultUrl, 'video');
@@ -1325,11 +1444,49 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
                         ? 'Reference images detected — running Image→Image (Nano Banana Edit).'
                         : 'No reference images connected — running Text→Image.'}
                     </div>
+                    <select
+                      value={selectedNode.data.videoFrameRole || 'none'}
+                      onChange={(e) =>
+                        updateNodeData(selectedNode.id, {
+                          videoFrameRole: e.target.value as 'none' | 'start' | 'end',
+                        })
+                      }
+                      className={`w-full px-3 py-2 rounded-lg text-xs border ${
+                        isDark ? 'bg-zinc-900 border-zinc-800 text-zinc-200' : 'bg-white border-zinc-200'
+                      }`}
+                    >
+                      <option value="none">Video Frame: None</option>
+                      <option value="start">Video Frame: Start</option>
+                      <option value="end">Video Frame: End</option>
+                    </select>
                   </>
                 )}
 
                 {selectedNode.type === 'video' && (
                   <>
+                    <div className="flex gap-2">
+                      {(['auto', 't2v', 'i2v-single', 'i2v-reference'] as const).map((mode) => (
+                        <button
+                          key={mode}
+                          onClick={() => updateNodeData(selectedNode.id, { videoMode: mode })}
+                          className={`flex-1 px-2 py-2 rounded-lg text-[10px] border ${
+                            selectedNode.data.videoMode === mode
+                              ? 'border-emerald-500/60 text-emerald-200'
+                              : isDark
+                              ? 'border-zinc-800 text-zinc-400'
+                              : 'border-zinc-200 text-zinc-600'
+                          }`}
+                        >
+                          {mode === 'auto'
+                            ? 'Auto'
+                            : mode === 't2v'
+                            ? 'Text→Video'
+                            : mode === 'i2v-single'
+                            ? 'I2V Single'
+                            : 'I2V Ref (2)'}
+                        </button>
+                      ))}
+                    </div>
                     <select
                       value={selectedNode.data.model || 'veo3_fast'}
                       onChange={(e) => updateNodeData(selectedNode.id, { model: e.target.value })}
@@ -1340,6 +1497,7 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
                       <option value="veo3_fast">Veo3 Fast</option>
                       <option value="veo3">Veo3 Quality</option>
                       <option value="sora-2-text-to-video">Sora2 Text-to-Video</option>
+                      <option value="grok-imagine/image-to-video">Grok Image→Video</option>
                     </select>
                     <select
                       value={selectedNode.data.aspectRatio || '16:9'}
@@ -1352,6 +1510,15 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
                       <option value="9:16">9:16</option>
                       <option value="Auto">Auto</option>
                     </select>
+                    <div className="text-[10px] text-zinc-500">
+                      {selectedNode.data.videoMode === 't2v'
+                        ? 'Forced Text→Video.'
+                        : selectedNode.data.videoMode === 'i2v-single'
+                        ? 'Forced Image→Video (single frame).'
+                        : selectedNode.data.videoMode === 'i2v-reference'
+                        ? 'Forced Image→Video (start + end).'
+                        : 'Auto: uses images if connected, otherwise text.'}
+                    </div>
                   </>
                 )}
 
@@ -1382,6 +1549,23 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
                       <option value="subject">Role: Subject</option>
                       <option value="object">Role: Object</option>
                     </select>
+                    {selectedNode.data.assetType === 'image' && (
+                      <select
+                        value={selectedNode.data.videoFrameRole || 'none'}
+                        onChange={(e) =>
+                          updateNodeData(selectedNode.id, {
+                            videoFrameRole: e.target.value as 'none' | 'start' | 'end',
+                          })
+                        }
+                        className={`w-full px-3 py-2 rounded-lg text-xs border ${
+                          isDark ? 'bg-zinc-900 border-zinc-800 text-zinc-200' : 'bg-white border-zinc-200'
+                        }`}
+                      >
+                        <option value="none">Video Frame: None</option>
+                        <option value="start">Video Frame: Start</option>
+                        <option value="end">Video Frame: End</option>
+                      </select>
+                    )}
                     <input
                       type="file"
                       accept={selectedNode.data.assetType === 'video' ? 'video/*' : 'image/*'}
