@@ -51,6 +51,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, o
                   rel="noreferrer"
                   className="text-orange-400 hover:text-orange-300 underline"
                 >CLICK HERE</a>
+                <span className="ml-2">Kalau mau dapat 100 kredit gratis klik link ini.</span>
               </p>
               <div className="relative">
                 <input 
