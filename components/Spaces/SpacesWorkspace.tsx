@@ -78,6 +78,7 @@ const defaultNodeData = (type: SpaceNodeType): SpaceNodeData => {
         model: 'veo3_fast',
         aspectRatio: '16:9',
         videoMode: 'auto',
+        videoUpscale: false,
       };
     case 'upload':
       return {
@@ -1484,6 +1485,7 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
         const frameInfo = resolveVideoFrames(nodeId);
         const images = frameInfo.list;
         let taskId = '';
+        let provider: 'jobs' | 'veo' = 'jobs';
         if (node.data.model?.startsWith('veo3')) {
           let input: Veo3Input;
           const videoMode = node.data.videoMode || 'auto';
@@ -1525,6 +1527,7 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
             throw new Error(response?.msg || 'Task creation failed.');
           }
           taskId = response.data?.taskId || '';
+          provider = 'veo';
         } else if (node.data.model === 'grok-imagine/image-to-video') {
           const videoMode = node.data.videoMode || 'auto';
           if (videoMode === 't2v') {
@@ -1545,6 +1548,7 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
             throw new Error(response?.msg || 'Task creation failed.');
           }
           taskId = response.data.taskId;
+          provider = 'jobs';
         } else {
           const videoMode = node.data.videoMode || 'auto';
           const useImages = (videoMode === 'i2v-single' || videoMode === 'i2v-reference' || (videoMode === 'auto' && frameInfo.start));
@@ -1559,6 +1563,7 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
               throw new Error(response?.msg || 'Task creation failed.');
             }
             taskId = response.data.taskId;
+            provider = 'jobs';
           } else {
             const response = await createTask(apiKey, 'sora-2-text-to-video', {
               prompt,
@@ -1567,6 +1572,7 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
               throw new Error(response?.msg || 'Task creation failed.');
             }
             taskId = response.data.taskId;
+            provider = 'jobs';
           }
         }
 
@@ -1574,7 +1580,22 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
           throw new Error('Failed to create video task.');
         }
 
-        const resultUrl = await pollTaskForResult(taskId, node.data.model?.startsWith('veo3') ? 'veo' : 'jobs');
+        const baseResultUrl = await pollTaskForResult(taskId, provider);
+        let resultUrl = baseResultUrl;
+        let upscaleTaskId: string | undefined;
+        if (node.data.videoUpscale) {
+          if (provider !== 'jobs') {
+            addLog('Grok Upscale requires Kie AI task_id. Skipping for this provider.');
+          } else {
+            const upscaleResponse = await createTask(apiKey, 'grok-imagine/upscale', { task_id: taskId });
+            if (!upscaleResponse || upscaleResponse.code !== 200 || !upscaleResponse.data?.taskId) {
+              throw new Error(upscaleResponse?.msg || 'Upscale task creation failed.');
+            }
+            upscaleTaskId = upscaleResponse.data.taskId;
+            resultUrl = await pollTaskForResult(upscaleTaskId, 'jobs');
+          }
+        }
+
         let storedUrl = resultUrl;
         try {
           storedUrl = await uploadOutputUrlToSupabase(resultUrl, 'video');
@@ -1587,7 +1608,14 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
           output: {
             contentType: 'video',
             url: storedUrl,
-            metadata: { sourceUrl: resultUrl, taskId, model: node.data.model },
+            metadata: {
+              sourceUrl: baseResultUrl,
+              taskId,
+              model: node.data.model,
+              provider,
+              upscaleTaskId,
+              upscaleUrl: node.data.videoUpscale ? resultUrl : undefined,
+            },
           },
         });
         return;
@@ -2049,6 +2077,28 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
                       <option value="9:16">9:16</option>
                       <option value="Auto">Auto</option>
                     </select>
+                    <div className="flex items-center justify-between rounded-lg border px-3 py-2 text-xs">
+                      <span className="text-zinc-400">Grok Upscale</span>
+                      <button
+                        onClick={() => updateNodeData(selectedNode.id, { videoUpscale: !selectedNode.data.videoUpscale })}
+                        className={`w-11 h-6 rounded-full transition-colors relative ${
+                          selectedNode.data.videoUpscale
+                            ? 'bg-emerald-500/80'
+                            : isDark
+                            ? 'bg-zinc-800'
+                            : 'bg-zinc-200'
+                        }`}
+                      >
+                        <span
+                          className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${
+                            selectedNode.data.videoUpscale ? 'left-6' : 'left-1'
+                          }`}
+                        />
+                      </button>
+                    </div>
+                    <div className="text-[10px] text-zinc-500">
+                      Requires Kie AI task_id (Sora/Grok). Veo tasks will skip upscale.
+                    </div>
                     <div className="text-[10px] text-zinc-500">
                       {selectedNode.data.videoMode === 't2v'
                         ? 'Forced Text→Video.'
