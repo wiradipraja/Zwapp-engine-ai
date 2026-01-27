@@ -26,6 +26,7 @@ export interface SpaceNodeData {
   status: SpaceNodeStatus;
   prompt?: string;
   instructions?: string;
+  taskId?: string;
   model?: string;
   aspectRatio?: string;
   imageMode?: 'auto' | 't2i' | 'i2i';

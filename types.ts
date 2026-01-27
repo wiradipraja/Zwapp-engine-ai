@@ -178,6 +178,11 @@ export interface GrokTextToImageInput {
   aspect_ratio?: '2:3' | '3:2' | '1:1' | '9:16' | '16:9';
 }
 
+// Grok Upscale
+export interface GrokUpscaleInput {
+  task_id: string;
+}
+
 // ==================== VEO 3.1 API Types ====================
 // According to KIE.AI API Documentation
 // Endpoint: POST https://api.kie.ai/api/v1/veo/generate
@@ -228,7 +233,7 @@ export type Veo3Input = Veo3TextToVideoInput | Veo3ImageToVideoInput | Veo3Refer
 
 export interface CreateTaskRequest {
   model: string; 
-  input: MotionControlInput | NanoBananaInput | ImageEditInput | ZImageInput | Flux2Input | Sora2Input | GrokImageToVideoInput | GrokImageToImageInput | GrokTextToImageInput;
+  input: MotionControlInput | NanoBananaInput | ImageEditInput | ZImageInput | Flux2Input | Sora2Input | GrokImageToVideoInput | GrokImageToImageInput | GrokTextToImageInput | GrokUpscaleInput;
   callBackUrl?: string;
 }
 

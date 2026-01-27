@@ -35,6 +35,7 @@ import type {
   Flux2FlexTextInput,
   GrokImageToImageInput,
   GrokTextToImageInput,
+  GrokUpscaleInput,
   QwenTextToImageInput,
   ZImageInput,
   Veo3ImageToVideoInput,
@@ -398,6 +399,7 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
   );
   const selectedImageModel = selectedNode?.type === 'image' ? (selectedNode.data.model || 'google/nano-banana') : 'google/nano-banana';
   const selectedImageCaps = selectedNode?.type === 'image' ? getImageModelCapabilities(selectedImageModel) : { t2i: true, i2i: false };
+  const selectedImageIsUpscale = selectedNode?.type === 'image' && selectedNode.data.model === 'grok-imagine/upscale';
 
   const [logs, setLogs] = useState<string[]>([]);
   const [outputPreview, setOutputPreview] = useState<SpaceNodeOutput | null>(null);
@@ -797,6 +799,22 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
     return Array.from(new Set(urls));
   };
 
+  const resolveUpstreamTaskId = (nodeId: string) => {
+    const upstream = getUpstreamNodes(nodeId);
+    const candidates = upstream
+      .map((node) => {
+        const metadata = node.data.output?.metadata as { taskId?: string; model?: string } | undefined;
+        return {
+          taskId: metadata?.taskId,
+          model: metadata?.model,
+        };
+      })
+      .filter((item) => typeof item.taskId === 'string' && item.taskId);
+
+    const grokCandidate = candidates.find((item) => (item.model || '').startsWith('grok-imagine/'));
+    return (grokCandidate?.taskId || '') as string;
+  };
+
   const normalizeReferenceImages = async (urls: string[]) => {
     const normalized: string[] = [];
     for (const url of urls) {
@@ -952,12 +970,16 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
     return '1:1';
   };
 
+  const isGrokUpscaleModel = (model?: string) => model === 'grok-imagine/upscale';
+
   function getImageModelCapabilities(model: string) {
     switch (model) {
       case 'google/nano-banana':
         return { t2i: true, i2i: true };
       case 'grok-imagine/image-to-image':
         return { t2i: false, i2i: true };
+      case 'grok-imagine/upscale':
+        return { t2i: false, i2i: false };
       default:
         return { t2i: true, i2i: false };
     }
@@ -1110,13 +1132,46 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
       }
 
       if (node.type === 'image') {
+        const selectedModel = node.data.model || 'google/nano-banana';
+        const baseModel = selectedModel === 'google/nano-banana-edit' ? 'google/nano-banana' : selectedModel;
+
+        if (baseModel === 'grok-imagine/upscale') {
+          const manualTaskId = (node.data.taskId || '').trim();
+          const upstreamTaskId = manualTaskId ? '' : resolveUpstreamTaskId(nodeId);
+          const sourceTaskId = manualTaskId || upstreamTaskId;
+          if (!sourceTaskId) {
+            throw new Error('Grok Upscale requires a task_id from a Grok image task.');
+          }
+          addLog(`Grok Upscale: using task ${sourceTaskId.slice(-6)}`);
+          const payload: GrokUpscaleInput = { task_id: sourceTaskId };
+          const response = await createTask(apiKey, 'grok-imagine/upscale', payload);
+          if (!response || response.code !== 200 || !response.data?.taskId) {
+            throw new Error(response?.msg || 'Task creation failed.');
+          }
+          const upscaleTaskId = response.data.taskId;
+          const resultUrl = await pollTaskForResult(upscaleTaskId, 'jobs');
+          let storedUrl = resultUrl;
+          try {
+            storedUrl = await uploadOutputUrlToSupabase(resultUrl, 'image');
+          } catch (error: any) {
+            addLog(`Supabase upload failed, using source URL. ${error.message}`);
+          }
+          updateNodeData(nodeId, {
+            status: 'success',
+            output: {
+              contentType: 'image',
+              url: storedUrl,
+              metadata: { sourceUrl: resultUrl, taskId: upscaleTaskId, model: 'grok-imagine/upscale', sourceTaskId },
+            },
+          });
+          return;
+        }
+
         const incomingImages = resolveReferenceImages(nodeId);
         const { subjectUrls, objectUrls } = resolveUploadReferences(nodeId);
         const orderedReferenceImages = Array.from(new Set([...subjectUrls, ...objectUrls, ...incomingImages]));
         const normalizedReferenceImages = await normalizeReferenceImages(orderedReferenceImages);
         const hasReferences = normalizedReferenceImages.length > 0;
-        const selectedModel = node.data.model || 'google/nano-banana';
-        const baseModel = selectedModel === 'google/nano-banana-edit' ? 'google/nano-banana' : selectedModel;
         const imageMode = node.data.imageMode || 'auto';
         const caps = getImageModelCapabilities(baseModel);
 
@@ -1233,7 +1288,7 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
           output: {
             contentType: 'image',
             url: storedUrl,
-            metadata: { sourceUrl: resultUrl },
+            metadata: { sourceUrl: resultUrl, taskId, model },
           },
         });
         return;
@@ -1351,7 +1406,7 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
           output: {
             contentType: 'video',
             url: storedUrl,
-            metadata: { sourceUrl: resultUrl },
+            metadata: { sourceUrl: resultUrl, taskId, model: node.data.model },
           },
         });
         return;
@@ -1622,7 +1677,10 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
                   }`}
                 />
 
-                {(selectedNode.type === 'prompt' || selectedNode.type === 'script' || selectedNode.type === 'image' || selectedNode.type === 'video') && (
+                {(selectedNode.type === 'prompt' ||
+                  selectedNode.type === 'script' ||
+                  selectedNode.type === 'video' ||
+                  (selectedNode.type === 'image' && !selectedImageIsUpscale)) && (
                   <textarea
                     value={selectedNode.data.prompt || ''}
                     onChange={(e) => updateNodeData(selectedNode.id, { prompt: e.target.value })}
@@ -1636,37 +1694,43 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
 
                 {selectedNode.type === 'image' && (
                   <>
-                    <div className="flex gap-2">
-                      {(['auto', 't2i', 'i2i'] as const).map((mode) => (
-                        <button
-                          key={mode}
-                          onClick={() => updateNodeData(selectedNode.id, { imageMode: mode })}
-                          className={`flex-1 px-2 py-2 rounded-lg text-[10px] border ${
-                            selectedNode.data.imageMode === mode
-                              ? 'border-emerald-500/60 text-emerald-200'
-                              : isDark
-                              ? 'border-zinc-800 text-zinc-400'
-                              : 'border-zinc-200 text-zinc-600'
-                          }`}
-                        >
-                          {mode === 'auto' ? 'Auto' : mode === 't2i' ? 'Force T2I' : 'Force I2I'}
-                        </button>
-                      ))}
-                    </div>
+                    {!selectedImageIsUpscale && (
+                      <div className="flex gap-2">
+                        {(['auto', 't2i', 'i2i'] as const).map((mode) => (
+                          <button
+                            key={mode}
+                            onClick={() => updateNodeData(selectedNode.id, { imageMode: mode })}
+                            className={`flex-1 px-2 py-2 rounded-lg text-[10px] border ${
+                              selectedNode.data.imageMode === mode
+                                ? 'border-emerald-500/60 text-emerald-200'
+                                : isDark
+                                ? 'border-zinc-800 text-zinc-400'
+                                : 'border-zinc-200 text-zinc-600'
+                            }`}
+                          >
+                            {mode === 'auto' ? 'Auto' : mode === 't2i' ? 'Force T2I' : 'Force I2I'}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                     <select
                       value={selectedNode.data.model || 'google/nano-banana'}
                       onChange={(e) => {
                         const nextModel = e.target.value;
-                        const nextCaps = getImageModelCapabilities(nextModel);
                         const patch: Partial<SpaceNodeData> = { model: nextModel };
-                        if (!nextCaps.i2i && selectedNode.data.imageMode === 'i2i') {
-                          patch.imageMode = 't2i';
-                        }
-                        if (!nextCaps.t2i && selectedNode.data.imageMode === 't2i') {
-                          patch.imageMode = 'i2i';
-                        }
-                        if (nextCaps.i2i && !nextCaps.t2i) {
-                          patch.imageMode = 'i2i';
+                        if (isGrokUpscaleModel(nextModel)) {
+                          patch.imageMode = 'auto';
+                        } else {
+                          const nextCaps = getImageModelCapabilities(nextModel);
+                          if (!nextCaps.i2i && selectedNode.data.imageMode === 'i2i') {
+                            patch.imageMode = 't2i';
+                          }
+                          if (!nextCaps.t2i && selectedNode.data.imageMode === 't2i') {
+                            patch.imageMode = 'i2i';
+                          }
+                          if (nextCaps.i2i && !nextCaps.t2i) {
+                            patch.imageMode = 'i2i';
+                          }
                         }
                         updateNodeData(selectedNode.id, patch);
                       }}
@@ -1681,24 +1745,47 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
                       <option value="flux-2/flex-text-to-image">Flux 2 Flex Text→Image</option>
                       <option value="grok-imagine/image-to-image">Grok Imagine Image→Image</option>
                       <option value="grok-imagine/text-to-image">Grok Imagine Text→Image</option>
+                      <option value="grok-imagine/upscale">Grok Imagine Upscale</option>
                     </select>
-                    <select
-                      value={selectedNode.data.aspectRatio || '1:1'}
-                      onChange={(e) => updateNodeData(selectedNode.id, { aspectRatio: e.target.value })}
-                      className={`w-full px-3 py-2 rounded-lg text-xs border ${
-                        isDark ? 'bg-zinc-900 border-zinc-800 text-zinc-200' : 'bg-white border-zinc-200'
-                      }`}
-                    >
-                      <option value="1:1">1:1</option>
-                      <option value="9:16">9:16</option>
-                      <option value="16:9">16:9</option>
-                      <option value="3:4">3:4</option>
-                      <option value="4:3">4:3</option>
-                      <option value="2:3">2:3</option>
-                      <option value="3:2">3:2</option>
-                    </select>
+                    {selectedImageIsUpscale && (
+                      <div>
+                        <label className={`block text-[10px] font-mono mb-1 ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>
+                          GROK TASK ID
+                        </label>
+                        <input
+                          value={selectedNode.data.taskId || ''}
+                          onChange={(e) => updateNodeData(selectedNode.id, { taskId: e.target.value })}
+                          placeholder="Paste Grok task_id"
+                          className={`w-full px-3 py-2 rounded-lg text-xs border ${
+                            isDark ? 'bg-zinc-900 border-zinc-800 text-zinc-200' : 'bg-white border-zinc-200'
+                          }`}
+                        />
+                        <div className="text-[10px] text-zinc-500 mt-1">
+                          If empty, uses the closest upstream Grok task_id.
+                        </div>
+                      </div>
+                    )}
+                    {!selectedImageIsUpscale && (
+                      <select
+                        value={selectedNode.data.aspectRatio || '1:1'}
+                        onChange={(e) => updateNodeData(selectedNode.id, { aspectRatio: e.target.value })}
+                        className={`w-full px-3 py-2 rounded-lg text-xs border ${
+                          isDark ? 'bg-zinc-900 border-zinc-800 text-zinc-200' : 'bg-white border-zinc-200'
+                        }`}
+                      >
+                        <option value="1:1">1:1</option>
+                        <option value="9:16">9:16</option>
+                        <option value="16:9">16:9</option>
+                        <option value="3:4">3:4</option>
+                        <option value="4:3">4:3</option>
+                        <option value="2:3">2:3</option>
+                        <option value="3:2">3:2</option>
+                      </select>
+                    )}
                     <div className="text-[10px] text-zinc-500">
-                      {selectedNode.data.imageMode === 't2i'
+                      {selectedImageIsUpscale
+                        ? 'Upscale uses Grok task_id. Provide one or connect a Grok image node.'
+                        : selectedNode.data.imageMode === 't2i'
                         ? selectedImageCaps.t2i
                           ? 'Forced Text→Image mode.'
                           : 'Selected model does not support Text→Image.'
