@@ -1826,7 +1826,10 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
           </ReactFlow>
         </div>
 
-        <div className={`w-80 border-l ${isDark ? 'border-zinc-800 bg-zinc-950' : 'border-zinc-200 bg-white'}`}>
+        <div
+          className={`w-80 border-l ${isDark ? 'border-zinc-800 bg-zinc-950' : 'border-zinc-200 bg-white'}`}
+          onWheel={(event) => event.stopPropagation()}
+        >
           <div className="px-4 py-4 space-y-4 overflow-y-auto h-full">
             <h4 className="text-xs font-mono text-zinc-500 uppercase tracking-widest">Inspector</h4>
             {!selectedNode && (
