@@ -150,10 +150,22 @@ const cameraPresets = [
     snippet: 'Handheld phone camera, natural lighting, candid UGC realism, slight motion blur, real skin texture.',
   },
   {
+    id: 'ugc-clean',
+    label: 'UGC Clean',
+    description: 'Phone camera, clean framing, soft natural light.',
+    snippet: 'Clean UGC framing, phone camera, soft natural daylight, realistic skin texture, minimal motion blur.',
+  },
+  {
     id: 'cinematic',
     label: 'Cinematic',
     description: 'Filmic lighting, shallow depth, dramatic mood.',
     snippet: 'Cinematic lighting, shallow depth of field, filmic contrast, soft roll-off highlights.',
+  },
+  {
+    id: 'docu',
+    label: 'Documentary',
+    description: 'Natural handheld, authentic, slightly imperfect.',
+    snippet: 'Documentary handheld camera, natural color, subtle motion, authentic unpolished realism.',
   },
   {
     id: 'studio',
@@ -162,10 +174,22 @@ const cameraPresets = [
     snippet: 'Studio softbox lighting, clean backdrop, product-focused composition, crisp detail.',
   },
   {
+    id: 'fashion',
+    label: 'Fashion Editorial',
+    description: 'High-end editorial lighting and styling.',
+    snippet: 'Fashion editorial lighting, controlled highlights, soft shadows, premium commercial styling.',
+  },
+  {
     id: 'lifestyle',
     label: 'Lifestyle',
     description: 'Natural lifestyle scene, warm tone.',
     snippet: 'Lifestyle photography, natural window light, warm tones, candid everyday scene.',
+  },
+  {
+    id: 'product',
+    label: 'Product Close-Up',
+    description: 'Macro detail, clean focus, minimal background.',
+    snippet: 'Close-up product shot, macro detail, sharp focus, minimal background, clean highlights.',
   },
 ];
 
@@ -1951,32 +1975,44 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
                 )}
 
                 {selectedNode.type === 'camera' && (
-                  <div className="space-y-2">
-                    {cameraPresets.map((preset) => (
-                      <button
-                        key={preset.id}
-                        onClick={() =>
-                          updateNodeData(selectedNode.id, {
-                            presetId: preset.id,
-                            status: 'success',
-                            output: { contentType: 'text', text: preset.snippet, metadata: { kind: 'camera_preset' } },
-                          })
-                        }
-                        className={`w-full text-left px-3 py-2 rounded-lg text-xs border ${
-                          selectedNode.data.presetId === preset.id
-                            ? 'border-emerald-500/50 text-emerald-200'
-                            : isDark
-                            ? 'border-zinc-800 text-zinc-300'
-                            : 'border-zinc-200 text-zinc-700'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between">
-                          <span className="font-semibold">{preset.label}</span>
-                          <span className="text-[10px] text-zinc-500">Image</span>
+                  <div className="space-y-3">
+                    <select
+                      value={selectedNode.data.presetId || cameraPresets[0].id}
+                      onChange={(e) => {
+                        const preset = cameraPresets.find((item) => item.id === e.target.value) || cameraPresets[0];
+                        updateNodeData(selectedNode.id, {
+                          presetId: preset.id,
+                          status: 'success',
+                          output: { contentType: 'text', text: preset.snippet, metadata: { kind: 'camera_preset' } },
+                        });
+                      }}
+                      className={`w-full px-3 py-2 rounded-lg text-xs border ${
+                        isDark ? 'bg-zinc-900 border-zinc-800 text-zinc-200' : 'bg-white border-zinc-200'
+                      }`}
+                    >
+                      {cameraPresets.map((preset) => (
+                        <option key={preset.id} value={preset.id}>
+                          {preset.label}
+                        </option>
+                      ))}
+                    </select>
+                    {(() => {
+                      const preset = cameraPresets.find((item) => item.id === (selectedNode.data.presetId || cameraPresets[0].id)) || cameraPresets[0];
+                      return (
+                        <div className={`rounded-lg border px-3 py-2 text-[10px] ${
+                          isDark ? 'border-zinc-800 text-zinc-400' : 'border-zinc-200 text-zinc-600'
+                        }`}>
+                          <div className={`text-xs font-semibold ${isDark ? 'text-zinc-200' : 'text-zinc-800'}`}>
+                            {preset.label}
+                          </div>
+                          <div className="mt-1">{preset.description}</div>
+                          <div className="mt-2 text-[10px] text-zinc-500">Prompt snippet:</div>
+                          <div className="mt-1 whitespace-pre-wrap text-[10px] text-zinc-400">
+                            {preset.snippet}
+                          </div>
                         </div>
-                        <div className="text-[10px] text-zinc-500">{preset.description}</div>
-                      </button>
-                    ))}
+                      );
+                    })()}
                   </div>
                 )}
 
