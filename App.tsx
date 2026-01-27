@@ -31,7 +31,6 @@ import { StatusTerminal } from './components/StatusTerminal';
 import { QueueList } from './components/QueueList';
 import { AuthForm } from './components/AuthForm';
 import { SettingsModal } from './components/SettingsModal';
-import UGCOrchestrationWorkspace from './components/UGC/UGCOrchestrationWorkspace';
 import SpacesWorkspace from './components/Spaces/SpacesWorkspace';
 import Sidebar, { MenuSection, ModuleType } from './components/layout/Sidebar';
 import PublicLanding from './components/layout/PublicLanding';
@@ -55,7 +54,6 @@ const AppContent: React.FC = () => {
 
   // App State
   const [apiKey, setApiKey] = useState('');
-  const [googleApiKey, setGoogleApiKey] = useState('');
   const [tasks, setTasks] = useState<LocalTask[]>([]);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [logs, setLogs] = useState<string[]>([]);
@@ -107,10 +105,6 @@ const AppContent: React.FC = () => {
     if (storedKey) {
         setApiKey(storedKey);
     }
-    const storedGoogleKey = localStorage.getItem('google_gemini_api_key');
-    if (storedGoogleKey) {
-        setGoogleApiKey(storedGoogleKey);
-    }
 
     return () => subscription.unsubscribe();
   }, []);
@@ -153,14 +147,11 @@ const AppContent: React.FC = () => {
     }
   };
 
-  const handleSaveApiKey = (kieKey: string, googleKey: string) => {
+  const handleSaveApiKey = (kieKey: string) => {
       setApiKey(kieKey);
       localStorage.setItem('kie_api_key', kieKey);
       
-      setGoogleApiKey(googleKey);
-      localStorage.setItem('google_gemini_api_key', googleKey);
-      
-      addLog('System Configuration Updated: API Keys Saved.');
+      addLog('System Configuration Updated: API Key Saved.');
   };
 
   const handleLogout = async () => {
@@ -427,8 +418,6 @@ const AppContent: React.FC = () => {
         return <GrokTextToImageForm onSubmit={handleCreateTask} isLoading={isSubmitting} />;
       case 'grok-image-to-image':
         return <GrokImageToImageForm onSubmit={handleCreateTask} isLoading={isSubmitting} apiKey={apiKey} />;
-      case 'ugc':
-        return null; // UGC has its own workspace in the right panel
       case 'spaces':
         return null; // Spaces has its own workspace in the right panel
       default:
@@ -462,7 +451,6 @@ const AppContent: React.FC = () => {
       'veo3-text-to-video': 'Veo 3.1 Text→Video',
       'veo3-image-to-video': 'Veo 3.1 Image→Video',
       'veo3-reference-to-video': 'Veo 3.1 Reference→Video',
-      'ugc': 'UGC AI Studio',
       'spaces': 'Spaces Studio',
       'grok-image-to-video': 'Grok Image→Video',
       'grok-text-to-image': 'Grok Text→Image',
@@ -524,7 +512,6 @@ const AppContent: React.FC = () => {
         onClose={() => setIsSettingsOpen(false)} 
         onSave={handleSaveApiKey}
         currentKey={apiKey}
-        currentGoogleKey={googleApiKey}
       />
 
       {/* Sidebar - Narrow icon-based */}
@@ -585,19 +572,11 @@ const AppContent: React.FC = () => {
 
         {/* Content */}
         <div className="flex">
-          {activeModule === 'ugc' ? (
-            <div className="flex-1 p-6">
-              <UGCOrchestrationWorkspace
-                apiKey={apiKey}
-                googleApiKey={googleApiKey}
-                onOpenSettings={() => setIsSettingsOpen(true)}
-              />
-            </div>
-          ) : activeModule === 'spaces' ? (
+          {activeModule === 'spaces' ? (
             <div className="flex-1">
               <SpacesWorkspace
                 apiKey={apiKey}
-                googleApiKey={googleApiKey}
+                googleApiKey=""
                 onOpenSettings={() => setIsSettingsOpen(true)}
               />
             </div>

@@ -1,10 +1,6 @@
 {
   "rewrites": [
     {
-      "source": "/api/proxy-gemini/:path*",
-      "destination": "https://api.kie.ai/:path*"
-    },
-    {
       "source": "/api/proxy/veo/:path*",
       "destination": "https://api.kie.ai/api/v1/veo/:path*"
     },
