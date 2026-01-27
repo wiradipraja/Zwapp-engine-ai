@@ -1,10 +1,10 @@
-import { CreateTaskRequest, CreateTaskResponse, QueryTaskResponse, MotionControlInput, NanoBananaInput, ImageEditInput, ZImageInput, Flux2ProTextInput, Flux2ProImageInput, Flux2FlexTextInput, Flux2FlexImageInput, Sora2Input, GrokImageToVideoInput, GrokImageToImageInput, GrokTextToImageInput } from '../types';
+import { CreateTaskRequest, CreateTaskResponse, QueryTaskResponse, MotionControlInput, NanoBananaInput, ImageEditInput, ZImageInput, Flux2ProTextInput, Flux2ProImageInput, Flux2FlexTextInput, Flux2FlexImageInput, Sora2Input, GrokImageToVideoInput, GrokImageToImageInput, GrokTextToImageInput, GrokUpscaleInput } from '../types';
 
 // MENGGUNAKAN PROXY VERCEL (lihat vercel.json)
 // Ini menghindari masalah CORS yang sering membuat request "stuck" di browser.
 const BASE_URL = '/api/proxy/jobs';
 
-export const createTask = async (apiKey: string, model: string, input: MotionControlInput | NanoBananaInput | ImageEditInput | ZImageInput | Flux2ProTextInput | Flux2ProImageInput | Flux2FlexTextInput | Flux2FlexImageInput | Sora2Input | GrokImageToVideoInput | GrokImageToImageInput | GrokTextToImageInput): Promise<CreateTaskResponse> => {
+export const createTask = async (apiKey: string, model: string, input: MotionControlInput | NanoBananaInput | ImageEditInput | ZImageInput | Flux2ProTextInput | Flux2ProImageInput | Flux2FlexTextInput | Flux2FlexImageInput | Sora2Input | GrokImageToVideoInput | GrokImageToImageInput | GrokTextToImageInput | GrokUpscaleInput): Promise<CreateTaskResponse> => {
   const payload: CreateTaskRequest = {
     model: model,
     input: input,

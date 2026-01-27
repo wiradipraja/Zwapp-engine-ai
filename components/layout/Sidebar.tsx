@@ -28,7 +28,8 @@ export type ModuleType =
   | 'spaces'
   | 'grok-image-to-video'
   | 'grok-image-to-image'
-  | 'grok-text-to-image';
+  | 'grok-text-to-image'
+  | 'grok-upscale';
 
 interface SubMenuItem {
   id: ModuleType;
@@ -179,6 +180,7 @@ const Sidebar: React.FC<SidebarProps> = ({
         { id: 'grok-text-to-image', label: 'Text→Image' },
         { id: 'grok-image-to-image', label: 'Image→Image' },
         { id: 'grok-image-to-video', label: 'Image→Video' },
+        { id: 'grok-upscale', label: 'Upscale' },
       ],
     },
     {
@@ -217,7 +219,7 @@ const Sidebar: React.FC<SidebarProps> = ({
       case 'veo3':
         return ['veo3-text-to-video', 'veo3-image-to-video', 'veo3-reference-to-video'].includes(module);
       case 'grok':
-        return ['grok-text-to-image', 'grok-image-to-image', 'grok-image-to-video'].includes(module);
+        return ['grok-text-to-image', 'grok-image-to-image', 'grok-image-to-video', 'grok-upscale'].includes(module);
       default:
         return false;
     }
@@ -479,3 +481,5 @@ const Sidebar: React.FC<SidebarProps> = ({
 };
 
 export default Sidebar;
+
+
