@@ -103,7 +103,11 @@ const defaultNodeData = (type: SpaceNodeType): SpaceNodeData => {
         title: 'Motion Preset',
         status: 'success',
         presetId: 'static',
-        output: { contentType: 'text', text: motionPresets[0].snippet, metadata: { kind: 'motion_preset' } },
+        output: {
+          contentType: 'text',
+          text: motionPresets.find((item) => item.id === 'static')?.snippet || motionPresets[0].snippet,
+          metadata: { kind: 'motion_preset' },
+        },
       };
     case 'angle':
       return {
@@ -194,11 +198,155 @@ const cameraPresets = [
 ];
 
 const motionPresets = [
-  { id: 'static', label: 'Static', description: 'Tripod, minimal motion.', snippet: 'Static tripod shot, minimal camera movement, stable framing.' },
-  { id: 'slow-pan', label: 'Slow Pan', description: 'Gentle horizontal pan.', snippet: 'Slow horizontal pan, smooth cinematic movement.' },
-  { id: 'push-in', label: 'Push In', description: 'Subtle dolly forward.', snippet: 'Slow push-in, subtle dolly movement toward subject.' },
-  { id: 'handheld', label: 'Handheld', description: 'Natural handheld feel.', snippet: 'Handheld camera, natural micro-shake, authentic UGC feel.' },
+  { id: 'pan_left', label: 'Pan Left', description: 'Horizontal pan to the left.', snippet: 'Slow pan left, smooth cinematic movement.' },
+  { id: 'pan_right', label: 'Pan Right', description: 'Horizontal pan to the right.', snippet: 'Slow pan right, smooth cinematic movement.' },
+  { id: 'tilt_up', label: 'Tilt Up', description: 'Vertical tilt upward.', snippet: 'Slow tilt up, reveal upward, smooth movement.' },
+  { id: 'tilt_down', label: 'Tilt Down', description: 'Vertical tilt downward.', snippet: 'Slow tilt down, reveal downward, smooth movement.' },
+  { id: 'dolly_in', label: 'Dolly In', description: 'Camera moves closer to subject.', snippet: 'Dolly in, subtle push-in, smooth cinematic movement.' },
+  { id: 'dolly_out', label: 'Dolly Out', description: 'Camera moves away from subject.', snippet: 'Dolly out, smooth pull-back movement.' },
+  { id: 'truck_left', label: 'Truck Left', description: 'Lateral move to the left.', snippet: 'Truck left, lateral move, stable framing.' },
+  { id: 'truck_right', label: 'Truck Right', description: 'Lateral move to the right.', snippet: 'Truck right, lateral move, stable framing.' },
+  { id: 'orbit_left', label: 'Orbit Left', description: 'Orbit around subject to the left.', snippet: 'Orbit left around subject, smooth arc movement.' },
+  { id: 'orbit_right', label: 'Orbit Right', description: 'Orbit around subject to the right.', snippet: 'Orbit right around subject, smooth arc movement.' },
+  { id: 'crane_up', label: 'Crane Up', description: 'Camera rises upward.', snippet: 'Crane up, vertical rise, smooth controlled movement.' },
+  { id: 'crane_down', label: 'Crane Down', description: 'Camera descends downward.', snippet: 'Crane down, gentle vertical drop, smooth movement.' },
+  { id: 'drone_forward', label: 'Drone Forward', description: 'Aerial forward motion.', snippet: 'Drone forward, smooth aerial push with depth.' },
+  { id: 'drone_down', label: 'Drone Down', description: 'Aerial descent.', snippet: 'Drone down, smooth aerial descent.' },
+  { id: 'handheld_micro', label: 'Handheld Micro', description: 'Natural micro shake.', snippet: 'Handheld micro-shake, subtle natural movement.' },
+  { id: 'static', label: 'Static', description: 'Locked-off shot, no movement.', snippet: 'Static tripod shot, no camera movement, stable framing.' },
 ];
+
+const motionGroups = [
+  { id: 'Pan', items: ['pan_left', 'pan_right'] },
+  { id: 'Tilt', items: ['tilt_up', 'tilt_down'] },
+  { id: 'Dolly', items: ['dolly_in', 'dolly_out'] },
+  { id: 'Truck', items: ['truck_left', 'truck_right'] },
+  { id: 'Orbit', items: ['orbit_left', 'orbit_right'] },
+  { id: 'Crane', items: ['crane_up', 'crane_down'] },
+  { id: 'Drone', items: ['drone_forward', 'drone_down'] },
+  { id: 'Handheld', items: ['handheld_micro'] },
+  { id: 'Static', items: ['static'] },
+];
+
+const getMotionPreset = (id: string) => motionPresets.find((preset) => preset.id === id);
+
+const getMotionDiagram = (id: string) => {
+  const stroke = '#00FFD1';
+  const bg = '#0b0f1a';
+  const text = id.replace(/_/g, ' ').toUpperCase();
+  const arrowLeft = `<polygon points="60,45 74,38 74,52" fill="${stroke}" />`;
+  const arrowRight = `<polygon points="180,45 166,38 166,52" fill="${stroke}" />`;
+  const arrowUp = `<polygon points="120,20 112,34 128,34" fill="${stroke}" />`;
+  const arrowDown = `<polygon points="120,70 112,56 128,56" fill="${stroke}" />`;
+
+  let path = '';
+  let circle = '';
+
+  switch (id) {
+    case 'pan_left':
+    case 'truck_left':
+      path = `<line x1="180" y1="45" x2="60" y2="45" stroke="${stroke}" stroke-width="2.5" stroke-dasharray="6 6" />${arrowLeft}`;
+      circle = `<circle r="10" fill="#111" stroke="${stroke}" stroke-width="3">
+        <animate attributeName="cx" from="180" to="60" dur="1.5s" repeatCount="indefinite" />
+        <animate attributeName="cy" from="45" to="45" dur="1.5s" repeatCount="indefinite" />
+      </circle>`;
+      break;
+    case 'pan_right':
+    case 'truck_right':
+      path = `<line x1="60" y1="45" x2="180" y2="45" stroke="${stroke}" stroke-width="2.5" stroke-dasharray="6 6" />${arrowRight}`;
+      circle = `<circle r="10" fill="#111" stroke="${stroke}" stroke-width="3">
+        <animate attributeName="cx" from="60" to="180" dur="1.5s" repeatCount="indefinite" />
+        <animate attributeName="cy" from="45" to="45" dur="1.5s" repeatCount="indefinite" />
+      </circle>`;
+      break;
+    case 'tilt_up':
+      path = `<line x1="120" y1="70" x2="120" y2="20" stroke="${stroke}" stroke-width="2.5" stroke-dasharray="6 6" />${arrowUp}`;
+      circle = `<circle r="10" fill="#111" stroke="${stroke}" stroke-width="3">
+        <animate attributeName="cx" from="120" to="120" dur="1.5s" repeatCount="indefinite" />
+        <animate attributeName="cy" from="70" to="20" dur="1.5s" repeatCount="indefinite" />
+      </circle>`;
+      break;
+    case 'tilt_down':
+      path = `<line x1="120" y1="20" x2="120" y2="70" stroke="${stroke}" stroke-width="2.5" stroke-dasharray="6 6" />${arrowDown}`;
+      circle = `<circle r="10" fill="#111" stroke="${stroke}" stroke-width="3">
+        <animate attributeName="cx" from="120" to="120" dur="1.5s" repeatCount="indefinite" />
+        <animate attributeName="cy" from="20" to="70" dur="1.5s" repeatCount="indefinite" />
+      </circle>`;
+      break;
+    case 'dolly_in':
+      path = `<line x1="120" y1="20" x2="120" y2="70" stroke="${stroke}" stroke-width="2.5" stroke-dasharray="6 6" />`;
+      circle = `<circle cx="120" cy="45" r="10" fill="#111" stroke="${stroke}" stroke-width="3">
+        <animate attributeName="r" from="10" to="18" dur="1.5s" repeatCount="indefinite" />
+      </circle>`;
+      break;
+    case 'dolly_out':
+      path = `<line x1="120" y1="20" x2="120" y2="70" stroke="${stroke}" stroke-width="2.5" stroke-dasharray="6 6" />`;
+      circle = `<circle cx="120" cy="45" r="18" fill="#111" stroke="${stroke}" stroke-width="3">
+        <animate attributeName="r" from="18" to="10" dur="1.5s" repeatCount="indefinite" />
+      </circle>`;
+      break;
+    case 'orbit_left':
+    case 'orbit_right':
+      path = `<circle cx="120" cy="45" r="24" fill="none" stroke="${stroke}" stroke-width="2" stroke-dasharray="6 6" />
+        <circle cx="120" cy="45" r="4" fill="#FF0066" />`;
+      circle = `<circle r="8" fill="#111" stroke="${stroke}" stroke-width="3">
+        <animateMotion dur="2s" repeatCount="indefinite" path="M 120 45 m -24 0 a 24 24 0 1 1 48 0 a 24 24 0 1 1 -48 0" />
+      </circle>`;
+      break;
+    case 'crane_up':
+      path = `<line x1="120" y1="70" x2="120" y2="20" stroke="${stroke}" stroke-width="2.5" stroke-dasharray="6 6" />${arrowUp}`;
+      circle = `<circle r="10" fill="#111" stroke="${stroke}" stroke-width="3">
+        <animate attributeName="cx" from="120" to="120" dur="1.6s" repeatCount="indefinite" />
+        <animate attributeName="cy" from="70" to="20" dur="1.6s" repeatCount="indefinite" />
+      </circle>`;
+      break;
+    case 'crane_down':
+      path = `<line x1="120" y1="20" x2="120" y2="70" stroke="${stroke}" stroke-width="2.5" stroke-dasharray="6 6" />${arrowDown}`;
+      circle = `<circle r="10" fill="#111" stroke="${stroke}" stroke-width="3">
+        <animate attributeName="cx" from="120" to="120" dur="1.6s" repeatCount="indefinite" />
+        <animate attributeName="cy" from="20" to="70" dur="1.6s" repeatCount="indefinite" />
+      </circle>`;
+      break;
+    case 'drone_forward':
+      path = `<line x1="70" y1="65" x2="170" y2="30" stroke="${stroke}" stroke-width="2.5" stroke-dasharray="6 6" />${arrowRight}`;
+      circle = `<circle cx="70" cy="65" r="8" fill="#111" stroke="${stroke}" stroke-width="3">
+        <animate attributeName="cx" from="70" to="170" dur="2s" repeatCount="indefinite" />
+        <animate attributeName="cy" from="65" to="30" dur="2s" repeatCount="indefinite" />
+        <animate attributeName="r" from="8" to="14" dur="2s" repeatCount="indefinite" />
+      </circle>`;
+      break;
+    case 'drone_down':
+      path = `<line x1="120" y1="20" x2="120" y2="70" stroke="${stroke}" stroke-width="2.5" stroke-dasharray="6 6" />${arrowDown}`;
+      circle = `<circle cx="120" cy="20" r="9" fill="#111" stroke="${stroke}" stroke-width="3">
+        <animate attributeName="cy" from="20" to="70" dur="1.8s" repeatCount="indefinite" />
+        <animate attributeName="r" from="9" to="12" dur="1.8s" repeatCount="indefinite" />
+      </circle>`;
+      break;
+    case 'handheld_micro':
+      path = `<line x1="100" y1="45" x2="140" y2="45" stroke="${stroke}" stroke-width="2.5" stroke-dasharray="6 6" />`;
+      circle = `<circle cx="120" cy="45" r="10" fill="#111" stroke="${stroke}" stroke-width="3">
+        <animate attributeName="cx" values="118;122;119;121;118" dur="1.2s" repeatCount="indefinite" />
+        <animate attributeName="cy" values="44;46;45;43;44" dur="1.2s" repeatCount="indefinite" />
+      </circle>`;
+      break;
+    case 'static':
+    default:
+      path = `<line x1="90" y1="45" x2="150" y2="45" stroke="${stroke}" stroke-width="2.5" stroke-dasharray="6 6" />`;
+      circle = `<circle cx="120" cy="45" r="10" fill="#111" stroke="${stroke}" stroke-width="3" />`;
+      break;
+  }
+
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="240" height="90" viewBox="0 0 240 90">
+    <rect width="240" height="90" rx="8" fill="${bg}" />
+    ${path}
+    ${circle}
+    <text x="120" y="82" text-anchor="middle" fill="${stroke}" font-size="12" font-family="Arial, sans-serif">
+      ${text}
+    </text>
+  </svg>`;
+
+  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+};
 
 const anglePresets = [
   { id: 'eye', label: 'Eye Level', description: 'Neutral, natural angle.', snippet: 'Eye-level camera angle, neutral perspective.' },
@@ -260,6 +408,14 @@ const SpaceNodeCard: React.FC<NodeProps<SpaceNodeData>> = ({ data, type, selecte
         <div className="mt-2 text-[10px] text-zinc-300 line-clamp-4 whitespace-pre-wrap">
           {output.text}
         </div>
+      )}
+
+      {type === 'motion' && data.presetId && (
+        <img
+          src={getMotionDiagram(data.presetId)}
+          alt="motion preview"
+          className="mt-2 w-full h-12 object-contain rounded-md border border-white/10 bg-zinc-950"
+        />
       )}
 
       {output?.url && output.contentType === 'image' && (
@@ -428,6 +584,7 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
   const [logs, setLogs] = useState<string[]>([]);
   const [outputPreview, setOutputPreview] = useState<SpaceNodeOutput | null>(null);
   const [outputsCollapsed, setOutputsCollapsed] = useState(true);
+  const [compactMotionList, setCompactMotionList] = useState(false);
 
   const [assetModalOpen, setAssetModalOpen] = useState(false);
   const [assetModalKind, setAssetModalKind] = useState<'image' | 'video'>('image');
@@ -2017,34 +2174,70 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
                 )}
 
                 {selectedNode.type === 'motion' && (
-                  <div className="space-y-2">
-                    {motionPresets.map((preset) => (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] uppercase tracking-widest text-zinc-500">Motion Presets</span>
                       <button
-                        key={preset.id}
-                        onClick={() =>
-                          updateNodeData(selectedNode.id, {
-                            presetId: preset.id,
-                            status: 'success',
-                            output: { contentType: 'text', text: preset.snippet, metadata: { kind: 'motion_preset' } },
-                          })
-                        }
-                        className={`w-full text-left px-3 py-2 rounded-lg text-xs border ${
-                          selectedNode.data.presetId === preset.id
-                            ? 'border-emerald-500/50 text-emerald-200'
+                        onClick={() => setCompactMotionList((prev) => !prev)}
+                        className={`px-2 py-1 rounded text-[10px] border ${
+                          compactMotionList
+                            ? 'border-emerald-500/60 text-emerald-200'
                             : isDark
-                            ? 'border-zinc-800 text-zinc-300'
-                            : 'border-zinc-200 text-zinc-700'
+                            ? 'border-zinc-800 text-zinc-400'
+                            : 'border-zinc-200 text-zinc-600'
                         }`}
                       >
-                        <div className="flex items-center justify-between">
-                          <span className="font-semibold">{preset.label}</span>
-                          <span className="text-[10px] text-zinc-500">Motion</span>
-                        </div>
-                        <div className="mt-1 h-8 rounded-md border border-zinc-800 bg-zinc-900/60 relative overflow-hidden">
-                          <div className="absolute inset-y-0 w-10 bg-white/10 animate-pulse" />
-                        </div>
-                        <div className="text-[10px] text-zinc-500 mt-1">{preset.description}</div>
+                        {compactMotionList ? 'Compact On' : 'Compact Off'}
                       </button>
+                    </div>
+
+                    {motionGroups.map((group) => (
+                      <div key={group.id} className="space-y-2">
+                        <div className="text-[10px] uppercase tracking-widest text-zinc-500">{group.id}</div>
+                        {group.items.map((id) => {
+                          const preset = getMotionPreset(id);
+                          if (!preset) return null;
+                          const isActive = selectedNode.data.presetId === preset.id;
+                          return (
+                            <button
+                              key={preset.id}
+                              onClick={() =>
+                                updateNodeData(selectedNode.id, {
+                                  presetId: preset.id,
+                                  status: 'success',
+                                  output: { contentType: 'text', text: preset.snippet, metadata: { kind: 'motion_preset' } },
+                                })
+                              }
+                              className={`w-full text-left rounded-lg border ${
+                                compactMotionList ? 'px-2 py-2' : 'px-3 py-2'
+                              } ${
+                                isActive
+                                  ? 'border-emerald-500/50 text-emerald-200'
+                                  : isDark
+                                  ? 'border-zinc-800 text-zinc-300'
+                                  : 'border-zinc-200 text-zinc-700'
+                              }`}
+                            >
+                              <div className="flex items-center justify-between">
+                                <span className="font-semibold text-xs">{preset.label}</span>
+                                <span className="text-[10px] text-zinc-500">Motion</span>
+                              </div>
+                              <div className={`mt-2 flex items-center gap-2 ${compactMotionList ? '' : 'flex-col items-start'}`}>
+                                <img
+                                  src={getMotionDiagram(preset.id)}
+                                  className={`${compactMotionList ? 'w-20 h-12' : 'w-full h-20'} object-contain rounded-md border border-zinc-800 bg-zinc-950`}
+                                />
+                                {!compactMotionList && (
+                                  <div className="text-[10px] text-zinc-500">{preset.description}</div>
+                                )}
+                              </div>
+                              {compactMotionList && (
+                                <div className="text-[9px] text-zinc-500 mt-1">{preset.description}</div>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
                     ))}
                   </div>
                 )}
