@@ -79,6 +79,14 @@ const inferOutputType = (url: string, model: string): 'image' | 'video' | 'text'
   return 'image';
 };
 
+const normalizeProgress = (value: any): number | null => {
+  if (value === undefined || value === null) return null;
+  const num = Number(value);
+  if (Number.isNaN(num)) return null;
+  if (num > 0 && num <= 1) return Math.round(num * 100);
+  return Math.max(0, Math.min(100, Math.round(num)));
+};
+
 const extractPromptFromParam = (param: string): string => {
   if (!param) return '';
   try {
@@ -281,7 +289,7 @@ const AppContent: React.FC = () => {
             state: 'waiting',
             param: JSON.stringify(input),
             createTime: Date.now(),
-            progress: 0,
+            progress: 1,
             isRead: false
         };
 
@@ -309,8 +317,8 @@ const AppContent: React.FC = () => {
             return prevTasks.map(task => {
                // Only simulate progress for tasks that are still waiting
                if (task.state === 'waiting' && task.progress < 90) {
-                 // Slow down progress as it gets closer to 90%
-                 const increment = Math.max(0.1, (90 - task.progress) / 20);
+                 // Slow down progress as it gets closer to 90% (but keep it visible)
+                 const increment = Math.max(1, (90 - task.progress) / 15);
                  return { 
                    ...task, 
                    progress: Math.min(task.progress + increment, 90),
@@ -361,8 +369,11 @@ const AppContent: React.FC = () => {
             if (update && update.data) {
                 const normalized = normalizeTaskState(update.data);
                 const newState = normalized.state;
+                const apiProgress = normalizeProgress((update.data as any).progress);
                 // If success or fail, set progress to 100% immediately
-                const newProgress = (newState === 'success' || newState === 'fail') ? 100 : t.progress;
+                const newProgress = (newState === 'success' || newState === 'fail')
+                  ? 100
+                  : (apiProgress !== null ? Math.max(t.progress, apiProgress) : t.progress);
                 
                 if (newState !== t.state) {
                     const stateEmoji = newState === 'success' ? '✓' : newState === 'fail' ? '✗' : '⏳';

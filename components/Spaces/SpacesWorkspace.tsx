@@ -21,10 +21,10 @@ import { generateTextWithGemini } from '../../services/textGeneration';
 import { uploadImageToKieAI, uploadVideoToKieAI } from '../../services/kieFileUpload';
 import { createSpace, deleteSpace, fetchSpaces, updateSpace } from '../../services/spaces';
 import { listUserAssets, uploadOutputUrlToSupabase, type SupabaseAsset } from '../../services/spacesAssets';
-import { estimateDurationMs, computeRemainingMs, formatCountdown } from '../../services/taskTiming';
+import { formatElapsed } from '../../services/taskTiming';
 import { ProgressBar } from '../ui/ProgressBar';
 import { normalizeTaskState, getFailureReason } from '../../services/taskState';
-import { saveOutputToSupabase, getOutputByTaskId } from '../../services/outputSaving';
+import { saveOutputToSupabase, getOutputByTaskId, downloadOutput } from '../../services/outputSaving';
 import { getCreditCost } from '../../services/credits';
 import type {
   SpaceFlowData,
@@ -377,23 +377,15 @@ const getAnglePreview = (id: string) => {
   return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
 };
 
-const estimateNodeDurationMs = (type: SpaceNodeType, model?: string) => {
-  if (type === 'script') return 15000;
-  if (type === 'image' || type === 'video') return estimateDurationMs(model || '');
-  return 8000;
-};
-
 const SpaceNodeCard: React.FC<NodeProps<SpaceNodeData>> = ({ data, type, selected }) => {
   const { theme } = useTheme();
   const isDark = theme === 'dark';
   const output = data.output;
   const status = data.status || 'idle';
   const progress = data.progress ?? 0;
-  const remainingMs =
-    status === 'running'
-      ? computeRemainingMs(progress, data.startedAt, estimateNodeDurationMs(type as SpaceNodeType, data.model), Date.now())
-      : 0;
-  const countdownLabel = status === 'running' ? (remainingMs > 0 ? formatCountdown(remainingMs) : 'FINALIZING') : '';
+  const elapsedMs =
+    status === 'running' ? Math.max(0, Date.now() - (data.startedAt || Date.now())) : 0;
+  const countdownLabel = status === 'running' ? formatElapsed(elapsedMs) : '';
 
   return (
     <div
@@ -620,6 +612,9 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
   const [outputPreview, setOutputPreview] = useState<SpaceNodeOutput | null>(null);
   const [outputsCollapsed, setOutputsCollapsed] = useState(true);
   const [compactMotionList, setCompactMotionList] = useState(false);
+  const [previewSaving, setPreviewSaving] = useState(false);
+  const [previewSaved, setPreviewSaved] = useState(false);
+  const [previewError, setPreviewError] = useState('');
 
   useEffect(() => {
     const intervalId = window.setInterval(() => {
@@ -630,7 +625,7 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
           if (node.data.status !== 'running') return node;
           const progress = node.data.progress ?? 0;
           if (progress >= 90) return node;
-          const increment = Math.max(0.3, (90 - progress) / 20);
+          const increment = Math.max(1, (90 - progress) / 15);
           return {
             ...node,
             data: {
@@ -697,6 +692,28 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
       setOutputPreview(null);
     }
   }, [selectedNode]);
+
+  useEffect(() => {
+    setPreviewSaved(false);
+    setPreviewError('');
+  }, [outputPreview?.url, outputPreview?.text, selectedNode?.id]);
+
+  useEffect(() => {
+    let active = true;
+    const taskId =
+      (outputPreview?.metadata as any)?.taskId ||
+      (outputPreview?.metadata as any)?.task_id ||
+      selectedNode?.data?.taskId;
+    if (!taskId) return undefined;
+    getOutputByTaskId(taskId).then((existing) => {
+      if (active && existing) {
+        setPreviewSaved(true);
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, [outputPreview, selectedNode]);
 
   const loadSpace = (space: SpaceRecord) => {
     const flow = space.data || buildDefaultFlow();
@@ -1323,6 +1340,111 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
     } catch (error: any) {
       addLog(`Gallery save failed: ${error.message || error}`);
     }
+  };
+
+  const buildPreviewTaskId = () => {
+    const metaTaskId =
+      (outputPreview?.metadata as any)?.taskId ||
+      (outputPreview?.metadata as any)?.task_id ||
+      selectedNode?.data?.taskId;
+    if (metaTaskId) return String(metaTaskId);
+    return `space-${activeSpace?.id || 'space'}-${selectedNode?.id || 'node'}-${Date.now()}`;
+  };
+
+  const buildPreviewPrompt = () => {
+    return (
+      selectedNode?.data?.prompt ||
+      (outputPreview?.metadata as any)?.prompt ||
+      (outputPreview?.metadata as any)?.text ||
+      ''
+    );
+  };
+
+  const buildPreviewOutputUrl = () => {
+    if (outputPreview?.url) return outputPreview.url;
+    if (outputPreview?.text) {
+      return `data:text/plain;charset=utf-8,${encodeURIComponent(outputPreview.text)}`;
+    }
+    return '';
+  };
+
+  const buildPreviewOutputType = (url: string) => {
+    if (outputPreview?.contentType === 'video') return 'video';
+    if (outputPreview?.contentType === 'text') return 'text';
+    if (url.toLowerCase().match(/\.(mp4|mov|webm|mkv|avi)$/)) return 'video';
+    return 'image';
+  };
+
+  const handleSavePreviewToGallery = async () => {
+    if (!outputPreview || !selectedNode) return;
+    const outputUrl = buildPreviewOutputUrl();
+    if (!outputUrl) {
+      setPreviewError('No output available to save.');
+      return;
+    }
+    setPreviewSaving(true);
+    setPreviewError('');
+    const taskId = buildPreviewTaskId();
+    const existing = await getOutputByTaskId(taskId);
+    if (existing) {
+      setPreviewSaved(true);
+      setPreviewSaving(false);
+      return;
+    }
+    const model = selectedNode.data.model || selectedNode.data.label || 'spaces-output';
+    const outputType = buildPreviewOutputType(outputUrl);
+    const prompt = buildPreviewPrompt();
+    try {
+      await saveOutputToSupabase(
+        taskId,
+        model,
+        prompt,
+        outputUrl,
+        outputType,
+        getCreditCost(model),
+        {
+          source: 'spaces-preview',
+          nodeId: selectedNode.id,
+          spaceId: activeSpace?.id,
+          text: outputPreview.text,
+        }
+      );
+      setPreviewSaved(true);
+    } catch (error: any) {
+      setPreviewError(error.message || 'Failed to save output.');
+    } finally {
+      setPreviewSaving(false);
+    }
+  };
+
+  const handleDownloadPreview = async () => {
+    if (!outputPreview) return;
+    setPreviewError('');
+    if (outputPreview.url) {
+      try {
+        await downloadOutput(outputPreview.url, `zwapp-space-${selectedNode?.id || 'output'}`);
+      } catch (error: any) {
+        setPreviewError(error.message || 'Download failed.');
+      }
+      return;
+    }
+    if (outputPreview.text) {
+      try {
+        const blob = new Blob([outputPreview.text], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `zwapp-space-${selectedNode?.id || 'output'}.txt`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+      } catch (error: any) {
+        setPreviewError(error.message || 'Download failed.');
+      }
+      return;
+    }
+    setPreviewError('No output available to download.');
   };
 
   const runNode = async (nodeId: string) => {
@@ -2515,6 +2637,34 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
               {outputPreview?.text && (
                 <div className="text-[10px] text-zinc-400 line-clamp-6 whitespace-pre-wrap">
                   {outputPreview.text}
+                </div>
+              )}
+              {outputPreview && (
+                <div className="mt-3 flex flex-col gap-2">
+                  <button
+                    onClick={handleDownloadPreview}
+                    className={`text-[10px] font-mono px-2 py-1 border ${
+                      isDark ? 'border-zinc-700 text-zinc-300 hover:text-white' : 'border-zinc-300 text-zinc-600'
+                    }`}
+                  >
+                    DOWNLOAD
+                  </button>
+                  <button
+                    onClick={handleSavePreviewToGallery}
+                    disabled={previewSaving || previewSaved}
+                    className={`text-[10px] font-mono px-2 py-1 border ${
+                      previewSaved
+                        ? 'border-emerald-500 text-emerald-300'
+                        : isDark
+                        ? 'border-zinc-700 text-zinc-300 hover:text-orange-300'
+                        : 'border-zinc-300 text-zinc-600'
+                    }`}
+                  >
+                    {previewSaved ? 'SAVED TO GALLERY' : previewSaving ? 'SAVING...' : 'SAVE TO GALLERY'}
+                  </button>
+                  {previewError && (
+                    <div className="text-[10px] font-mono text-red-400">{previewError}</div>
+                  )}
                 </div>
               )}
               {!outputPreview && (

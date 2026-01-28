@@ -1,6 +1,8 @@
-import React from 'react';
-import { LocalTask, ParsedResult } from '../types';
-import { estimateDurationMs, computeRemainingMs, formatCountdown } from '../services/taskTiming';
+import { useEffect, useState } from 'react';
+import { LocalTask } from '../types';
+import { formatElapsed } from '../services/taskTiming';
+import { saveOutputToSupabase, getOutputByTaskId, downloadOutput } from '../services/outputSaving';
+import { getCreditCost } from '../services/credits';
 import { getFailureReason } from '../services/taskState';
 import { ProgressBar } from './ui/ProgressBar';
 
@@ -10,35 +12,47 @@ interface StatusTerminalProps {
 }
 
 export const StatusTerminal: React.FC<StatusTerminalProps> = ({ task, logs }) => {
-  let resultUrl = '';
-  let isVideo = false;
-  
-  if (task?.state === 'success' && task.resultJson) {
-    try {
-      const parsed: ParsedResult = JSON.parse(task.resultJson);
-      if (parsed.resultUrls && parsed.resultUrls.length > 0) {
-        resultUrl = parsed.resultUrls[0];
-        const lowerUrl = resultUrl.toLowerCase();
-        if (lowerUrl.endsWith('.mp4') || lowerUrl.endsWith('.mov')) {
-            isVideo = true;
-        }
+  const extractResultUrl = (resultJson?: string): string => {
+    if (!resultJson) return '';
+    let parsed: any = resultJson;
+    if (typeof resultJson === 'string') {
+      try {
+        parsed = JSON.parse(resultJson);
+      } catch (_err) {
+        if (resultJson.startsWith('http') || resultJson.startsWith('data:')) return resultJson;
+        return '';
       }
-    } catch (e) {
-      console.error("Failed to parse result JSON");
     }
-  }
+
+    if (!parsed) return '';
+    if (parsed.resultUrls?.[0]) return parsed.resultUrls[0];
+    if (parsed.images?.[0]?.url) return parsed.images[0].url;
+    if (parsed.image?.url) return parsed.image.url;
+    if (parsed.output?.[0]) return parsed.output[0];
+    if (parsed.url) return parsed.url;
+    if (parsed.data?.url) return parsed.data.url;
+    if (parsed.data?.images?.[0]?.url) return parsed.data.images[0].url;
+    if (parsed.video?.url) return parsed.video.url;
+    if (parsed.video_url) return parsed.video_url;
+    if (typeof parsed === 'string' && parsed.startsWith('http')) return parsed;
+    return '';
+  };
+
+  const resultUrl = task?.state === 'success' ? extractResultUrl(task.resultJson) : '';
+  const lowerUrl = resultUrl.toLowerCase();
+  const isVideo = lowerUrl.endsWith('.mp4') || lowerUrl.endsWith('.mov') || lowerUrl.endsWith('.webm');
 
   const now = Date.now();
   const progress = task?.progress ?? (task?.state === 'success' ? 100 : 0);
-  const remainingMs =
+  const elapsedMs =
     task && task.state === 'waiting'
-      ? computeRemainingMs(progress, task.createTime, estimateDurationMs(task.model), now)
+      ? Math.max(0, now - task.createTime)
+      : task?.completeTime
+      ? Math.max(0, task.completeTime - task.createTime)
       : 0;
   const countdownLabel =
     task && task.state === 'waiting'
-      ? remainingMs > 0
-        ? formatCountdown(remainingMs)
-        : 'FINALIZING'
+      ? formatElapsed(elapsedMs)
       : task?.state === 'success'
       ? 'DONE'
       : task?.state === 'fail'
@@ -49,6 +63,91 @@ export const StatusTerminal: React.FC<StatusTerminalProps> = ({ task, logs }) =>
     task && task.state === 'fail'
       ? getFailureReason(task) || task.failMsg || task.failCode || 'Unknown error'
       : '';
+
+  const [isSaving, setIsSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [downloadError, setDownloadError] = useState('');
+
+  useEffect(() => {
+    setSaved(false);
+  }, [task?.taskId]);
+
+  useEffect(() => {
+    let active = true;
+    if (!task || !resultUrl) return undefined;
+    getOutputByTaskId(task.taskId).then((existing) => {
+      if (active && existing) {
+        setSaved(true);
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, [task, resultUrl]);
+
+  const extractPromptFromParam = (param?: string): string => {
+    if (!param) return '';
+    try {
+      const data: any = JSON.parse(param);
+      return (
+        data.prompt ||
+        data.text ||
+        data.caption ||
+        data.description ||
+        data.character_prompt ||
+        data.safety_instruction ||
+        data.negative_prompt ||
+        ''
+      );
+    } catch (_err) {
+      return '';
+    }
+  };
+
+  const inferOutputType = (url: string, model: string): 'image' | 'video' | 'text' => {
+    const lowerUrl = (url || '').toLowerCase();
+    if (lowerUrl.startsWith('data:text')) return 'text';
+    if (lowerUrl.match(/\.(mp4|mov|webm|mkv|avi)$/)) return 'video';
+    if (model.toLowerCase().includes('video')) return 'video';
+    return 'image';
+  };
+
+  const handleSaveToGallery = async () => {
+    if (!task || !resultUrl) return;
+    setIsSaving(true);
+    const existing = await getOutputByTaskId(task.taskId);
+    if (existing) {
+      setSaved(true);
+      setIsSaving(false);
+      return;
+    }
+    try {
+      await saveOutputToSupabase(
+        task.taskId,
+        task.model,
+        extractPromptFromParam(task.param),
+        resultUrl,
+        inferOutputType(resultUrl, task.model),
+        getCreditCost(task.model),
+        { source: 'manual-save', model: task.model, createdAt: task.createTime }
+      );
+      setSaved(true);
+    } catch (_err) {
+      setSaved(false);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleDownload = async () => {
+    if (!resultUrl) return;
+    setDownloadError('');
+    try {
+      await downloadOutput(resultUrl, `zwapp-output-${task?.taskId.slice(-6) || 'file'}`);
+    } catch (err: any) {
+      setDownloadError(err?.message || 'Download failed.');
+    }
+  };
 
   // Check if task is complete
   const isTaskComplete = task && (task.state === 'success' || task.state === 'fail');
@@ -77,16 +176,26 @@ export const StatusTerminal: React.FC<StatusTerminalProps> = ({ task, logs }) =>
             />
           )}
           
-          <div className="mt-2 text-center">
-             <a 
-               href={resultUrl} 
-               target="_blank" 
-               rel="noreferrer"
-               className="inline-block text-xs text-orange-500 hover:text-orange-400 underline decoration-dotted underline-offset-4"
-             >
-               DOWNLOAD RAW ARTIFACT
-             </a>
+          <div className="mt-3 flex items-center justify-center gap-3">
+            <button
+              onClick={handleDownload}
+              className="inline-block text-xs text-orange-500 hover:text-orange-400 underline decoration-dotted underline-offset-4"
+            >
+              DOWNLOAD RAW ARTIFACT
+            </button>
+            <button
+              onClick={handleSaveToGallery}
+              disabled={isSaving || saved}
+              className={`inline-block text-xs underline decoration-dotted underline-offset-4 ${
+                saved ? 'text-green-400' : 'text-zinc-300 hover:text-orange-300'
+              }`}
+            >
+              {saved ? 'SAVED TO GALLERY' : isSaving ? 'SAVING...' : 'SAVE TO GALLERY'}
+            </button>
           </div>
+          {downloadError && (
+            <div className="mt-2 text-[10px] font-mono text-red-400 text-center">{downloadError}</div>
+          )}
         </div>
       )}
 

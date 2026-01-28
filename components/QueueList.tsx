@@ -1,6 +1,6 @@
 import React from 'react';
 import { LocalTask } from '../types';
-import { estimateDurationMs, computeRemainingMs, formatCountdown } from '../services/taskTiming';
+import { formatElapsed } from '../services/taskTiming';
 import { getFailureReason } from '../services/taskState';
 import { ProgressBar } from './ui/ProgressBar';
 
@@ -61,16 +61,15 @@ export const QueueList: React.FC<QueueListProps> = ({ tasks, onSelectTask, selec
             {/* Progress Bar */}
             <div className="pl-2">
               {(() => {
-                const estimatedMs = estimateDurationMs(task.model);
-                const remainingMs =
+                const elapsedMs =
                   task.state === 'waiting'
-                    ? computeRemainingMs(task.progress, task.createTime, estimatedMs, now)
+                    ? Math.max(0, now - task.createTime)
+                    : task.completeTime
+                    ? Math.max(0, task.completeTime - task.createTime)
                     : 0;
                 const countdownLabel =
                   task.state === 'waiting'
-                    ? remainingMs > 0
-                      ? formatCountdown(remainingMs)
-                      : 'FINALIZING'
+                    ? formatElapsed(elapsedMs)
                     : task.state === 'success'
                     ? 'DONE'
                     : 'FAILED';
