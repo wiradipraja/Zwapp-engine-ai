@@ -1,8 +1,11 @@
 import React from 'react';
-import { TaskRecordInfo, ParsedResult } from '../types';
+import { LocalTask, ParsedResult } from '../types';
+import { estimateDurationMs, computeRemainingMs, formatCountdown } from '../services/taskTiming';
+import { getFailureReason } from '../services/taskState';
+import { ProgressBar } from './ui/ProgressBar';
 
 interface StatusTerminalProps {
-  task: TaskRecordInfo | null;
+  task: LocalTask | null;
   logs: string[];
 }
 
@@ -24,6 +27,28 @@ export const StatusTerminal: React.FC<StatusTerminalProps> = ({ task, logs }) =>
       console.error("Failed to parse result JSON");
     }
   }
+
+  const now = Date.now();
+  const progress = task?.progress ?? (task?.state === 'success' ? 100 : 0);
+  const remainingMs =
+    task && task.state === 'waiting'
+      ? computeRemainingMs(progress, task.createTime, estimateDurationMs(task.model), now)
+      : 0;
+  const countdownLabel =
+    task && task.state === 'waiting'
+      ? remainingMs > 0
+        ? formatCountdown(remainingMs)
+        : 'FINALIZING'
+      : task?.state === 'success'
+      ? 'DONE'
+      : task?.state === 'fail'
+      ? 'FAILED'
+      : '--:--';
+
+  const failureReason =
+    task && task.state === 'fail'
+      ? getFailureReason(task) || task.failMsg || task.failCode || 'Unknown error'
+      : '';
 
   // Check if task is complete
   const isTaskComplete = task && (task.state === 'success' || task.state === 'fail');
@@ -98,6 +123,34 @@ export const StatusTerminal: React.FC<StatusTerminalProps> = ({ task, logs }) =>
                   <span className="text-green-400">{task.costTime}ms</span>
                 </div>
              )}
+          </div>
+
+          {failureReason && (
+            <div className="mt-3 border border-red-900/40 bg-red-950/20 px-3 py-2 text-[10px] font-mono text-red-300 break-words">
+              <span className="block text-red-400 mb-1">FAIL REASON</span>
+              <span>{failureReason}</span>
+            </div>
+          )}
+
+          <div className="mt-4">
+            <div className="flex justify-between text-[10px] text-zinc-500 font-mono mb-1">
+              <span>PROGRESS</span>
+              <span>{Math.round(progress)}%</span>
+              <span>{countdownLabel}</span>
+            </div>
+            <ProgressBar
+              value={progress}
+              animated={task.state === 'waiting'}
+              heightClassName="h-2"
+              trackClassName="bg-zinc-800"
+              barClassName={
+                task.state === 'success'
+                  ? 'bg-green-500'
+                  : task.state === 'fail'
+                  ? 'bg-red-500'
+                  : 'bg-orange-500'
+              }
+            />
           </div>
         </div>
       )}

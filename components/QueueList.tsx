@@ -1,5 +1,8 @@
 import React from 'react';
 import { LocalTask } from '../types';
+import { estimateDurationMs, computeRemainingMs, formatCountdown } from '../services/taskTiming';
+import { getFailureReason } from '../services/taskState';
+import { ProgressBar } from './ui/ProgressBar';
 
 interface QueueListProps {
   tasks: LocalTask[];
@@ -9,6 +12,7 @@ interface QueueListProps {
 
 export const QueueList: React.FC<QueueListProps> = ({ tasks, onSelectTask, selectedTaskId }) => {
   if (tasks.length === 0) return null;
+  const now = Date.now();
 
   return (
     <div className="bg-zinc-950 border border-zinc-700 p-4 relative overflow-hidden">
@@ -56,20 +60,50 @@ export const QueueList: React.FC<QueueListProps> = ({ tasks, onSelectTask, selec
 
             {/* Progress Bar */}
             <div className="pl-2">
-              <div className="flex justify-between text-[10px] text-zinc-500 font-mono mb-1">
-                <span>PROGRESS</span>
-                <span>{Math.round(task.progress)}%</span>
-              </div>
-              <div className="h-1.5 w-full bg-zinc-800 overflow-hidden relative">
-                <div 
-                  className={`h-full transition-all duration-500 ease-out ${
-                    task.state === 'success' ? 'bg-green-500' : 
-                    task.state === 'fail' ? 'bg-red-500' : 
-                    'bg-stripes-sm bg-orange-500'
-                  }`}
-                  style={{ width: `${task.progress}%` }}
-                ></div>
-              </div>
+              {(() => {
+                const estimatedMs = estimateDurationMs(task.model);
+                const remainingMs =
+                  task.state === 'waiting'
+                    ? computeRemainingMs(task.progress, task.createTime, estimatedMs, now)
+                    : 0;
+                const countdownLabel =
+                  task.state === 'waiting'
+                    ? remainingMs > 0
+                      ? formatCountdown(remainingMs)
+                      : 'FINALIZING'
+                    : task.state === 'success'
+                    ? 'DONE'
+                    : 'FAILED';
+                const failureReason =
+                  task.state === 'fail' ? (getFailureReason(task) || task.failMsg || task.failCode || 'Unknown error') : '';
+                return (
+                  <>
+                    <div className="flex justify-between text-[10px] text-zinc-500 font-mono mb-1">
+                      <span>PROGRESS</span>
+                      <span>{Math.round(task.progress)}%</span>
+                      <span>{countdownLabel}</span>
+                    </div>
+                    <ProgressBar
+                      value={task.progress}
+                      animated={task.state === 'waiting'}
+                      heightClassName="h-1.5"
+                      trackClassName="bg-zinc-800"
+                      barClassName={
+                        task.state === 'success'
+                          ? 'bg-green-500'
+                          : task.state === 'fail'
+                          ? 'bg-red-500'
+                          : 'bg-orange-500'
+                      }
+                    />
+                    {failureReason && (
+                      <div className="mt-2 text-[10px] font-mono text-red-400 break-words">
+                        FAIL REASON: {failureReason}
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
             </div>
             
             {/* Hover Effect Corner */}
@@ -77,12 +111,8 @@ export const QueueList: React.FC<QueueListProps> = ({ tasks, onSelectTask, selec
           </div>
         ))}
       </div>
-      
+
       <style>{`
-        .bg-stripes-sm {
-          background-image: linear-gradient(45deg, rgba(0,0,0,0.3) 25%, transparent 25%, transparent 50%, rgba(0,0,0,0.3) 50%, rgba(0,0,0,0.3) 75%, transparent 75%, transparent 100%);
-          background-size: 10px 10px;
-        }
         .custom-scrollbar::-webkit-scrollbar {
           width: 4px;
         }

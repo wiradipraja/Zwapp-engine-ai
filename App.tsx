@@ -37,6 +37,7 @@ import Sidebar, { MenuSection, ModuleType } from './components/layout/Sidebar';
 import PublicLanding from './components/layout/PublicLanding';
 import Toast, { useToast, ToastMessage } from './components/ui/Toast';
 import { ThemeProvider, useTheme } from './contexts/ThemeContext';
+import { normalizeTaskState, getFailureReason } from './services/taskState';
 
 type NanoBananaType = 'gen' | 'edit' | 'pro';
 type Flux2Type = 'pro-text' | 'pro-image' | 'flex-text' | 'flex-image';
@@ -299,13 +300,16 @@ const AppContent: React.FC = () => {
             const update = updates.find(u => u && u.taskId === t.taskId);
             
             if (update && update.data) {
-                const newState = update.data.state;
+                const normalized = normalizeTaskState(update.data);
+                const newState = normalized.state;
                 // If success or fail, set progress to 100% immediately
                 const newProgress = (newState === 'success' || newState === 'fail') ? 100 : t.progress;
                 
                 if (newState !== t.state) {
                     const stateEmoji = newState === 'success' ? '✓' : newState === 'fail' ? '✗' : '⏳';
-                    addLog(`${stateEmoji} Task ${t.taskId.slice(-4)}: ${t.state} → ${newState}${update.data.failMsg ? ` (${update.data.failMsg})` : ''}`);
+                    const rawSuffix = normalized.raw && normalized.raw !== newState ? ` [${normalized.raw}]` : '';
+                    const reason = newState === 'fail' ? (getFailureReason(update.data) || update.data.failMsg || update.data.errorMsg) : '';
+                    addLog(`${stateEmoji} Task ${t.taskId.slice(-4)}: ${t.state} → ${newState}${rawSuffix}${reason ? ` (${reason})` : ''}`);
                     
                     // Trigger credit refresh when task completes (success or fail)
                     if (newState === 'success' || newState === 'fail') {

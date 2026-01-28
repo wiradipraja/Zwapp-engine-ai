@@ -21,6 +21,9 @@ import { generateTextWithGemini } from '../../services/textGeneration';
 import { uploadImageToKieAI, uploadVideoToKieAI } from '../../services/kieFileUpload';
 import { createSpace, deleteSpace, fetchSpaces, updateSpace } from '../../services/spaces';
 import { listUserAssets, uploadOutputUrlToSupabase, type SupabaseAsset } from '../../services/spacesAssets';
+import { estimateDurationMs, computeRemainingMs, formatCountdown } from '../../services/taskTiming';
+import { ProgressBar } from '../ui/ProgressBar';
+import { normalizeTaskState, getFailureReason } from '../../services/taskState';
 import type {
   SpaceFlowData,
   SpaceNodeData,
@@ -372,11 +375,23 @@ const getAnglePreview = (id: string) => {
   return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
 };
 
+const estimateNodeDurationMs = (type: SpaceNodeType, model?: string) => {
+  if (type === 'script') return 15000;
+  if (type === 'image' || type === 'video') return estimateDurationMs(model || '');
+  return 8000;
+};
+
 const SpaceNodeCard: React.FC<NodeProps<SpaceNodeData>> = ({ data, type, selected }) => {
   const { theme } = useTheme();
   const isDark = theme === 'dark';
   const output = data.output;
   const status = data.status || 'idle';
+  const progress = data.progress ?? 0;
+  const remainingMs =
+    status === 'running'
+      ? computeRemainingMs(progress, data.startedAt, estimateNodeDurationMs(type as SpaceNodeType, data.model), Date.now())
+      : 0;
+  const countdownLabel = status === 'running' ? (remainingMs > 0 ? formatCountdown(remainingMs) : 'FINALIZING') : '';
 
   return (
     <div
@@ -404,6 +419,23 @@ const SpaceNodeCard: React.FC<NodeProps<SpaceNodeData>> = ({ data, type, selecte
           {status}
         </span>
       </div>
+
+      {status === 'running' && (
+        <div className="mt-2">
+          <div className="flex justify-between text-[9px] font-mono text-zinc-400 mb-1">
+            <span>PROGRESS</span>
+            <span>{Math.round(progress)}%</span>
+            <span>{countdownLabel}</span>
+          </div>
+          <ProgressBar
+            value={progress}
+            animated
+            heightClassName="h-1.5"
+            trackClassName="bg-zinc-800"
+            barClassName="bg-amber-400"
+          />
+        </div>
+      )}
 
       {output?.text && (
         <div className="mt-2 text-[10px] text-zinc-300 line-clamp-4 whitespace-pre-wrap">
@@ -586,6 +618,29 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
   const [outputPreview, setOutputPreview] = useState<SpaceNodeOutput | null>(null);
   const [outputsCollapsed, setOutputsCollapsed] = useState(true);
   const [compactMotionList, setCompactMotionList] = useState(false);
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      setNodes((prev) => {
+        const hasRunning = prev.some((node) => node.data.status === 'running');
+        if (!hasRunning) return prev;
+        return prev.map((node) => {
+          if (node.data.status !== 'running') return node;
+          const progress = node.data.progress ?? 0;
+          if (progress >= 90) return node;
+          const increment = Math.max(0.3, (90 - progress) / 20);
+          return {
+            ...node,
+            data: {
+              ...node.data,
+              progress: Math.min(progress + increment, 90),
+            },
+          };
+        });
+      });
+    }, 1000);
+    return () => clearInterval(intervalId);
+  }, [setNodes]);
 
   const [assetModalOpen, setAssetModalOpen] = useState(false);
   const [assetModalKind, setAssetModalKind] = useState<'image' | 'video'>('image');
@@ -1225,7 +1280,8 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
         continue;
       }
 
-      const state = data.state || data.status;
+      const normalized = normalizeTaskState(data);
+      const state = normalized.state;
       if (state === 'success') {
         const url = extractResultUrl(data.resultJson || data.result, data);
         if (!url) {
@@ -1233,8 +1289,9 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
         }
         return url;
       }
-      if (state === 'fail' || state === 'failed' || state === 'error') {
-        throw new Error(data.failMsg || data.errorMsg || 'Generation failed.');
+      if (state === 'fail') {
+        const reason = getFailureReason(data) || data.failMsg || data.errorMsg || 'Generation failed.';
+        throw new Error(reason);
       }
       await new Promise((resolve) => setTimeout(resolve, 3000));
     }
@@ -1245,7 +1302,7 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
     const node = nodes.find((item) => item.id === nodeId);
     if (!node) return;
 
-    updateNodeData(nodeId, { status: 'running', error: undefined });
+    updateNodeData(nodeId, { status: 'running', error: undefined, progress: 0, startedAt: Date.now() });
     addLog(`Running ${node.data.label}...`);
 
     try {
@@ -1253,6 +1310,7 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
         const text = node.data.prompt?.trim() || '';
         updateNodeData(nodeId, {
           status: 'success',
+          progress: 100,
           output: { contentType: 'text', text, metadata: { kind: 'prompt' } },
         });
         return;
@@ -1269,6 +1327,7 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
         const text = await generateTextWithGemini(prompt, { apiKey: googleApiKey });
         updateNodeData(nodeId, {
           status: 'success',
+          progress: 100,
           output: { contentType: 'text', text, metadata: { kind: 'script' } },
         });
         return;
@@ -1281,6 +1340,7 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
         const contentType = node.data.assetType === 'video' ? 'video' : 'image';
         updateNodeData(nodeId, {
           status: 'success',
+          progress: 100,
           output: { contentType, url: node.data.assetUrl },
         });
         return;
@@ -1290,6 +1350,7 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
         const preset = cameraPresets.find((item) => item.id === node.data.presetId) || cameraPresets[0];
         updateNodeData(nodeId, {
           status: 'success',
+          progress: 100,
           output: { contentType: 'text', text: preset.snippet, metadata: { kind: 'camera_preset' } },
         });
         return;
@@ -1299,6 +1360,7 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
         const preset = motionPresets.find((item) => item.id === node.data.presetId) || motionPresets[0];
         updateNodeData(nodeId, {
           status: 'success',
+          progress: 100,
           output: { contentType: 'text', text: preset.snippet, metadata: { kind: 'motion_preset' } },
         });
         return;
@@ -1308,6 +1370,7 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
         const preset = anglePresets.find((item) => item.id === node.data.presetId) || anglePresets[0];
         updateNodeData(nodeId, {
           status: 'success',
+          progress: 100,
           output: { contentType: 'text', text: preset.snippet, metadata: { kind: 'angle_preset' } },
         });
         return;
@@ -1340,6 +1403,7 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
           }
           updateNodeData(nodeId, {
             status: 'success',
+            progress: 100,
             output: {
               contentType: 'image',
               url: storedUrl,
@@ -1467,6 +1531,7 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
 
         updateNodeData(nodeId, {
           status: 'success',
+          progress: 100,
           output: {
             contentType: 'image',
             url: storedUrl,
@@ -1605,6 +1670,7 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
 
         updateNodeData(nodeId, {
           status: 'success',
+          progress: 100,
           output: {
             contentType: 'video',
             url: storedUrl,
@@ -1621,8 +1687,9 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
         return;
       }
     } catch (error: any) {
-      updateNodeData(nodeId, { status: 'error', error: error.message || 'Failed' });
-      addLog(`${node.data.label} failed: ${error.message}`);
+      const friendly = getFailureReason(error.message) || error.message || 'Failed';
+      updateNodeData(nodeId, { status: 'error', error: friendly, progress: 100 });
+      addLog(`${node.data.label} failed: ${friendly}`);
     }
   };
 
@@ -1663,7 +1730,7 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
 
   const handleUploadFile = async (nodeId: string, file: File) => {
     try {
-      updateNodeData(nodeId, { status: 'running', error: undefined });
+      updateNodeData(nodeId, { status: 'running', error: undefined, progress: 0, startedAt: Date.now() });
       const isVideo = file.type.startsWith('video');
       const url = isVideo
         ? await uploadVideoToKieAI(file, apiKey)
@@ -1676,10 +1743,11 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
         assetSource: 'local',
         output: { contentType: isVideo ? 'video' : 'image', url },
         status: 'success',
+        progress: 100,
       });
       addLog('Asset uploaded to Supabase.');
     } catch (error: any) {
-      updateNodeData(nodeId, { status: 'error', error: error.message });
+      updateNodeData(nodeId, { status: 'error', error: error.message, progress: 100 });
       addLog(`Upload failed: ${error.message}`);
     }
   };

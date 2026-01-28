@@ -41,6 +41,8 @@ export interface SpaceNodeData {
   presetId?: string;
   output?: SpaceNodeOutput;
   error?: string;
+  progress?: number;
+  startedAt?: number;
   updatedAt?: number;
 }
 
