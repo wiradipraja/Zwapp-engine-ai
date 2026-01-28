@@ -99,6 +99,8 @@ const AppContent: React.FC = () => {
       setSession(session);
       if (session) {
         setCurrentView('app');
+      } else {
+        setCurrentView('landing');
       }
     });
 
@@ -160,6 +162,7 @@ const AppContent: React.FC = () => {
       await signOut();
       addLog('Session Terminated.');
       setSession(null);
+      setCurrentView('landing');
   };
 
   const handleCreateTask = async (input: MotionControlInput | NanoBananaInput | ImageEditInput | ZImageInput | Flux2Input | QwenTextToImageInput | Sora2CharactersInput | Sora2TextToVideoInput | Sora2ImageToVideoInput | Sora2ProTextToVideoInput | Sora2ProImageToVideoInput | Veo3Input | GrokImageToVideoInput | GrokImageToImageInput | GrokTextToImageInput | GrokUpscaleInput) => {
