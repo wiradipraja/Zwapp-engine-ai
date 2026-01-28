@@ -2,6 +2,7 @@
 // Industrial futuristic landing page shown before login
 import React, { useState, useEffect } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
+import { fetchFeaturedOutputs, type SavedOutput } from '../../services/outputSaving';
 
 interface PublicLandingProps {
   onSignIn: () => void;
@@ -13,6 +14,8 @@ const PublicLanding: React.FC<PublicLandingProps> = ({ onSignIn, onLaunchEngine 
   const [scrollY, setScrollY] = useState(0);
   const [terminalText, setTerminalText] = useState('');
   const [showCursor, setShowCursor] = useState(true);
+  const [featuredOutputs, setFeaturedOutputs] = useState<SavedOutput[]>([]);
+  const [activeFeatured, setActiveFeatured] = useState(0);
 
   const isDark = theme === 'dark';
 
@@ -43,6 +46,43 @@ const PublicLanding: React.FC<PublicLandingProps> = ({ onSignIn, onLaunchEngine 
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
+
+  useEffect(() => {
+    let mounted = true;
+    fetchFeaturedOutputs(8).then((data) => {
+      if (mounted) setFeaturedOutputs(data);
+    });
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (featuredOutputs.length <= 1) return;
+    const interval = setInterval(() => {
+      setActiveFeatured((prev) => (prev + 1) % featuredOutputs.length);
+    }, 6000);
+    return () => clearInterval(interval);
+  }, [featuredOutputs]);
+
+  useEffect(() => {
+    if (activeFeatured >= featuredOutputs.length) {
+      setActiveFeatured(0);
+    }
+  }, [activeFeatured, featuredOutputs]);
+
+  const heroItem = featuredOutputs[activeFeatured];
+  const isHeroVideo =
+    heroItem?.outputType === 'video' ||
+    (heroItem?.outputUrl || '').toLowerCase().match(/\.(mp4|mov|webm|mkv|avi)$/);
+  const isHeroText = heroItem?.outputType === 'text';
+
+  const handleViewPortfolio = () => {
+    const target = document.getElementById('featured-gallery');
+    if (target) {
+      target.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
 
   return (
     <div className={`min-h-screen ${isDark ? 'bg-zinc-950' : 'bg-zinc-100'} transition-colors duration-500`}>
@@ -147,7 +187,10 @@ const PublicLanding: React.FC<PublicLandingProps> = ({ onSignIn, onLaunchEngine 
                 </svg>
               </button>
               
-              <button className={`px-8 py-4 border ${isDark ? 'border-zinc-700 hover:border-zinc-500 text-white' : 'border-zinc-300 hover:border-zinc-400 text-zinc-900'} font-bold tracking-wider transition-all uppercase text-sm`}>
+              <button
+                onClick={handleViewPortfolio}
+                className={`px-8 py-4 border ${isDark ? 'border-zinc-700 hover:border-zinc-500 text-white' : 'border-zinc-300 hover:border-zinc-400 text-zinc-900'} font-bold tracking-wider transition-all uppercase text-sm`}
+              >
                 VIEW PORTFOLIO
               </button>
             </div>
@@ -170,18 +213,51 @@ const PublicLanding: React.FC<PublicLandingProps> = ({ onSignIn, onLaunchEngine 
               </div>
 
               {/* Terminal Content */}
-              <div className={`aspect-video flex items-center justify-center ${isDark ? 'bg-zinc-950' : 'bg-zinc-50'}`}>
-                <div className="text-center space-y-4">
-                  <div className={`w-16 h-16 mx-auto border-2 ${isDark ? 'border-zinc-700' : 'border-zinc-300'} flex items-center justify-center`}>
-                    <svg className={`w-8 h-8 ${isDark ? 'text-zinc-700' : 'text-zinc-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
+              <div className={`aspect-video flex items-center justify-center ${isDark ? 'bg-zinc-950' : 'bg-zinc-50'} relative overflow-hidden`}>
+                {heroItem ? (
+                  <>
+                    {isHeroText ? (
+                      <div className="p-6 text-xs font-mono text-zinc-200 whitespace-pre-wrap">
+                        {heroItem.metadata?.text || heroItem.prompt || 'Featured text output'}
+                      </div>
+                    ) : isHeroVideo ? (
+                      <video
+                        src={heroItem.outputUrl}
+                        className="w-full h-full object-contain bg-black"
+                        muted
+                        loop
+                        autoPlay
+                        playsInline
+                      />
+                    ) : (
+                      <img
+                        src={heroItem.outputUrl}
+                        alt={heroItem.prompt || 'Featured output'}
+                        className="w-full h-full object-contain bg-black"
+                      />
+                    )}
+                    <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent p-4">
+                      <div className="text-[10px] font-mono text-orange-400 uppercase tracking-widest">
+                        FEATURED OUTPUT
+                      </div>
+                      <div className="text-xs font-mono text-zinc-200 line-clamp-2">
+                        {heroItem.prompt || heroItem.model}
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <div className="text-center space-y-4">
+                    <div className={`w-16 h-16 mx-auto border-2 ${isDark ? 'border-zinc-700' : 'border-zinc-300'} flex items-center justify-center`}>
+                      <svg className={`w-8 h-8 ${isDark ? 'text-zinc-700' : 'text-zinc-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    </div>
+                    <p className={`text-xs font-mono tracking-wider ${isDark ? 'text-zinc-600' : 'text-zinc-400'}`}>
+                      {terminalText}{showCursor ? '?' : ' '}
+                    </p>
                   </div>
-                  <p className={`text-xs font-mono tracking-wider ${isDark ? 'text-zinc-600' : 'text-zinc-400'}`}>
-                    {terminalText}{showCursor ? '█' : ' '}
-                  </p>
-                </div>
+                )}
               </div>
 
               {/* Terminal Footer - Progress Bar */}
@@ -203,6 +279,70 @@ const PublicLanding: React.FC<PublicLandingProps> = ({ onSignIn, onLaunchEngine 
               NODE: GPU_ACCEL
             </div>
           </div>
+        </div>
+      </section>
+
+      {/* Featured Outputs Section */}
+      <section id="featured-gallery" className={`py-20 ${isDark ? 'bg-zinc-950' : 'bg-zinc-50'}`}>
+        <div className="max-w-7xl mx-auto px-6">
+          <div className="flex items-center justify-between mb-10">
+            <div>
+              <div className={`inline-flex items-center gap-2 px-3 py-1.5 border ${isDark ? 'border-orange-500/30 bg-orange-500/5' : 'border-orange-400 bg-orange-50'}`}>
+                <span className={`text-xs font-mono tracking-widest ${isDark ? 'text-orange-400' : 'text-orange-600'}`}>
+                  FEATURED OUTPUTS
+                </span>
+              </div>
+              <h2 className={`mt-3 text-3xl font-bold tracking-tight ${isDark ? 'text-white' : 'text-zinc-900'}`}>
+                CURATED LANDING GALLERY
+              </h2>
+              <p className={`text-xs font-mono mt-2 ${isDark ? 'text-zinc-500' : 'text-zinc-600'}`}>
+                Selected from your gallery to appear on the landing page.
+              </p>
+            </div>
+            <button
+              onClick={onLaunchEngine}
+              className={`px-4 py-2 border text-xs font-mono ${isDark ? 'border-zinc-700 text-zinc-300 hover:border-orange-500' : 'border-zinc-300 text-zinc-700 hover:border-orange-500'}`}
+            >
+              OPEN GALLERY
+            </button>
+          </div>
+
+          {featuredOutputs.length === 0 ? (
+            <div className="text-xs font-mono text-zinc-500">No featured outputs yet.</div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              {featuredOutputs.map((item, idx) => (
+                <button
+                  key={item.id}
+                  onClick={() => setActiveFeatured(idx)}
+                  className={`border overflow-hidden text-left transition-transform hover:scale-[1.01] ${isDark ? 'border-zinc-800 bg-zinc-900/60' : 'border-zinc-200 bg-white'}`}
+                >
+                  <div className="relative">
+                    {item.outputType === 'video' ? (
+                      <video
+                        src={item.outputUrl}
+                        className="w-full h-44 object-cover bg-black"
+                        muted
+                        loop
+                        playsInline
+                      />
+                    ) : (
+                      <img src={item.outputUrl} alt={item.prompt} className="w-full h-44 object-cover bg-black" />
+                    )}
+                    <div className="absolute top-3 left-3 text-[10px] font-mono bg-black/60 text-orange-300 px-2 py-1">
+                      FEATURED
+                    </div>
+                  </div>
+                  <div className="p-3">
+                    <div className={`text-xs font-bold ${isDark ? 'text-white' : 'text-zinc-900'}`}>{item.model}</div>
+                    <div className={`text-[10px] font-mono mt-1 line-clamp-2 ${isDark ? 'text-zinc-500' : 'text-zinc-600'}`}>
+                      {item.prompt || 'No prompt'}
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       </section>
 

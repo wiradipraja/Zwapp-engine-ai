@@ -3,7 +3,8 @@ import 'reactflow/dist/style.css';
 import { createTask, queryTask } from './services/api';
 import { supabase, signOut } from './services/supabase';
 import { generateVeo3Video } from './services/veo3Generation';
-import { fetchUserCredits, formatCreditsShort } from './services/credits';
+import { fetchUserCredits, formatCreditsShort, getCreditCost } from './services/credits';
+import { saveOutputToSupabase, getOutputByTaskId } from './services/outputSaving';
 import { MotionControlInput, NanoBananaInput, ImageEditInput, ZImageInput, Flux2Input, Flux2ProTextInput, Flux2ProImageInput, Flux2FlexTextInput, Flux2FlexImageInput, QwenTextToImageInput, Sora2CharactersInput, Sora2TextToVideoInput, Sora2ImageToVideoInput, Sora2ProTextToVideoInput, Sora2ProImageToVideoInput, Veo3TextToVideoInput, Veo3ImageToVideoInput, Veo3ReferenceToVideoInput, Veo3Input, GrokImageToVideoInput, GrokImageToImageInput, GrokTextToImageInput, GrokUpscaleInput, LocalTask } from './types';
 import { TaskForm } from './components/TaskForm';
 import { NanoBananaGenForm } from './components/NanoBananaGenForm';
@@ -33,6 +34,7 @@ import { QueueList } from './components/QueueList';
 import { AuthForm } from './components/AuthForm';
 import { SettingsModal } from './components/SettingsModal';
 import SpacesWorkspace from './components/Spaces/SpacesWorkspace';
+import GalleryView from './components/Gallery/GalleryView';
 import Sidebar, { MenuSection, ModuleType } from './components/layout/Sidebar';
 import PublicLanding from './components/layout/PublicLanding';
 import Toast, { useToast, ToastMessage } from './components/ui/Toast';
@@ -42,6 +44,59 @@ import { normalizeTaskState, getFailureReason } from './services/taskState';
 type NanoBananaType = 'gen' | 'edit' | 'pro';
 type Flux2Type = 'pro-text' | 'pro-image' | 'flex-text' | 'flex-image';
 type AppView = 'landing' | 'auth' | 'app';
+
+const extractOutputUrl = (resultJson?: string): string => {
+  if (!resultJson) return '';
+  let parsed: any = resultJson;
+  if (typeof resultJson === 'string') {
+    try {
+      parsed = JSON.parse(resultJson);
+    } catch (_err) {
+      if (resultJson.startsWith('http') || resultJson.startsWith('data:')) return resultJson;
+      return '';
+    }
+  }
+
+  if (!parsed) return '';
+  if (parsed.resultUrls?.[0]) return parsed.resultUrls[0];
+  if (parsed.images?.[0]?.url) return parsed.images[0].url;
+  if (parsed.image?.url) return parsed.image.url;
+  if (parsed.output?.[0]) return parsed.output[0];
+  if (parsed.url) return parsed.url;
+  if (parsed.data?.url) return parsed.data.url;
+  if (parsed.data?.images?.[0]?.url) return parsed.data.images[0].url;
+  if (parsed.video?.url) return parsed.video.url;
+  if (parsed.video_url) return parsed.video_url;
+  if (typeof parsed === 'string' && parsed.startsWith('http')) return parsed;
+  return '';
+};
+
+const inferOutputType = (url: string, model: string): 'image' | 'video' | 'text' => {
+  const lowerUrl = (url || '').toLowerCase();
+  if (lowerUrl.startsWith('data:text')) return 'text';
+  if (lowerUrl.match(/\.(mp4|mov|webm|mkv|avi)$/)) return 'video';
+  if (model.toLowerCase().includes('video')) return 'video';
+  return 'image';
+};
+
+const extractPromptFromParam = (param: string): string => {
+  if (!param) return '';
+  try {
+    const data: any = JSON.parse(param);
+    return (
+      data.prompt ||
+      data.text ||
+      data.caption ||
+      data.description ||
+      data.character_prompt ||
+      data.safety_instruction ||
+      data.negative_prompt ||
+      ''
+    );
+  } catch (_err) {
+    return '';
+  }
+};
 
 const AppContent: React.FC = () => {
   const { theme } = useTheme();
@@ -81,6 +136,7 @@ const AppContent: React.FC = () => {
 
   // Polling Interval Ref
   const pollIntervalRef = useRef<number | null>(null);
+  const savedTaskIdsRef = useRef<Set<string>>(new Set());
 
   // 1. Check for Supabase Session and LocalStorage API Key on Mount
   useEffect(() => {
@@ -326,7 +382,7 @@ const AppContent: React.FC = () => {
                     ...update.data,
                     state: newState,
                     progress: newProgress,
-                    resultJson: update.data.resultJson || t.resultJson,
+                    resultJson: (update.data as any).resultJson || (update.data as any).result || t.resultJson,
                     failCode: update.data.failCode,
                     failMsg: update.data.failMsg,
                 };
@@ -340,6 +396,48 @@ const AppContent: React.FC = () => {
         if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
     };
   }, [apiKey, session]);
+
+  useEffect(() => {
+    if (!session) return;
+    const completed = tasks.filter(t => t.state === 'success');
+    if (completed.length === 0) return;
+
+    completed.forEach(async (task) => {
+      if (savedTaskIdsRef.current.has(task.taskId)) return;
+
+      const outputUrl = extractOutputUrl(task.resultJson);
+      if (!outputUrl) return;
+
+      const existing = await getOutputByTaskId(task.taskId);
+      if (existing) {
+        savedTaskIdsRef.current.add(task.taskId);
+        return;
+      }
+
+      const prompt = extractPromptFromParam(task.param);
+      const outputType = inferOutputType(outputUrl, task.model);
+      const creditsCost = getCreditCost(task.model);
+
+      try {
+        await saveOutputToSupabase(
+          task.taskId,
+          task.model,
+          prompt,
+          outputUrl,
+          outputType,
+          creditsCost,
+          {
+            source: 'main-app',
+            model: task.model,
+            createdAt: task.createTime,
+          }
+        );
+        savedTaskIdsRef.current.add(task.taskId);
+      } catch (error: any) {
+        console.warn('Failed to save output to gallery:', error.message || error);
+      }
+    });
+  }, [tasks, session]);
 
   const activeTask = tasks.find(t => t.taskId === selectedTaskId) || tasks[0] || null;
 
@@ -427,6 +525,8 @@ const AppContent: React.FC = () => {
         return <GrokTextToImageForm onSubmit={handleCreateTask} isLoading={isSubmitting} />;
       case 'grok-image-to-image':
         return <GrokImageToImageForm onSubmit={handleCreateTask} isLoading={isSubmitting} apiKey={apiKey} />;
+      case 'gallery':
+        return null;
       case 'ugc':
         return null; // UGC has its own workspace in the right panel
       case 'spaces':
@@ -462,6 +562,7 @@ const AppContent: React.FC = () => {
       'veo3-text-to-video': 'Veo 3.1 Text→Video',
       'veo3-image-to-video': 'Veo 3.1 Image→Video',
       'veo3-reference-to-video': 'Veo 3.1 Reference→Video',
+      'gallery': 'Output Gallery',
       'spaces': 'Spaces Studio',
       'grok-image-to-video': 'Grok Image→Video',
       'grok-text-to-image': 'Grok Text→Image',
@@ -591,6 +692,10 @@ const AppContent: React.FC = () => {
                 googleApiKey=""
                 onOpenSettings={() => setIsSettingsOpen(true)}
               />
+            </div>
+          ) : activeModule === 'gallery' ? (
+            <div className="flex-1">
+              <GalleryView />
             </div>
           ) : (
             <>

@@ -24,6 +24,8 @@ import { listUserAssets, uploadOutputUrlToSupabase, type SupabaseAsset } from '.
 import { estimateDurationMs, computeRemainingMs, formatCountdown } from '../../services/taskTiming';
 import { ProgressBar } from '../ui/ProgressBar';
 import { normalizeTaskState, getFailureReason } from '../../services/taskState';
+import { saveOutputToSupabase, getOutputByTaskId } from '../../services/outputSaving';
+import { getCreditCost } from '../../services/credits';
 import type {
   SpaceFlowData,
   SpaceNodeData,
@@ -1298,6 +1300,31 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
     throw new Error('Task timed out.');
   };
 
+  const saveOutputToGallery = async (params: {
+    taskId: string;
+    model: string;
+    prompt: string;
+    outputUrl: string;
+    outputType: 'image' | 'video' | 'text';
+    metadata?: Record<string, any>;
+  }) => {
+    try {
+      const existing = await getOutputByTaskId(params.taskId);
+      if (existing) return;
+      await saveOutputToSupabase(
+        params.taskId,
+        params.model,
+        params.prompt,
+        params.outputUrl,
+        params.outputType,
+        getCreditCost(params.model || 'unknown'),
+        params.metadata || {}
+      );
+    } catch (error: any) {
+      addLog(`Gallery save failed: ${error.message || error}`);
+    }
+  };
+
   const runNode = async (nodeId: string) => {
     const node = nodes.find((item) => item.id === nodeId);
     if (!node) return;
@@ -1409,6 +1436,14 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
               url: storedUrl,
               metadata: { sourceUrl: resultUrl, taskId: upscaleTaskId, model: 'grok-imagine/upscale', sourceTaskId },
             },
+          });
+          saveOutputToGallery({
+            taskId: upscaleTaskId,
+            model: 'grok-imagine/upscale',
+            prompt: node.data.prompt || '',
+            outputUrl: storedUrl,
+            outputType: 'image',
+            metadata: { sourceUrl: resultUrl, nodeId, spaceId: activeSpace?.id, sourceTaskId },
           });
           return;
         }
@@ -1537,6 +1572,14 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
             url: storedUrl,
             metadata: { sourceUrl: resultUrl, taskId, model },
           },
+        });
+        saveOutputToGallery({
+          taskId,
+          model,
+          prompt,
+          outputUrl: storedUrl,
+          outputType: 'image',
+          metadata: { sourceUrl: resultUrl, nodeId, spaceId: activeSpace?.id },
         });
         return;
       }
@@ -1683,6 +1726,14 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
               upscaleUrl: node.data.videoUpscale ? resultUrl : undefined,
             },
           },
+        });
+        saveOutputToGallery({
+          taskId,
+          model: node.data.model || 'video',
+          prompt,
+          outputUrl: storedUrl,
+          outputType: 'video',
+          metadata: { sourceUrl: baseResultUrl, nodeId, spaceId: activeSpace?.id, provider },
         });
         return;
       }

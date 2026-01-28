@@ -17,7 +17,26 @@ export interface SavedOutput {
   creditsCost: number;
   createdAt: string;
   userId?: string;
+  featured?: boolean;
+  featuredOrder?: number | null;
 }
+
+const STORAGE_BUCKET = 'kie-assets';
+const STORAGE_PUBLIC_PREFIX = `/storage/v1/object/public/${STORAGE_BUCKET}/`;
+
+const extractStoragePathFromUrl = (url: string): string | null => {
+  if (!url) return null;
+  try {
+    const parsed = new URL(url);
+    const idx = parsed.pathname.indexOf(STORAGE_PUBLIC_PREFIX);
+    if (idx === -1) return null;
+    return parsed.pathname.slice(idx + STORAGE_PUBLIC_PREFIX.length).replace(/^\/+/, '');
+  } catch (_err) {
+    const idx = url.indexOf(STORAGE_PUBLIC_PREFIX);
+    if (idx === -1) return null;
+    return url.slice(idx + STORAGE_PUBLIC_PREFIX.length).replace(/^\/+/, '').split('?')[0];
+  }
+};
 
 /**
  * Save generated output to Supabase
@@ -33,9 +52,12 @@ export const saveOutputToSupabase = async (
   metadata: Record<string, any> = {}
 ): Promise<SavedOutput> => {
   try {
+    const userResult = await supabase.auth.getUser();
+    const userId = userResult.data.user?.id;
     const now = new Date().toISOString();
     const insertData = {
       task_id: taskId,
+      user_id: userId || null,
       model,
       prompt,
       output_url: outputUrl,
@@ -67,6 +89,8 @@ export const saveOutputToSupabase = async (
       creditsCost: data.credits_cost,
       createdAt: data.created_at,
       userId: data.user_id,
+      featured: data.featured ?? false,
+      featuredOrder: data.featured_order ?? null,
     };
   } catch (error: any) {
     throw new Error(`Failed to save output: ${error.message}`);
@@ -81,9 +105,16 @@ export const fetchUserOutputs = async (
   offset: number = 0
 ): Promise<SavedOutput[]> => {
   try {
+    const userResult = await supabase.auth.getUser();
+    const userId = userResult.data.user?.id;
+    if (!userId) {
+      return [];
+    }
+
     const { data, error } = await supabase
       .from('generated_outputs')
       .select('*')
+      .eq('user_id', userId)
       .order('created_at', { ascending: false })
       .limit(limit)
       .range(offset, offset + limit - 1);
@@ -103,6 +134,8 @@ export const fetchUserOutputs = async (
       creditsCost: row.credits_cost,
       createdAt: row.created_at,
       userId: row.user_id,
+      featured: row.featured ?? false,
+      featuredOrder: row.featured_order ?? null,
     }));
   } catch (error: any) {
     console.error('Failed to fetch outputs:', error);
@@ -115,6 +148,25 @@ export const fetchUserOutputs = async (
  */
 export const deleteOutput = async (outputId: string): Promise<boolean> => {
   try {
+    const { data, error: fetchError } = await supabase
+      .from('generated_outputs')
+      .select('output_url')
+      .eq('id', outputId)
+      .single();
+
+    if (fetchError) {
+      throw new Error(`Fetch error: ${fetchError.message}`);
+    }
+
+    const storagePath = data?.output_url ? extractStoragePathFromUrl(data.output_url) : null;
+
+    if (storagePath) {
+      const { error: storageError } = await supabase.storage.from(STORAGE_BUCKET).remove([storagePath]);
+      if (storageError && !String(storageError.message || '').toLowerCase().includes('not found')) {
+        throw new Error(`Storage delete error: ${storageError.message}`);
+      }
+    }
+
     const { error } = await supabase
       .from('generated_outputs')
       .delete()
@@ -161,10 +213,77 @@ export const getOutputByTaskId = async (taskId: string): Promise<SavedOutput | n
       creditsCost: data.credits_cost,
       createdAt: data.created_at,
       userId: data.user_id,
+      featured: data.featured ?? false,
+      featuredOrder: data.featured_order ?? null,
     };
   } catch (error: any) {
     console.error('Failed to get output:', error);
     return null;
+  }
+};
+
+/**
+ * Fetch featured outputs for landing page
+ */
+export const fetchFeaturedOutputs = async (limit: number = 6): Promise<SavedOutput[]> => {
+  try {
+    const { data, error } = await supabase
+      .from('generated_outputs')
+      .select('*')
+      .eq('featured', true)
+      .order('featured_order', { ascending: false })
+      .order('created_at', { ascending: false })
+      .limit(limit);
+
+    if (error) {
+      throw new Error(`Fetch error: ${error.message}`);
+    }
+
+    return (data || []).map(row => ({
+      id: row.id,
+      taskId: row.task_id,
+      model: row.model,
+      prompt: row.prompt,
+      outputUrl: row.output_url,
+      outputType: row.output_type,
+      metadata: row.metadata,
+      creditsCost: row.credits_cost,
+      createdAt: row.created_at,
+      userId: row.user_id,
+      featured: row.featured ?? false,
+      featuredOrder: row.featured_order ?? null,
+    }));
+  } catch (error: any) {
+    console.error('Failed to fetch featured outputs:', error);
+    return [];
+  }
+};
+
+/**
+ * Update featured status for landing page
+ */
+export const updateOutputFeatured = async (
+  outputId: string,
+  featured: boolean,
+  featuredOrder: number = 0
+): Promise<boolean> => {
+  try {
+    const { error } = await supabase
+      .from('generated_outputs')
+      .update({
+        featured,
+        featured_order: featured ? featuredOrder : 0,
+      })
+      .eq('id', outputId);
+
+    if (error) {
+      throw new Error(`Update error: ${error.message}`);
+    }
+
+    return true;
+  } catch (error: any) {
+    console.error('Failed to update featured output:', error);
+    return false;
   }
 };
 
