@@ -339,10 +339,36 @@ export const getOutputStatistics = async () => {
   }
 };
 
+const isDirectDownloadUrl = (url: string): boolean => {
+  return /^data:|^blob:/i.test(url);
+};
+
+const triggerAnchorDownload = (href: string, fileName?: string, openInNewTab: boolean = false) => {
+  const link = document.createElement('a');
+  link.href = href;
+  if (fileName) link.download = fileName;
+  if (openInNewTab) {
+    link.target = '_blank';
+    link.rel = 'noreferrer';
+  }
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+};
+
 /**
  * Download output file (creates a download link)
  */
 export const downloadOutput = async (outputUrl: string, fileName: string): Promise<void> => {
+  if (!outputUrl) {
+    throw new Error('Download failed: missing output URL');
+  }
+
+  if (isDirectDownloadUrl(outputUrl)) {
+    triggerAnchorDownload(outputUrl, fileName);
+    return;
+  }
+
   try {
     const response = await fetch(outputUrl);
     if (!response.ok) {
@@ -351,15 +377,19 @@ export const downloadOutput = async (outputUrl: string, fileName: string): Promi
 
     const blob = await response.blob();
     const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = fileName;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+    try {
+      triggerAnchorDownload(url, fileName);
+    } finally {
+      URL.revokeObjectURL(url);
+    }
   } catch (error: any) {
-    throw new Error(`Download failed: ${error.message}`);
+    try {
+      // Fallback for cross-origin URLs without CORS
+      triggerAnchorDownload(outputUrl, fileName, true);
+    } catch (fallbackError: any) {
+      const message = error?.message || fallbackError?.message || 'Unknown error';
+      throw new Error(`Download failed: ${message}`);
+    }
   }
 };
 
