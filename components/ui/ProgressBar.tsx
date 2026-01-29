@@ -19,7 +19,7 @@ export const ProgressBar: React.FC<ProgressBarProps> = ({
   return (
     <div className={`w-full overflow-hidden ${heightClassName} ${trackClassName}`}>
       <div
-        className={`h-full transition-all duration-500 ease-out ${barClassName} ${animated ? 'progress-bar-striped' : ''}`}
+        className={`h-full transition-[width] duration-300 ease-linear ${barClassName} ${animated ? 'progress-bar-striped' : ''}`}
         style={{ width: `${safeValue}%` }}
       />
       <style>{`

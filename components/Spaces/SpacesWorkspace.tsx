@@ -617,25 +617,38 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
   const [previewError, setPreviewError] = useState('');
 
   useEffect(() => {
+    const PROGRESS_TICK_MS = 250;
+    const PROGRESS_FAST_CAP = 90;
+    const PROGRESS_SOFT_CAP = 99;
     const intervalId = window.setInterval(() => {
       setNodes((prev) => {
         const hasRunning = prev.some((node) => node.data.status === 'running');
         if (!hasRunning) return prev;
+        const tickScale = PROGRESS_TICK_MS / 1000;
         return prev.map((node) => {
           if (node.data.status !== 'running') return node;
-          const progress = node.data.progress ?? 0;
-          if (progress >= 90) return node;
-          const increment = Math.max(1, (90 - progress) / 15);
+          const current = Number(node.data.progress) || 0;
+          let next = current;
+          if (current < PROGRESS_FAST_CAP) {
+            const remaining = PROGRESS_FAST_CAP - current;
+            const increment = Math.max(0.2, (remaining / 15) * tickScale);
+            next = Math.min(current + increment, PROGRESS_FAST_CAP);
+          } else if (current < PROGRESS_SOFT_CAP) {
+            const remaining = PROGRESS_SOFT_CAP - current;
+            const increment = Math.max(0.02, (remaining / 120) * tickScale);
+            next = Math.min(current + increment, PROGRESS_SOFT_CAP);
+          }
+          if (next === current) return node;
           return {
             ...node,
             data: {
               ...node.data,
-              progress: Math.min(progress + increment, 90),
+              progress: next,
             },
           };
         });
       });
-    }, 1000);
+    }, PROGRESS_TICK_MS);
     return () => clearInterval(intervalId);
   }, [setNodes]);
 

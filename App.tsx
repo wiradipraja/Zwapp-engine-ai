@@ -310,33 +310,53 @@ const AppContent: React.FC = () => {
     if (!session || !apiKey) return;
 
     // Background Progress Simulator (Visual Only)
+    const PROGRESS_TICK_MS = 250;
+    const PROGRESS_FAST_CAP = 90;
+    const PROGRESS_SOFT_CAP = 99;
     if (!pollIntervalRef.current) {
-        pollIntervalRef.current = window.setInterval(async () => {
+        pollIntervalRef.current = window.setInterval(() => {
           setTasks(prevTasks => {
             const pendingTasks = prevTasks.filter(t => t.state === 'waiting');
+            if (pendingTasks.length === 0) return prevTasks;
+            const queueMap = new Map(pendingTasks.map((t, idx) => [t.taskId, idx + 1]));
+            const tickScale = PROGRESS_TICK_MS / 1000;
             return prevTasks.map(task => {
-               // Only simulate progress for tasks that are still waiting
-               if (task.state === 'waiting' && task.progress < 90) {
-                 // Slow down progress as it gets closer to 90% (but keep it visible)
-                 const increment = Math.max(1, (90 - task.progress) / 15);
-                 return { 
-                   ...task, 
-                   progress: Math.min(task.progress + increment, 90),
-                   queuePosition: pendingTasks.findIndex(pt => pt.taskId === task.taskId) + 1
-                 };
+               if (task.state === 'waiting') {
+                 const current = Number(task.progress) || 0;
+                 let next = current;
+                 if (current < PROGRESS_FAST_CAP) {
+                   const remaining = PROGRESS_FAST_CAP - current;
+                   const increment = Math.max(0.2, (remaining / 15) * tickScale);
+                   next = Math.min(current + increment, PROGRESS_FAST_CAP);
+                 } else if (current < PROGRESS_SOFT_CAP) {
+                   const remaining = PROGRESS_SOFT_CAP - current;
+                   const increment = Math.max(0.02, (remaining / 120) * tickScale);
+                   next = Math.min(current + increment, PROGRESS_SOFT_CAP);
+                 }
+                 const queuePosition = queueMap.get(task.taskId) ?? task.queuePosition;
+                 if (next !== current || queuePosition !== task.queuePosition) {
+                   return { 
+                     ...task, 
+                     progress: next,
+                     queuePosition
+                   };
+                 }
                }
-               // For success/fail states, ensure progress is 100%
                if ((task.state === 'success' || task.state === 'fail') && task.progress < 100) {
                  return { ...task, progress: 100 };
                }
                return task;
             });
           });
-        }, 1000);
+        }, PROGRESS_TICK_MS);
     }
 
     // Actual API Polling - polls all waiting tasks
+    const API_POLL_MS = 1000;
+    let polling = false;
     const apiPollId = window.setInterval(async () => {
+        if (polling) return;
+        polling = true;
         // Get current tasks that need polling
         let tasksToPoll: LocalTask[] = [];
         setTasks(prevTasks => {
@@ -344,67 +364,77 @@ const AppContent: React.FC = () => {
             return prevTasks;
         });
 
-        if (tasksToPoll.length === 0) return;
+        if (tasksToPoll.length === 0) {
+            polling = false;
+            return;
+        }
 
         // Poll all waiting tasks
-        const updates = await Promise.all(tasksToPoll.map(async (task) => {
-            try {
-                const res = await queryTask(apiKey, task.taskId);
-                if (res.code === 200) {
-                    return { taskId: task.taskId, data: res.data };
-                }
-            } catch (e: any) {
-                // Log error only once per few seconds to avoid spamming
-                if (Math.random() > 0.8) {
-                   console.error(`Polling error for ${task.taskId}:`, e.message);
-                }
-            }
-            return null;
-        }));
+        try {
+          const updates = await Promise.all(tasksToPoll.map(async (task) => {
+              try {
+                  const res = await queryTask(apiKey, task.taskId);
+                  if (res.code === 200) {
+                      return { taskId: task.taskId, data: res.data };
+                  }
+              } catch (e: any) {
+                  // Log error only once per few seconds to avoid spamming
+                  if (Math.random() > 0.8) {
+                     console.error(`Polling error for ${task.taskId}:`, e.message);
+                  }
+              }
+              return null;
+          }));
 
-        // Update State with fetched data
-        setTasks(prev => prev.map(t => {
-            const update = updates.find(u => u && u.taskId === t.taskId);
-            
-            if (update && update.data) {
-                const normalized = normalizeTaskState(update.data);
-                const newState = normalized.state;
-                const apiProgress = normalizeProgress((update.data as any).progress);
-                // If success or fail, set progress to 100% immediately
-                const newProgress = (newState === 'success' || newState === 'fail')
-                  ? 100
-                  : (apiProgress !== null ? Math.max(t.progress, apiProgress) : t.progress);
-                
-                if (newState !== t.state) {
-                    const stateEmoji = newState === 'success' ? '✓' : newState === 'fail' ? '✗' : '⏳';
-                    const rawSuffix = normalized.raw && normalized.raw !== newState ? ` [${normalized.raw}]` : '';
-                    const reason = newState === 'fail' ? (getFailureReason(update.data) || update.data.failMsg || update.data.errorMsg) : '';
-                    addLog(`${stateEmoji} Task ${t.taskId.slice(-4)}: ${t.state} → ${newState}${rawSuffix}${reason ? ` (${reason})` : ''}`);
-                    
-                    // Trigger credit refresh when task completes (success or fail)
-                    if (newState === 'success' || newState === 'fail') {
-                        console.log('[App] Task completed, triggering credit refresh');
-                        setCreditRefreshTrigger(prev => prev + 1);
-                    }
-                }
+          // Update State with fetched data
+          setTasks(prev => prev.map(t => {
+              const update = updates.find(u => u && u.taskId === t.taskId);
+              
+              if (update && update.data) {
+                  const normalized = normalizeTaskState(update.data);
+                  const newState = normalized.state;
+                  const apiProgress = normalizeProgress((update.data as any).progress);
+                  // If success or fail, set progress to 100% immediately
+                  const newProgress = (newState === 'success' || newState === 'fail')
+                    ? 100
+                    : (apiProgress !== null ? Math.max(t.progress, apiProgress) : t.progress);
+                  
+                  if (newState !== t.state) {
+                      const stateEmoji = newState === 'success' ? '✓' : newState === 'fail' ? '✗' : '⏳';
+                      const rawSuffix = normalized.raw && normalized.raw !== newState ? ` [${normalized.raw}]` : '';
+                      const reason = newState === 'fail' ? (getFailureReason(update.data) || update.data.failMsg || update.data.errorMsg) : '';
+                      addLog(`${stateEmoji} Task ${t.taskId.slice(-4)}: ${t.state} → ${newState}${rawSuffix}${reason ? ` (${reason})` : ''}`);
+                      
+                      // Trigger credit refresh when task completes (success or fail)
+                      if (newState === 'success' || newState === 'fail') {
+                          console.log('[App] Task completed, triggering credit refresh');
+                          setCreditRefreshTrigger(prev => prev + 1);
+                      }
+                  }
 
-                return {
-                    ...t,
-                    ...update.data,
-                    state: newState,
-                    progress: newProgress,
-                    resultJson: (update.data as any).resultJson || (update.data as any).result || t.resultJson,
-                    failCode: update.data.failCode,
-                    failMsg: update.data.failMsg,
-                };
-            }
-            return t;
-        }));
-    }, 3000); // Check every 3 seconds
+                  return {
+                      ...t,
+                      ...update.data,
+                      state: newState,
+                      progress: newProgress,
+                      resultJson: (update.data as any).resultJson || (update.data as any).result || t.resultJson,
+                      failCode: update.data.failCode,
+                      failMsg: update.data.failMsg,
+                  };
+              }
+              return t;
+          }));
+        } finally {
+          polling = false;
+        }
+    }, API_POLL_MS); // Check every ~1 second for faster success sync
 
     return () => {
         clearInterval(apiPollId);
-        if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+        if (pollIntervalRef.current) {
+          clearInterval(pollIntervalRef.current);
+          pollIntervalRef.current = null;
+        }
     };
   }, [apiKey, session]);
 
