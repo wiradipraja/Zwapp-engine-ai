@@ -24,6 +24,13 @@ export interface SavedOutput {
 const STORAGE_BUCKET = 'kie-assets';
 const STORAGE_PUBLIC_PREFIX = `/storage/v1/object/public/${STORAGE_BUCKET}/`;
 
+const getCurrentUserId = async (): Promise<string | null> => {
+  const { data: sessionData } = await supabase.auth.getSession();
+  if (sessionData.session?.user?.id) return sessionData.session.user.id;
+  const { data: userData } = await supabase.auth.getUser();
+  return userData.user?.id || null;
+};
+
 const extractStoragePathFromUrl = (url: string): string | null => {
   if (!url) return null;
   try {
@@ -52,12 +59,14 @@ export const saveOutputToSupabase = async (
   metadata: Record<string, any> = {}
 ): Promise<SavedOutput> => {
   try {
-    const userResult = await supabase.auth.getUser();
-    const userId = userResult.data.user?.id;
+    const userId = await getCurrentUserId();
+    if (!userId) {
+      throw new Error('Authentication required to save output.');
+    }
     const now = new Date().toISOString();
     const insertData = {
       task_id: taskId,
-      user_id: userId || null,
+      user_id: userId,
       model,
       prompt,
       output_url: outputUrl,
@@ -105,10 +114,9 @@ export const fetchUserOutputs = async (
   offset: number = 0
 ): Promise<SavedOutput[]> => {
   try {
-    const userResult = await supabase.auth.getUser();
-    const userId = userResult.data.user?.id;
+    const userId = await getCurrentUserId();
     if (!userId) {
-      return [];
+      throw new Error('Authentication required to load gallery.');
     }
 
     const { data, error } = await supabase
@@ -139,7 +147,7 @@ export const fetchUserOutputs = async (
     }));
   } catch (error: any) {
     console.error('Failed to fetch outputs:', error);
-    return [];
+    throw new Error(error?.message || 'Failed to fetch outputs.');
   }
 };
 

@@ -21,14 +21,21 @@ const GalleryView: React.FC = () => {
   const isDark = theme === 'dark';
   const [items, setItems] = useState<SavedOutput[]>([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
   const [filter, setFilter] = useState<FilterType>('all');
   const [query, setQuery] = useState('');
   const [featuredOnly, setFeaturedOnly] = useState(false);
 
   const loadGallery = async () => {
     setLoading(true);
-    const data = await fetchUserOutputs(200, 0);
-    setItems(data);
+    setError('');
+    try {
+      const data = await fetchUserOutputs(200, 0);
+      setItems(data);
+    } catch (err: any) {
+      setItems([]);
+      setError(err?.message || 'Failed to load gallery.');
+    }
     setLoading(false);
   };
 
@@ -155,6 +162,8 @@ const GalleryView: React.FC = () => {
 
         {loading ? (
           <div className="text-xs font-mono text-zinc-500">Loading gallery...</div>
+        ) : error ? (
+          <div className="text-xs font-mono text-red-500">{error}</div>
         ) : filtered.length === 0 ? (
           <div className="text-xs font-mono text-zinc-500">No outputs found.</div>
         ) : (
