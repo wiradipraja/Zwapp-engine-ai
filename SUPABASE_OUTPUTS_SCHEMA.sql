@@ -77,6 +77,7 @@ create table if not exists public.ai_models (
   short_description text,
   price_per_output numeric(10,2) default 0,
   price_currency text default 'CREDITS',
+  price_unit text default 'per_output' check (price_unit in ('per_output', 'per_second')),
   thumbnail_url text,
   sample_urls text[] not null default '{}',
   capabilities jsonb default '{}'::jsonb,

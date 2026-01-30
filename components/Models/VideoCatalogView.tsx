@@ -11,11 +11,11 @@ interface VideoCatalogViewProps {
 
 type FilterMode = 'all' | 'text' | 'image';
 
-const formatCredits = (price?: number) => {
+const formatCredits = (price?: number, unit?: ModelCatalogItem['priceUnit']) => {
   if (price === undefined || price === null) return 'Custom';
   const numeric = Number(price);
   if (Number.isNaN(numeric)) return 'Custom';
-  return `${numeric.toLocaleString('en-US')} credits`;
+  return `${numeric.toLocaleString('en-US')} credits${unit === 'per_second' ? ' / sec' : ''}`;
 };
 
 const getCapabilityBadges = (item: ModelCatalogItem) => {
@@ -208,10 +208,10 @@ const VideoCatalogView: React.FC<VideoCatalogViewProps> = ({ onSelectModule, onO
                             </div>
                             <div className="text-right">
                               <div className={`text-[10px] uppercase tracking-[0.3em] ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>
-                                credits per video
+                                {item.priceUnit === 'per_second' ? 'credits per second' : 'credits per video'}
                               </div>
                               <div className={`text-sm font-semibold ${isDark ? 'text-sky-200' : 'text-sky-600'}`}>
-                                {formatCredits(item.pricePerOutput)}
+                                {formatCredits(item.pricePerOutput, item.priceUnit)}
                               </div>
                             </div>
                           </div>

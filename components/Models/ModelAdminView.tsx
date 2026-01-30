@@ -48,6 +48,7 @@ const EMPTY_FORM: ModelCatalogForm = {
   shortDescription: '',
   pricePerOutput: 0,
   priceCurrency: 'CREDITS',
+  priceUnit: 'per_output',
   thumbnailUrl: '',
   sampleUrls: [],
   capabilities: { textToImage: false, imageToImage: false, upscale: false },
@@ -288,14 +289,27 @@ const ModelAdminView: React.FC<ModelAdminViewProps> = ({ onBackToCatalog }) => {
                 />
               </div>
 
-              <div className="space-y-2">
-                <label className="text-xs uppercase tracking-[0.2em]">Credits per Output</label>
-                <input
-                  type="number"
-                  value={form.pricePerOutput ?? 0}
-                  onChange={(e) => setForm((prev) => ({ ...prev, pricePerOutput: Number(e.target.value) }))}
-                  className={`px-3 py-2 text-sm border w-full ${isDark ? 'bg-zinc-950 border-zinc-800' : 'bg-white border-zinc-300'}`}
-                />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <label className="text-xs uppercase tracking-[0.2em]">Credits</label>
+                  <input
+                    type="number"
+                    value={form.pricePerOutput ?? 0}
+                    onChange={(e) => setForm((prev) => ({ ...prev, pricePerOutput: Number(e.target.value) }))}
+                    className={`px-3 py-2 text-sm border w-full ${isDark ? 'bg-zinc-950 border-zinc-800' : 'bg-white border-zinc-300'}`}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-xs uppercase tracking-[0.2em]">Pricing Unit</label>
+                  <select
+                    value={form.priceUnit || 'per_output'}
+                    onChange={(e) => setForm((prev) => ({ ...prev, priceUnit: e.target.value as 'per_output' | 'per_second' }))}
+                    className={`px-3 py-2 text-sm border w-full ${isDark ? 'bg-zinc-950 border-zinc-800' : 'bg-white border-zinc-300'}`}
+                  >
+                    <option value="per_output">Per Output</option>
+                    <option value="per_second">Per Second</option>
+                  </select>
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -336,11 +350,12 @@ const ModelAdminView: React.FC<ModelAdminViewProps> = ({ onBackToCatalog }) => {
                         type="checkbox"
                         checked={!!form.capabilities?.[cap.id]}
                         onChange={(e) =>
-                          setForm((prev) => ({
-                            ...prev,
-                            capabilities: { ...prev.capabilities, [cap.id]: e.target.checked },
-                          }))
-                        }
+                        setForm((prev) => ({
+                          ...prev,
+                          capabilities: { ...prev.capabilities, [cap.id]: e.target.checked },
+                          priceUnit: prev.priceUnit || 'per_output',
+                        }))
+                      }
                       />
                       {cap.label}
                     </label>
@@ -467,6 +482,7 @@ const ModelAdminView: React.FC<ModelAdminViewProps> = ({ onBackToCatalog }) => {
                           shortDescription: item.shortDescription || '',
                           pricePerOutput: item.pricePerOutput || 0,
                           priceCurrency: item.priceCurrency || 'CREDITS',
+                          priceUnit: item.priceUnit || 'per_output',
                           thumbnailUrl: item.thumbnailUrl || '',
                           sampleUrls: item.sampleUrls || [],
                           capabilities: item.capabilities || {},

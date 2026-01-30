@@ -13,6 +13,7 @@ export interface ModelCatalogForm {
   shortDescription?: string;
   pricePerOutput?: number;
   priceCurrency?: string;
+  priceUnit?: 'per_output' | 'per_second';
   thumbnailUrl?: string;
   sampleUrls?: string[];
   capabilities?: ModelCapabilities;
@@ -297,8 +298,9 @@ const FALLBACK_MODELS: ModelCatalogItem[] = [
     appModule: 'motion-control',
     modelType: 'video',
     shortDescription: 'Control motion with reference frames and direction.',
-    pricePerOutput: 420,
+    pricePerOutput: 35,
     priceCurrency: 'CREDITS',
+    priceUnit: 'per_second',
     thumbnailUrl: 'https://images.unsplash.com/photo-1492691527719-9d1e07e534b4?auto=format&fit=crop&w=900&q=80',
     sampleUrls: [
       'https://images.unsplash.com/photo-1492691527719-9d1e07e534b4?auto=format&fit=crop&w=900&q=80',
@@ -319,6 +321,7 @@ const FALLBACK_MODELS: ModelCatalogItem[] = [
     shortDescription: 'Text to video with cinematic motion.',
     pricePerOutput: 520,
     priceCurrency: 'CREDITS',
+    priceUnit: 'per_output',
     thumbnailUrl: 'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=900&q=80',
     sampleUrls: [
       'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=900&q=80',
@@ -339,6 +342,7 @@ const FALLBACK_MODELS: ModelCatalogItem[] = [
     shortDescription: 'Animate stills into short video clips.',
     pricePerOutput: 560,
     priceCurrency: 'CREDITS',
+    priceUnit: 'per_output',
     thumbnailUrl: 'https://images.unsplash.com/photo-1523413651479-597eb2da0ad6?auto=format&fit=crop&w=900&q=80',
     sampleUrls: [
       'https://images.unsplash.com/photo-1523413651479-597eb2da0ad6?auto=format&fit=crop&w=900&q=80',
@@ -359,6 +363,7 @@ const FALLBACK_MODELS: ModelCatalogItem[] = [
     shortDescription: 'Higher quality text to video output.',
     pricePerOutput: 760,
     priceCurrency: 'CREDITS',
+    priceUnit: 'per_output',
     thumbnailUrl: 'https://images.unsplash.com/photo-1495567720989-cebdbdd97913?auto=format&fit=crop&w=900&q=80',
     sampleUrls: [
       'https://images.unsplash.com/photo-1495567720989-cebdbdd97913?auto=format&fit=crop&w=900&q=80',
@@ -379,6 +384,7 @@ const FALLBACK_MODELS: ModelCatalogItem[] = [
     shortDescription: 'Premium image to video with higher fidelity.',
     pricePerOutput: 820,
     priceCurrency: 'CREDITS',
+    priceUnit: 'per_output',
     thumbnailUrl: 'https://images.unsplash.com/photo-1487412720507-e7ab37603c6f?auto=format&fit=crop&w=900&q=80',
     sampleUrls: [
       'https://images.unsplash.com/photo-1487412720507-e7ab37603c6f?auto=format&fit=crop&w=900&q=80',
@@ -399,6 +405,7 @@ const FALLBACK_MODELS: ModelCatalogItem[] = [
     shortDescription: 'Flagship text to video with depth.',
     pricePerOutput: 680,
     priceCurrency: 'CREDITS',
+    priceUnit: 'per_output',
     thumbnailUrl: 'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=900&q=80',
     sampleUrls: [
       'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=900&q=80',
@@ -419,6 +426,7 @@ const FALLBACK_MODELS: ModelCatalogItem[] = [
     shortDescription: 'Turn frames into smooth video motion.',
     pricePerOutput: 720,
     priceCurrency: 'CREDITS',
+    priceUnit: 'per_output',
     thumbnailUrl: 'https://images.unsplash.com/photo-1519681393784-d120267933ba?auto=format&fit=crop&w=900&q=80',
     sampleUrls: [
       'https://images.unsplash.com/photo-1519681393784-d120267933ba?auto=format&fit=crop&w=900&q=80',
@@ -439,6 +447,7 @@ const FALLBACK_MODELS: ModelCatalogItem[] = [
     shortDescription: 'Reference guided motion with multiple frames.',
     pricePerOutput: 760,
     priceCurrency: 'CREDITS',
+    priceUnit: 'per_output',
     thumbnailUrl: 'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?auto=format&fit=crop&w=900&q=80',
     sampleUrls: [
       'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?auto=format&fit=crop&w=900&q=80',
@@ -459,6 +468,7 @@ const FALLBACK_MODELS: ModelCatalogItem[] = [
     shortDescription: 'Quick image to video animation.',
     pricePerOutput: 360,
     priceCurrency: 'CREDITS',
+    priceUnit: 'per_output',
     thumbnailUrl: 'https://images.unsplash.com/photo-1495567720989-cebdbdd97913?auto=format&fit=crop&w=900&q=80',
     sampleUrls: [
       'https://images.unsplash.com/photo-1495567720989-cebdbdd97913?auto=format&fit=crop&w=900&q=80',
@@ -482,6 +492,7 @@ const mapRowToItem = (row: any): ModelCatalogItem => {
     shortDescription: row.short_description || undefined,
     pricePerOutput: row.price_per_output !== null && row.price_per_output !== undefined ? Number(row.price_per_output) : undefined,
     priceCurrency: row.price_currency || undefined,
+    priceUnit: row.price_unit || undefined,
     thumbnailUrl: row.thumbnail_url || undefined,
     sampleUrls: row.sample_urls || undefined,
     capabilities: row.capabilities || undefined,
@@ -503,6 +514,7 @@ const mapFormToRow = (form: ModelCatalogForm) => {
     short_description: form.shortDescription,
     price_per_output: form.pricePerOutput ?? 0,
     price_currency: form.priceCurrency || 'CREDITS',
+    price_unit: form.priceUnit || 'per_output',
     thumbnail_url: form.thumbnailUrl,
     sample_urls: form.sampleUrls || [],
     capabilities: form.capabilities || {},

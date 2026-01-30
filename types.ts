@@ -343,6 +343,7 @@ export interface ModelCatalogItem {
   shortDescription?: string;
   pricePerOutput?: number;
   priceCurrency?: string;
+  priceUnit?: 'per_output' | 'per_second';
   thumbnailUrl?: string;
   sampleUrls?: string[];
   capabilities?: ModelCapabilities;
