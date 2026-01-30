@@ -128,8 +128,8 @@ const Sidebar: React.FC<SidebarProps> = ({
         </svg>
       ),
       subItems: [
-        { id: 'qwen-text-to-image', label: 'Textâ†’Image' },
-        { id: 'qwen-image-to-image', label: 'Imageâ†’Image' },
+        { id: 'qwen-text-to-image', label: 'Text-to-Image' },
+        { id: 'qwen-image-to-image', label: 'Image-to-Image' },
         { id: 'z-image', label: 'Z-Image Gen' },
       ],
     },
@@ -143,10 +143,10 @@ const Sidebar: React.FC<SidebarProps> = ({
         </svg>
       ),
       subItems: [
-        { id: 'flux2-pro-text', label: 'Pro Textâ†’Image', group: 'FLUX 2 PRO' },
-        { id: 'flux2-pro-image', label: 'Pro Imageâ†’Image', group: 'FLUX 2 PRO' },
-        { id: 'flux2-flex-text', label: 'Flex Textâ†’Image', group: 'FLUX 2 FLEX' },
-        { id: 'flux2-flex-image', label: 'Flex Imageâ†’Image', group: 'FLUX 2 FLEX' },
+        { id: 'flux2-pro-text', label: 'Pro Text-to-Image', group: 'FLUX 2 PRO' },
+        { id: 'flux2-pro-image', label: 'Pro Image-to-Image', group: 'FLUX 2 PRO' },
+        { id: 'flux2-flex-text', label: 'Flex Text-to-Image', group: 'FLUX 2 FLEX' },
+        { id: 'flux2-flex-image', label: 'Flex Image-to-Image', group: 'FLUX 2 FLEX' },
         { id: 'flux-schnell', label: 'Flux Schnell (Free)', group: 'PIXAZO' },
       ],
     },
@@ -175,10 +175,10 @@ const Sidebar: React.FC<SidebarProps> = ({
       ),
       subItems: [
         { id: 'sora2-characters', label: 'Characters' },
-        { id: 'sora2-text-to-video', label: 'Textâ†’Video' },
-        { id: 'sora2-image-to-video', label: 'Imageâ†’Video' },
-        { id: 'sora2-pro-text-to-video', label: 'Pro Textâ†’Video', group: 'SORA 2 PRO' },
-        { id: 'sora2-pro-image-to-video', label: 'Pro Imageâ†’Video', group: 'SORA 2 PRO' },
+        { id: 'sora2-text-to-video', label: 'Text-to-Video' },
+        { id: 'sora2-image-to-video', label: 'Image-to-Video' },
+        { id: 'sora2-pro-text-to-video', label: 'Pro Text-to-Video', group: 'SORA 2 PRO' },
+        { id: 'sora2-pro-image-to-video', label: 'Pro Image-to-Video', group: 'SORA 2 PRO' },
       ],
     },
     {
@@ -191,9 +191,9 @@ const Sidebar: React.FC<SidebarProps> = ({
         </svg>
       ),
       subItems: [
-        { id: 'veo3-text-to-video', label: 'Textâ†’Video' },
-        { id: 'veo3-image-to-video', label: 'Imageâ†’Video' },
-        { id: 'veo3-reference-to-video', label: 'Referenceâ†’Video' },
+        { id: 'veo3-text-to-video', label: 'Text-to-Video' },
+        { id: 'veo3-image-to-video', label: 'Image-to-Video' },
+        { id: 'veo3-reference-to-video', label: 'Reference-to-Video' },
       ],
     },
     {
@@ -206,9 +206,9 @@ const Sidebar: React.FC<SidebarProps> = ({
         </svg>
       ),
       subItems: [
-        { id: 'grok-text-to-image', label: 'Textâ†’Image' },
-        { id: 'grok-image-to-image', label: 'Imageâ†’Image' },
-        { id: 'grok-image-to-video', label: 'Imageâ†’Video' },
+        { id: 'grok-text-to-image', label: 'Text-to-Image' },
+        { id: 'grok-image-to-image', label: 'Image-to-Image' },
+        { id: 'grok-image-to-video', label: 'Image-to-Video' },
         { id: 'grok-upscale', label: 'Upscale' },
       ],
     },

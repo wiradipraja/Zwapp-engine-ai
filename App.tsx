@@ -532,7 +532,7 @@ const AppContent: React.FC = () => {
                       const stateEmoji = newState === 'success' ? 'âœ“' : newState === 'fail' ? 'âœ—' : 'â³';
                       const rawSuffix = normalized.raw && normalized.raw !== newState ? ` [${normalized.raw}]` : '';
                       const reason = newState === 'fail' ? (getFailureReason(update.data) || update.data.failMsg || update.data.errorMsg) : '';
-                      addLog(`${stateEmoji} Task ${t.taskId.slice(-4)}: ${t.state} â†’ ${newState}${rawSuffix}${reason ? ` (${reason})` : ''}`);
+                      addLog(`${stateEmoji} Task ${t.taskId.slice(-4)}: ${t.state} -> ${newState}${rawSuffix}${reason ? ` (${reason})` : ''}`);
                       
                       // Trigger credit refresh when task completes (success or fail)
                       if (newState === 'success' || newState === 'fail') {
@@ -731,29 +731,29 @@ const AppContent: React.FC = () => {
       'nano-banana-gen': 'Nano Banana Generate',
       'nano-banana-edit': 'Nano Banana Edit',
       'nano-banana-pro': 'Nano Banana Pro',
-      'qwen-text-to-image': 'Qwen Textâ†’Image',
-      'qwen-image-to-image': 'Qwen Imageâ†’Image',
+      'qwen-text-to-image': 'Qwen Text-to-Image',
+      'qwen-image-to-image': 'Qwen Image-to-Image',
       'z-image': 'Z-Image Generation',
-      'flux2-pro-text': 'Flux 2 Pro Textâ†’Image',
-      'flux2-pro-image': 'Flux 2 Pro Imageâ†’Image',
-      'flux2-flex-text': 'Flux 2 Flex Textâ†’Image',
-      'flux2-flex-image': 'Flux 2 Flex Imageâ†’Image',
+      'flux2-pro-text': 'Flux 2 Pro Text-to-Image',
+      'flux2-pro-image': 'Flux 2 Pro Image-to-Image',
+      'flux2-flex-text': 'Flux 2 Flex Text-to-Image',
+      'flux2-flex-image': 'Flux 2 Flex Image-to-Image',
       'flux-schnell': 'Flux Schnell (Free)',
       'stable-diffusion-text': 'Stable Diffusion Text-to-Image',
       'stable-diffusion-inpaint': 'Stable Diffusion Inpainting',
       'sora2-characters': 'Sora 2 Characters',
-      'sora2-text-to-video': 'Sora 2 Textâ†’Video',
-      'sora2-image-to-video': 'Sora 2 Imageâ†’Video',
-      'sora2-pro-text-to-video': 'Sora 2 Pro Textâ†’Video',
-      'sora2-pro-image-to-video': 'Sora 2 Pro Imageâ†’Video',
-      'veo3-text-to-video': 'Veo 3.1 Textâ†’Video',
-      'veo3-image-to-video': 'Veo 3.1 Imageâ†’Video',
-      'veo3-reference-to-video': 'Veo 3.1 Referenceâ†’Video',
+      'sora2-text-to-video': 'Sora 2 Text-to-Video',
+      'sora2-image-to-video': 'Sora 2 Image-to-Video',
+      'sora2-pro-text-to-video': 'Sora 2 Pro Text-to-Video',
+      'sora2-pro-image-to-video': 'Sora 2 Pro Image-to-Video',
+      'veo3-text-to-video': 'Veo 3.1 Text-to-Video',
+      'veo3-image-to-video': 'Veo 3.1 Image-to-Video',
+      'veo3-reference-to-video': 'Veo 3.1 Reference-to-Video',
       'gallery': 'Output Gallery',
       'spaces': 'Spaces Studio',
-      'grok-image-to-video': 'Grok Imageâ†’Video',
-      'grok-text-to-image': 'Grok Textâ†’Image',
-      'grok-image-to-image': 'Grok Imageâ†’Image',
+      'grok-image-to-video': 'Grok Image-to-Video',
+      'grok-text-to-image': 'Grok Text-to-Image',
+      'grok-image-to-image': 'Grok Image-to-Image',
       'grok-upscale': 'Grok Upscale',
       'landing': 'Home',
     };
