@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
 
-export type MenuSection = 'home' | 'video' | 'nano-banana' | 'qwen' | 'flux' | 'sora2' | 'veo3' | 'grok' | 'settings';
+export type MenuSection = 'home' | 'video' | 'nano-banana' | 'qwen' | 'flux' | 'stable-diffusion' | 'sora2' | 'veo3' | 'grok' | 'settings';
 export type ModuleType = 
   | 'landing'
   | 'gallery'
@@ -17,6 +17,8 @@ export type ModuleType =
   | 'flux2-pro-image' 
   | 'flux2-flex-text' 
   | 'flux2-flex-image' 
+  | 'stable-diffusion-text'
+  | 'stable-diffusion-inpaint'
   | 'sora2-characters'
   | 'sora2-text-to-video'
   | 'sora2-image-to-video'
@@ -145,6 +147,20 @@ const Sidebar: React.FC<SidebarProps> = ({
       ],
     },
     {
+      id: 'stable-diffusion-text',
+      label: 'stable diffusion',
+      section: 'stable-diffusion',
+      icon: (
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M12 4a8 8 0 100 16 8 8 0 000-16zm0 0v4m0 8v4m8-8h-4M8 12H4m10.828-4.828l-2.828 2.828m0 0L9.172 7.172m5.656 9.656l-2.828-2.828m0 0L9.172 16.828" />
+        </svg>
+      ),
+      subItems: [
+        { id: 'stable-diffusion-text', label: 'Text-to-Image' },
+        { id: 'stable-diffusion-inpaint', label: 'Inpainting' },
+      ],
+    },
+    {
       id: 'sora2-text-to-video',
       label: 'SORA 2',
       section: 'sora2',
@@ -214,6 +230,8 @@ const Sidebar: React.FC<SidebarProps> = ({
         return ['qwen-text-to-image', 'qwen-image-to-image', 'z-image'].includes(module);
       case 'flux':
         return ['flux2-pro-text', 'flux2-pro-image', 'flux2-flex-text', 'flux2-flex-image'].includes(module);
+      case 'stable-diffusion':
+        return ['stable-diffusion-text', 'stable-diffusion-inpaint'].includes(module);
       case 'sora2':
         return ['sora2-characters', 'sora2-text-to-video', 'sora2-image-to-video', 'sora2-pro-text-to-video', 'sora2-pro-image-to-video'].includes(module);
       case 'veo3':

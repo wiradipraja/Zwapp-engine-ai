@@ -50,6 +50,31 @@ export interface ZImageInput {
   aspect_ratio: '1:1' | '4:3' | '3:4' | '16:9' | '9:16';
 }
 
+// ==================== STABLE DIFFUSION (PIXAZO) TYPES ====================
+export interface StableDiffusionTextInput {
+  prompt: string;
+  negative_prompt?: string;
+  height?: number;
+  width?: number;
+  num_steps?: number;
+  guidance_scale?: number;
+  seed?: number;
+}
+
+export interface StableDiffusionInpaintInput {
+  prompt: string;
+  imageUrl?: string;
+  maskUrl?: string;
+  negative_prompt?: string;
+  height?: number;
+  width?: number;
+  num_steps?: number;
+  guidance?: number;
+  seed?: number;
+}
+
+export type StableDiffusionInput = StableDiffusionTextInput | StableDiffusionInpaintInput;
+
 // ==================== QWEN API Types ====================
 // According to KIE.AI API Documentation
 

@@ -5,7 +5,8 @@ import { supabase, signOut } from './services/supabase';
 import { generateVeo3Video } from './services/veo3Generation';
 import { fetchUserCredits, formatCreditsShort, getCreditCost } from './services/credits';
 import { saveOutputToSupabase, getOutputByTaskId } from './services/outputSaving';
-import { MotionControlInput, NanoBananaInput, ImageEditInput, ZImageInput, Flux2Input, Flux2ProTextInput, Flux2ProImageInput, Flux2FlexTextInput, Flux2FlexImageInput, QwenTextToImageInput, Sora2CharactersInput, Sora2TextToVideoInput, Sora2ImageToVideoInput, Sora2ProTextToVideoInput, Sora2ProImageToVideoInput, Veo3TextToVideoInput, Veo3ImageToVideoInput, Veo3ReferenceToVideoInput, Veo3Input, GrokImageToVideoInput, GrokImageToImageInput, GrokTextToImageInput, GrokUpscaleInput, LocalTask } from './types';
+import { generateSDXLImage, generateInpaintImage } from './services/pixazo';
+import { MotionControlInput, NanoBananaInput, ImageEditInput, ZImageInput, Flux2Input, Flux2ProTextInput, Flux2ProImageInput, Flux2FlexTextInput, Flux2FlexImageInput, QwenTextToImageInput, Sora2CharactersInput, Sora2TextToVideoInput, Sora2ImageToVideoInput, Sora2ProTextToVideoInput, Sora2ProImageToVideoInput, Veo3TextToVideoInput, Veo3ImageToVideoInput, Veo3ReferenceToVideoInput, Veo3Input, GrokImageToVideoInput, GrokImageToImageInput, GrokTextToImageInput, GrokUpscaleInput, StableDiffusionTextInput, StableDiffusionInpaintInput, LocalTask } from './types';
 import { TaskForm } from './components/TaskForm';
 import { NanoBananaGenForm } from './components/NanoBananaGenForm';
 import { NanoBananaEditForm } from './components/NanoBananaEditForm';
@@ -17,6 +18,8 @@ import { Flux2ProTextForm } from './components/Flux2ProTextForm';
 import { Flux2ProImageForm } from './components/Flux2ProImageForm';
 import { Flux2FlexTextForm } from './components/Flux2FlexTextForm';
 import { Flux2FlexImageForm } from './components/Flux2FlexImageForm';
+import { StableDiffusionTextForm } from './components/StableDiffusionTextForm';
+import { StableDiffusionInpaintForm } from './components/StableDiffusionInpaintForm';
 import { Sora2CharactersForm } from './components/Sora2CharactersForm';
 import { Sora2TextToVideoForm } from './components/Sora2TextToVideoForm';
 import { Sora2ImageToVideoForm } from './components/Sora2ImageToVideoForm';
@@ -44,6 +47,25 @@ import { normalizeTaskState, getFailureReason } from './services/taskState';
 type NanoBananaType = 'gen' | 'edit' | 'pro';
 type Flux2Type = 'pro-text' | 'pro-image' | 'flex-text' | 'flex-image';
 type AppView = 'landing' | 'auth' | 'app';
+type KieInput =
+  | MotionControlInput
+  | NanoBananaInput
+  | ImageEditInput
+  | ZImageInput
+  | Flux2Input
+  | QwenTextToImageInput
+  | Sora2CharactersInput
+  | Sora2TextToVideoInput
+  | Sora2ImageToVideoInput
+  | Sora2ProTextToVideoInput
+  | Sora2ProImageToVideoInput
+  | Veo3Input
+  | GrokImageToVideoInput
+  | GrokImageToImageInput
+  | GrokTextToImageInput
+  | GrokUpscaleInput;
+type PixazoInput = StableDiffusionTextInput | StableDiffusionInpaintInput;
+type AppInput = KieInput | PixazoInput;
 
 const extractOutputUrl = (resultJson?: string): string => {
   if (!resultJson) return '';
@@ -119,6 +141,7 @@ const AppContent: React.FC = () => {
 
   // App State
   const [apiKey, setApiKey] = useState('');
+  const [pixazoKey, setPixazoKey] = useState('');
   const [tasks, setTasks] = useState<LocalTask[]>([]);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [logs, setLogs] = useState<string[]>([]);
@@ -173,6 +196,10 @@ const AppContent: React.FC = () => {
     if (storedKey) {
         setApiKey(storedKey);
     }
+    const storedPixazoKey = localStorage.getItem('pixazo_api_key');
+    if (storedPixazoKey) {
+        setPixazoKey(storedPixazoKey);
+    }
 
     return () => subscription.unsubscribe();
   }, []);
@@ -215,11 +242,13 @@ const AppContent: React.FC = () => {
     }
   };
 
-  const handleSaveApiKey = (kieKey: string) => {
+  const handleSaveApiKey = (kieKey: string, pixazoApiKey: string) => {
       setApiKey(kieKey);
+      setPixazoKey(pixazoApiKey);
       localStorage.setItem('kie_api_key', kieKey);
+      localStorage.setItem('pixazo_api_key', pixazoApiKey);
       
-      addLog('System Configuration Updated: API Key Saved.');
+      addLog('System Configuration Updated: API Keys Saved.');
   };
 
   const handleLogout = async () => {
@@ -229,8 +258,15 @@ const AppContent: React.FC = () => {
       setCurrentView('landing');
   };
 
-  const handleCreateTask = async (input: MotionControlInput | NanoBananaInput | ImageEditInput | ZImageInput | Flux2Input | QwenTextToImageInput | Sora2CharactersInput | Sora2TextToVideoInput | Sora2ImageToVideoInput | Sora2ProTextToVideoInput | Sora2ProImageToVideoInput | Veo3Input | GrokImageToVideoInput | GrokImageToImageInput | GrokTextToImageInput | GrokUpscaleInput) => {
-    if (!apiKey) {
+  const handleCreateTask = async (input: AppInput) => {
+    const isPixazoTask = activeModule === 'stable-diffusion-text' || activeModule === 'stable-diffusion-inpaint';
+    if (isPixazoTask) {
+        if (!pixazoKey) {
+            setIsSettingsOpen(true);
+            addLog('ERROR: Pixazo API Key missing. Please configure in Settings.', true);
+            return;
+        }
+    } else if (!apiKey) {
         setIsSettingsOpen(true);
         addLog('ERROR: API Key missing. Please configure in Settings.', true);
         return;
@@ -265,18 +301,81 @@ const AppContent: React.FC = () => {
     else if (activeModule === 'grok-image-to-image') modelName = 'grok-imagine/image-to-image';
     else if (activeModule === 'grok-text-to-image') modelName = 'grok-imagine/text-to-image';
     else if (activeModule === 'grok-upscale') modelName = 'grok-imagine/upscale';
+    else if (activeModule === 'stable-diffusion-text') modelName = 'pixazo/sdxl-image';
+    else if (activeModule === 'stable-diffusion-inpaint') modelName = 'pixazo/sd-inpaint';
 
     addLog(`Initiating generation sequence [${modelName}]...`);
     
     try {
+      if (isPixazoTask) {
+        const taskId = `pixazo-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+        const createdAt = Date.now();
+        const newTask: LocalTask = {
+          taskId,
+          model: modelName,
+          state: 'waiting',
+          param: JSON.stringify(input),
+          createTime: createdAt,
+          progress: 1,
+          isRead: false,
+        };
+
+        setTasks((prev) => [newTask, ...prev]);
+        setSelectedTaskId(taskId);
+
+        try {
+          let imageUrl = '';
+          if (activeModule === 'stable-diffusion-text') {
+            const result = await generateSDXLImage(pixazoKey, input as StableDiffusionTextInput);
+            imageUrl = result.imageUrl;
+          } else {
+            const result = await generateInpaintImage(pixazoKey, input as StableDiffusionInpaintInput);
+            imageUrl = result.imageUrl;
+          }
+
+          setTasks((prev) =>
+            prev.map((task) =>
+              task.taskId === taskId
+                ? {
+                    ...task,
+                    state: 'success',
+                    progress: 100,
+                    resultJson: imageUrl,
+                    completeTime: Date.now(),
+                    costTime: Date.now() - createdAt,
+                  }
+                : task
+            )
+          );
+          addLog(`Task created successfully. ID: ${taskId}`);
+        } catch (error: any) {
+          const message = error?.message || 'Pixazo request failed';
+          setTasks((prev) =>
+            prev.map((task) =>
+              task.taskId === taskId
+                ? {
+                    ...task,
+                    state: 'fail',
+                    progress: 100,
+                    failMsg: message,
+                    completeTime: Date.now(),
+                    costTime: Date.now() - createdAt,
+                  }
+                : task
+            )
+          );
+          addLog(`ERROR: ${message}`, true);
+        }
+        return;
+      }
+
       let response;
-      
       if (isVeo3Task) {
         // Use Veo 3.1 specific API endpoint
         response = await generateVeo3Video(input as Veo3Input);
       } else {
         // Use standard KIE.AI API endpoint
-        response = await createTask(apiKey, modelName, input);
+        response = await createTask(apiKey, modelName, input as KieInput);
       }
       
       if (response.code === 200) {
@@ -360,7 +459,9 @@ const AppContent: React.FC = () => {
         // Get current tasks that need polling
         let tasksToPoll: LocalTask[] = [];
         setTasks(prevTasks => {
-            tasksToPoll = prevTasks.filter(t => t.state === 'waiting');
+            tasksToPoll = prevTasks.filter(
+              (t) => t.state === 'waiting' && !t.model.startsWith('pixazo/')
+            );
             return prevTasks;
         });
 
@@ -516,6 +617,8 @@ const AppContent: React.FC = () => {
       setExpandedSection('grok');
     } else if (['veo3-text-to-video', 'veo3-image-to-video', 'veo3-reference-to-video'].includes(module)) {
       setExpandedSection('veo3');
+    } else if (['stable-diffusion-text', 'stable-diffusion-inpaint'].includes(module)) {
+      setExpandedSection('stable-diffusion');
     }
   };
 
@@ -544,6 +647,10 @@ const AppContent: React.FC = () => {
         return <Flux2FlexTextForm onSubmit={handleCreateTask} isLoading={isSubmitting} apiKey={apiKey} />;
       case 'flux2-flex-image':
         return <Flux2FlexImageForm onSubmit={handleCreateTask} isLoading={isSubmitting} apiKey={apiKey} />;
+      case 'stable-diffusion-text':
+        return <StableDiffusionTextForm onSubmit={handleCreateTask} isLoading={isSubmitting} apiKey={pixazoKey} />;
+      case 'stable-diffusion-inpaint':
+        return <StableDiffusionInpaintForm onSubmit={handleCreateTask} isLoading={isSubmitting} apiKey={pixazoKey} />;
       case 'sora2-characters':
         return <Sora2CharactersForm onSubmit={handleCreateTask} isLoading={isSubmitting} apiKey={apiKey} />;
       case 'sora2-text-to-video':
@@ -595,6 +702,8 @@ const AppContent: React.FC = () => {
       'flux2-pro-image': 'Flux 2 Pro Image→Image',
       'flux2-flex-text': 'Flux 2 Flex Text→Image',
       'flux2-flex-image': 'Flux 2 Flex Image→Image',
+      'stable-diffusion-text': 'Stable Diffusion Text-to-Image',
+      'stable-diffusion-inpaint': 'Stable Diffusion Inpainting',
       'sora2-characters': 'Sora 2 Characters',
       'sora2-text-to-video': 'Sora 2 Text→Video',
       'sora2-image-to-video': 'Sora 2 Image→Video',
@@ -665,7 +774,8 @@ const AppContent: React.FC = () => {
         isOpen={isSettingsOpen} 
         onClose={() => setIsSettingsOpen(false)} 
         onSave={handleSaveApiKey}
-        currentKey={apiKey}
+        currentKieKey={apiKey}
+        currentPixazoKey={pixazoKey}
       />
 
       {/* Sidebar - Narrow icon-based */}
