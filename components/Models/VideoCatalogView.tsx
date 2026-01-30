@@ -4,14 +4,14 @@ import { fetchModelCatalog } from '../../services/modelCatalog';
 import type { ModelCatalogItem } from '../../types';
 import type { ModuleType } from '../layout/Sidebar';
 
-interface ImageCatalogViewProps {
+interface VideoCatalogViewProps {
   onSelectModule: (module: ModuleType) => void;
   onOpenAdmin?: () => void;
 }
 
-type FilterMode = 'all' | 'text' | 'image' | 'upscale';
+type FilterMode = 'all' | 'text' | 'image';
 
-const formatPrice = (price?: number) => {
+const formatCredits = (price?: number) => {
   if (price === undefined || price === null) return 'Custom';
   const numeric = Number(price);
   if (Number.isNaN(numeric)) return 'Custom';
@@ -21,13 +21,12 @@ const formatPrice = (price?: number) => {
 const getCapabilityBadges = (item: ModelCatalogItem) => {
   const caps = item.capabilities || {};
   const badges: string[] = [];
-  if (caps.textToImage) badges.push('Text to Image');
-  if (caps.imageToImage) badges.push('Image to Image');
-  if (caps.upscale) badges.push('Upscale');
-  return badges.length ? badges : ['Image'];
+  if (caps.textToVideo) badges.push('Text to Video');
+  if (caps.imageToVideo) badges.push('Image to Video');
+  return badges.length ? badges : ['Video'];
 };
 
-const ImageCatalogView: React.FC<ImageCatalogViewProps> = ({ onSelectModule, onOpenAdmin }) => {
+const VideoCatalogView: React.FC<VideoCatalogViewProps> = ({ onSelectModule, onOpenAdmin }) => {
   const { theme } = useTheme();
   const isDark = theme === 'dark';
   const [items, setItems] = useState<ModelCatalogItem[]>([]);
@@ -38,7 +37,7 @@ const ImageCatalogView: React.FC<ImageCatalogViewProps> = ({ onSelectModule, onO
   useEffect(() => {
     const load = async () => {
       setLoading(true);
-      const data = await fetchModelCatalog('image');
+      const data = await fetchModelCatalog('video');
       setItems(data);
       setLoading(false);
     };
@@ -53,9 +52,8 @@ const ImageCatalogView: React.FC<ImageCatalogViewProps> = ({ onSelectModule, onO
         const hay = `${item.name} ${item.family} ${item.apiModel} ${item.shortDescription || ''}`.toLowerCase();
         if (!hay.includes(q)) return false;
       }
-      if (filter === 'text' && !item.capabilities?.textToImage) return false;
-      if (filter === 'image' && !item.capabilities?.imageToImage) return false;
-      if (filter === 'upscale' && !item.capabilities?.upscale) return false;
+      if (filter === 'text' && !item.capabilities?.textToVideo) return false;
+      if (filter === 'image' && !item.capabilities?.imageToVideo) return false;
       return true;
     });
   }, [items, query, filter]);
@@ -73,20 +71,20 @@ const ImageCatalogView: React.FC<ImageCatalogViewProps> = ({ onSelectModule, onO
   return (
     <div className={`min-h-[calc(100vh-4rem)] ${isDark ? 'bg-zinc-950 text-zinc-200' : 'bg-zinc-50 text-zinc-900'}`}>
       <div className="relative overflow-hidden">
-        <div className={`absolute inset-0 ${isDark ? 'bg-[radial-gradient(circle_at_top,_rgba(255,214,170,0.12),_transparent_55%)]' : 'bg-[radial-gradient(circle_at_top,_rgba(255,191,120,0.25),_transparent_60%)]'}`} />
-        <div className="absolute -top-24 -right-24 w-72 h-72 rounded-full bg-orange-500/10 blur-3xl" />
+        <div className={`absolute inset-0 ${isDark ? 'bg-[radial-gradient(circle_at_top,_rgba(147,197,253,0.12),_transparent_55%)]' : 'bg-[radial-gradient(circle_at_top,_rgba(59,130,246,0.18),_transparent_60%)]'}`} />
+        <div className="absolute -top-24 -right-24 w-72 h-72 rounded-full bg-sky-400/10 blur-3xl" />
         <div className="relative px-6 py-8 lg:px-10">
           <div className="max-w-6xl mx-auto space-y-6">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
               <div className="space-y-2">
-                <div className={`text-xs uppercase tracking-[0.3em] ${isDark ? 'text-orange-300/70' : 'text-orange-600/80'}`}>
-                  Image Catalog
+                <div className={`text-xs uppercase tracking-[0.3em] ${isDark ? 'text-sky-300/70' : 'text-sky-600/80'}`}>
+                  Video Catalog
                 </div>
                 <h1 className="text-2xl md:text-3xl font-semibold tracking-tight">
-                  Choose the right image engine for every job
+                  Pick a video engine that matches the brief
                 </h1>
                 <p className={`text-sm md:text-base max-w-2xl ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>
-                  Grouped by model family with pricing and capability hints. Pick fast iteration or premium quality without guessing.
+                  Filter by text or image driven models. Pricing is in credits for every clip you generate.
                 </p>
               </div>
               <div className="flex items-center gap-3">
@@ -95,8 +93,8 @@ const ImageCatalogView: React.FC<ImageCatalogViewProps> = ({ onSelectModule, onO
                     onClick={onOpenAdmin}
                     className={`px-4 py-2 text-xs tracking-[0.2em] uppercase border transition-colors ${
                       isDark
-                        ? 'border-zinc-700 text-zinc-300 hover:border-orange-400 hover:text-orange-300'
-                        : 'border-zinc-300 text-zinc-600 hover:border-orange-500 hover:text-orange-600'
+                        ? 'border-zinc-700 text-zinc-300 hover:border-sky-400 hover:text-sky-300'
+                        : 'border-zinc-300 text-zinc-600 hover:border-sky-500 hover:text-sky-600'
                     }`}
                   >
                     Manage Catalog
@@ -109,9 +107,8 @@ const ImageCatalogView: React.FC<ImageCatalogViewProps> = ({ onSelectModule, onO
               <div className="flex flex-wrap gap-2">
                 {([
                   { id: 'all', label: 'All' },
-                  { id: 'text', label: 'Text to Image' },
-                  { id: 'image', label: 'Image to Image' },
-                  { id: 'upscale', label: 'Upscale' },
+                  { id: 'text', label: 'Text to Video' },
+                  { id: 'image', label: 'Image to Video' },
                 ] as const).map((chip) => (
                   <button
                     key={chip.id}
@@ -119,8 +116,8 @@ const ImageCatalogView: React.FC<ImageCatalogViewProps> = ({ onSelectModule, onO
                     className={`px-3 py-2 text-xs rounded-full border transition-colors ${
                       filter === chip.id
                         ? isDark
-                          ? 'border-orange-400/60 bg-orange-500/10 text-orange-200'
-                          : 'border-orange-500/60 bg-orange-200/50 text-orange-700'
+                          ? 'border-sky-400/60 bg-sky-500/10 text-sky-200'
+                          : 'border-sky-500/60 bg-sky-200/50 text-sky-700'
                         : isDark
                         ? 'border-zinc-800 text-zinc-400 hover:border-zinc-700'
                         : 'border-zinc-300 text-zinc-600 hover:border-zinc-400'
@@ -137,8 +134,8 @@ const ImageCatalogView: React.FC<ImageCatalogViewProps> = ({ onSelectModule, onO
                   placeholder="Search model, family, or feature..."
                   className={`w-full px-4 py-3 rounded-full border text-sm outline-none transition-colors ${
                     isDark
-                      ? 'bg-zinc-900/70 border-zinc-800 text-zinc-100 placeholder-zinc-500 focus:border-orange-400/60'
-                      : 'bg-white border-zinc-300 text-zinc-800 placeholder-zinc-400 focus:border-orange-500/60'
+                      ? 'bg-zinc-900/70 border-zinc-800 text-zinc-100 placeholder-zinc-500 focus:border-sky-400/60'
+                      : 'bg-white border-zinc-300 text-zinc-800 placeholder-zinc-400 focus:border-sky-500/60'
                   }`}
                 />
               </div>
@@ -176,8 +173,8 @@ const ImageCatalogView: React.FC<ImageCatalogViewProps> = ({ onSelectModule, onO
                         key={item.id}
                         className={`rounded-2xl border overflow-hidden transition-all ${
                           isDark
-                            ? 'border-zinc-800 bg-zinc-900/60 hover:border-orange-400/40'
-                            : 'border-zinc-200 bg-white hover:border-orange-300'
+                            ? 'border-zinc-800 bg-zinc-900/60 hover:border-sky-400/40'
+                            : 'border-zinc-200 bg-white hover:border-sky-300'
                         }`}
                       >
                         <div className="relative aspect-[4/3] overflow-hidden">
@@ -200,7 +197,7 @@ const ImageCatalogView: React.FC<ImageCatalogViewProps> = ({ onSelectModule, onO
                             ))}
                           </div>
                           <div className="absolute bottom-3 left-3">
-                            <p className="text-xs text-zinc-200">{item.shortDescription || 'Image generation engine'}</p>
+                            <p className="text-xs text-zinc-200">{item.shortDescription || 'Video generation engine'}</p>
                           </div>
                         </div>
                         <div className="p-4 space-y-4">
@@ -211,10 +208,10 @@ const ImageCatalogView: React.FC<ImageCatalogViewProps> = ({ onSelectModule, onO
                             </div>
                             <div className="text-right">
                               <div className={`text-[10px] uppercase tracking-[0.3em] ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>
-                                credits per image
+                                credits per video
                               </div>
-                              <div className={`text-sm font-semibold ${isDark ? 'text-orange-200' : 'text-orange-600'}`}>
-                                {formatPrice(item.pricePerOutput)}
+                              <div className={`text-sm font-semibold ${isDark ? 'text-sky-200' : 'text-sky-600'}`}>
+                                {formatCredits(item.pricePerOutput)}
                               </div>
                             </div>
                           </div>
@@ -237,8 +234,8 @@ const ImageCatalogView: React.FC<ImageCatalogViewProps> = ({ onSelectModule, onO
                               onClick={() => onSelectModule(item.appModule as ModuleType)}
                               className={`flex-1 px-4 py-2 text-xs uppercase tracking-[0.2em] rounded-full transition-colors ${
                                 isDark
-                                  ? 'bg-orange-500/80 text-black hover:bg-orange-400'
-                                  : 'bg-orange-500 text-white hover:bg-orange-600'
+                                  ? 'bg-sky-500/80 text-black hover:bg-sky-400'
+                                  : 'bg-sky-500 text-white hover:bg-sky-600'
                               }`}
                             >
                               Generate
@@ -247,8 +244,8 @@ const ImageCatalogView: React.FC<ImageCatalogViewProps> = ({ onSelectModule, onO
                               onClick={() => onSelectModule(item.appModule as ModuleType)}
                               className={`flex-1 px-4 py-2 text-xs uppercase tracking-[0.2em] rounded-full border transition-colors ${
                                 isDark
-                                  ? 'border-zinc-700 text-zinc-300 hover:border-orange-400 hover:text-orange-300'
-                                  : 'border-zinc-300 text-zinc-600 hover:border-orange-400 hover:text-orange-600'
+                                  ? 'border-zinc-700 text-zinc-300 hover:border-sky-400 hover:text-sky-300'
+                                  : 'border-zinc-300 text-zinc-600 hover:border-sky-400 hover:text-sky-600'
                               }`}
                             >
                               Open Form
@@ -268,4 +265,4 @@ const ImageCatalogView: React.FC<ImageCatalogViewProps> = ({ onSelectModule, onO
   );
 };
 
-export default ImageCatalogView;
+export default VideoCatalogView;

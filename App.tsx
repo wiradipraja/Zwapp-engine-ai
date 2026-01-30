@@ -41,6 +41,7 @@ import { SettingsModal } from './components/SettingsModal';
 import SpacesWorkspace from './components/Spaces/SpacesWorkspace';
 import GalleryView from './components/Gallery/GalleryView';
 import ImageCatalogView from './components/Models/ImageCatalogView';
+import VideoCatalogView from './components/Models/VideoCatalogView';
 import ModelAdminView from './components/Models/ModelAdminView';
 import Sidebar, { MenuSection, ModuleType } from './components/layout/Sidebar';
 import PublicLanding from './components/layout/PublicLanding';
@@ -160,6 +161,7 @@ const AppContent: React.FC = () => {
   // UI State
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [adminReturnModule, setAdminReturnModule] = useState<ModuleType>('image-catalog');
   
   // Credit refresh trigger - increment to force credit balance refresh
   const [creditRefreshTrigger, setCreditRefreshTrigger] = useState(0);
@@ -644,6 +646,7 @@ const AppContent: React.FC = () => {
     setActiveModule(module);
     // Auto-expand section based on module
     if ([
+      'video-catalog',
       'motion-control',
       'kling-motion-control-pixazo',
       'sora2-characters',
@@ -685,6 +688,12 @@ const AppContent: React.FC = () => {
       return;
     }
 
+    setExpandedSection(null);
+  };
+
+  const handleOpenAdmin = (returnModule: ModuleType) => {
+    setAdminReturnModule(returnModule);
+    setActiveModule('model-admin');
     setExpandedSection(null);
   };
 
@@ -745,6 +754,8 @@ const AppContent: React.FC = () => {
         return <GrokImageToImageForm onSubmit={handleCreateTask} isLoading={isSubmitting} apiKey={apiKey} />;
       case 'image-catalog':
         return null;
+      case 'video-catalog':
+        return null;
       case 'model-admin':
         return null;
       case 'gallery':
@@ -795,6 +806,7 @@ const AppContent: React.FC = () => {
       'grok-image-to-image': 'Grok Image-to-Image',
       'grok-upscale': 'Grok Upscale',
       'image-catalog': 'Image Catalog',
+      'video-catalog': 'Video Catalog',
       'model-admin': 'Catalog Admin',
       'landing': 'Home',
     };
@@ -932,12 +944,19 @@ const AppContent: React.FC = () => {
             <div className="flex-1">
               <ImageCatalogView
                 onSelectModule={handleModuleChange}
-                onOpenAdmin={() => handleModuleChange('model-admin')}
+                onOpenAdmin={isAdmin ? () => handleOpenAdmin('image-catalog') : undefined}
+              />
+            </div>
+          ) : activeModule === 'video-catalog' ? (
+            <div className="flex-1">
+              <VideoCatalogView
+                onSelectModule={handleModuleChange}
+                onOpenAdmin={isAdmin ? () => handleOpenAdmin('video-catalog') : undefined}
               />
             </div>
           ) : activeModule === 'model-admin' ? (
             <div className="flex-1">
-              <ModelAdminView onBackToCatalog={() => handleModuleChange('image-catalog')} />
+              <ModelAdminView onBackToCatalog={() => handleModuleChange(adminReturnModule)} />
             </div>
           ) : (
             <>

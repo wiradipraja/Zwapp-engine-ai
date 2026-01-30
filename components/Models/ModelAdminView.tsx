@@ -47,7 +47,7 @@ const EMPTY_FORM: ModelCatalogForm = {
   modelType: 'image',
   shortDescription: '',
   pricePerOutput: 0,
-  priceCurrency: 'IDR',
+  priceCurrency: 'CREDITS',
   thumbnailUrl: '',
   sampleUrls: [],
   capabilities: { textToImage: false, imageToImage: false, upscale: false },
@@ -92,7 +92,7 @@ const ModelAdminView: React.FC<ModelAdminViewProps> = ({ onBackToCatalog }) => {
     }
 
     const nextSlug = normalizeSlug(form.slug || form.name);
-    const payload = { ...form, slug: nextSlug };
+    const payload = { ...form, slug: nextSlug, priceCurrency: 'CREDITS' };
 
     try {
       setSaving(true);
@@ -167,7 +167,7 @@ const ModelAdminView: React.FC<ModelAdminViewProps> = ({ onBackToCatalog }) => {
             </div>
             <h2 className="text-2xl font-semibold">Model Catalog Manager</h2>
             <p className={`text-sm ${isDark ? 'text-zinc-500' : 'text-zinc-600'}`}>
-              Upload samples, set price per image, and control visibility.
+              Upload samples, set credits per output, and control visibility.
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -288,24 +288,14 @@ const ModelAdminView: React.FC<ModelAdminViewProps> = ({ onBackToCatalog }) => {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-2">
-                  <label className="text-xs uppercase tracking-[0.2em]">Price</label>
-                  <input
-                    type="number"
-                    value={form.pricePerOutput ?? 0}
-                    onChange={(e) => setForm((prev) => ({ ...prev, pricePerOutput: Number(e.target.value) }))}
-                    className={`px-3 py-2 text-sm border w-full ${isDark ? 'bg-zinc-950 border-zinc-800' : 'bg-white border-zinc-300'}`}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-xs uppercase tracking-[0.2em]">Currency</label>
-                  <input
-                    value={form.priceCurrency}
-                    onChange={(e) => setForm((prev) => ({ ...prev, priceCurrency: e.target.value }))}
-                    className={`px-3 py-2 text-sm border w-full ${isDark ? 'bg-zinc-950 border-zinc-800' : 'bg-white border-zinc-300'}`}
-                  />
-                </div>
+              <div className="space-y-2">
+                <label className="text-xs uppercase tracking-[0.2em]">Credits per Output</label>
+                <input
+                  type="number"
+                  value={form.pricePerOutput ?? 0}
+                  onChange={(e) => setForm((prev) => ({ ...prev, pricePerOutput: Number(e.target.value) }))}
+                  className={`px-3 py-2 text-sm border w-full ${isDark ? 'bg-zinc-950 border-zinc-800' : 'bg-white border-zinc-300'}`}
+                />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -338,6 +328,8 @@ const ModelAdminView: React.FC<ModelAdminViewProps> = ({ onBackToCatalog }) => {
                     { id: 'textToImage', label: 'Text to Image' },
                     { id: 'imageToImage', label: 'Image to Image' },
                     { id: 'upscale', label: 'Upscale' },
+                    { id: 'textToVideo', label: 'Text to Video' },
+                    { id: 'imageToVideo', label: 'Image to Video' },
                   ] as const).map((cap) => (
                     <label key={cap.id} className="flex items-center gap-2 text-xs">
                       <input
@@ -474,7 +466,7 @@ const ModelAdminView: React.FC<ModelAdminViewProps> = ({ onBackToCatalog }) => {
                           modelType: item.modelType,
                           shortDescription: item.shortDescription || '',
                           pricePerOutput: item.pricePerOutput || 0,
-                          priceCurrency: item.priceCurrency || 'IDR',
+                          priceCurrency: item.priceCurrency || 'CREDITS',
                           thumbnailUrl: item.thumbnailUrl || '',
                           sampleUrls: item.sampleUrls || [],
                           capabilities: item.capabilities || {},

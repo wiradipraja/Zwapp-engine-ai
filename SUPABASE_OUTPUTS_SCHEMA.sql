@@ -76,7 +76,7 @@ create table if not exists public.ai_models (
   model_type text not null check (model_type in ('image', 'video', 'text')),
   short_description text,
   price_per_output numeric(10,2) default 0,
-  price_currency text default 'IDR',
+  price_currency text default 'CREDITS',
   thumbnail_url text,
   sample_urls text[] not null default '{}',
   capabilities jsonb default '{}'::jsonb,

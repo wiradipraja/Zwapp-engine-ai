@@ -6,6 +6,7 @@ export type ModuleType =
   | 'landing'
   | 'gallery'
   | 'image-catalog'
+  | 'video-catalog'
   | 'model-admin'
   | 'motion-control' 
   | 'kling-motion-control-pixazo'
@@ -102,7 +103,7 @@ const Sidebar: React.FC<SidebarProps> = ({
       ),
     },
     {
-      id: 'motion-control',
+      id: 'video-catalog',
       label: 'VIDEO',
       section: 'video',
       icon: (
@@ -110,19 +111,6 @@ const Sidebar: React.FC<SidebarProps> = ({
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
         </svg>
       ),
-      subItems: [
-        { id: 'motion-control', label: 'Kling Motion Control', group: 'KIE AI' },
-        { id: 'kling-motion-control-pixazo', label: 'Kling 2.6 Motion Control', group: 'PIXAZO' },
-        { id: 'sora2-characters', label: 'Characters', group: 'SORA 2' },
-        { id: 'sora2-text-to-video', label: 'Text to Video', group: 'SORA 2' },
-        { id: 'sora2-image-to-video', label: 'Image to Video', group: 'SORA 2' },
-        { id: 'sora2-pro-text-to-video', label: 'Pro Text to Video', group: 'SORA 2 PRO' },
-        { id: 'sora2-pro-image-to-video', label: 'Pro Image to Video', group: 'SORA 2 PRO' },
-        { id: 'veo3-text-to-video', label: 'Text to Video', group: 'VEO 3.1' },
-        { id: 'veo3-image-to-video', label: 'Image to Video', group: 'VEO 3.1' },
-        { id: 'veo3-reference-to-video', label: 'Reference to Video', group: 'VEO 3.1' },
-        { id: 'grok-image-to-video', label: 'Image to Video', group: 'GROK' },
-      ],
     },
     {
       id: 'flux-schnell',
@@ -181,6 +169,7 @@ const Sidebar: React.FC<SidebarProps> = ({
         ].includes(module);
       case 'video':
         return [
+          'video-catalog',
           'motion-control',
           'kling-motion-control-pixazo',
           'sora2-characters',
