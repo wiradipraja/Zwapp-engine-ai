@@ -24,6 +24,15 @@ const getEnv = (key: string, viteKey: string) => {
   return '';
 };
 
+const getSiteUrl = () => {
+  const envSite = getEnv('REACT_APP_SITE_URL', 'VITE_SITE_URL');
+  if (envSite) return envSite.replace(/\/$/, '');
+  if (typeof window !== 'undefined' && window.location?.origin) {
+    return window.location.origin;
+  }
+  return '';
+};
+
 // Default Fallbacks (agar tidak crash jika env var belum diset di Vercel)
 // Ini mencegah error "supabaseUrl is required" saat deploy jika variabel lingkungan belum diset
 const DEFAULT_URL = 'https://gljcfyyiqbriuappruox.supabase.co';
@@ -55,9 +64,12 @@ export const signIn = async (email: string, password: string) => {
 };
 
 export const signUp = async (email: string, password: string) => {
+  const siteUrl = getSiteUrl();
+  const options = siteUrl ? { emailRedirectTo: siteUrl } : undefined;
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
+    options,
   });
   if (error) throw error;
   return data;
