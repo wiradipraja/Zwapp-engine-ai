@@ -1,6 +1,30 @@
 {
   "rewrites": [
     {
+      "source": "/api/pixazo/flux-schnell",
+      "destination": "https://gateway.pixazo.ai/flux-1-schnell/v1/getData"
+    },
+    {
+      "source": "/api/pixazo/sdxl",
+      "destination": "https://gateway.pixazo.ai/getImage/v1/getSDXLImage"
+    },
+    {
+      "source": "/api/pixazo/inpaint",
+      "destination": "https://gateway-stable-diffusion-v1-5-inpainting.appypie.workers.dev/getImage"
+    },
+    {
+      "source": "/api/pixazo/poll",
+      "destination": "https://gateway.pixazo.ai/ai-model-api-polling/getGenerationResults"
+    },
+    {
+      "source": "/api/pixazo/kling-motion-control",
+      "destination": "https://gateway.pixazo.ai/kling-video-v2-6-standard-motion-control/v1/kling-video-v2-6-standard-motion-control-request"
+    },
+    {
+      "source": "/api/pixazo/kling-motion-control-result",
+      "destination": "https://gateway.pixazo.ai/kling-video-v2-6-standard-motion-control/v1/kling-video-v2-6-standard-motion-control-request-result"
+    },
+    {
       "source": "/api/proxy/veo/:path*",
       "destination": "https://api.kie.ai/api/v1/veo/:path*"
     },

@@ -50,6 +50,39 @@ export interface ZImageInput {
   aspect_ratio: '1:1' | '4:3' | '3:4' | '16:9' | '9:16';
 }
 
+// ==================== STABLE DIFFUSION (PIXAZO) TYPES ====================
+export interface StableDiffusionTextInput {
+  prompt: string;
+  negative_prompt?: string;
+  height?: number;
+  width?: number;
+  num_steps?: number;
+  guidance_scale?: number;
+  seed?: number;
+}
+
+export interface StableDiffusionInpaintInput {
+  prompt: string;
+  imageUrl?: string;
+  maskUrl?: string;
+  negative_prompt?: string;
+  height?: number;
+  width?: number;
+  num_steps?: number;
+  guidance?: number;
+  seed?: number;
+}
+
+export type StableDiffusionInput = StableDiffusionTextInput | StableDiffusionInpaintInput;
+
+// ==================== PIXAZO KLING MOTION CONTROL ====================
+export interface PixazoKlingMotionControlInput {
+  image_url: string;
+  video_url: string;
+  character_orientation?: 'image' | 'video';
+  keep_original_sound?: boolean;
+}
+
 // ==================== QWEN API Types ====================
 // According to KIE.AI API Documentation
 
@@ -109,6 +142,15 @@ export interface Flux2FlexImageInput {
 }
 
 export type Flux2Input = Flux2ProTextInput | Flux2ProImageInput | Flux2FlexTextInput | Flux2FlexImageInput;
+
+// ==================== FLUX SCHNELL (PIXAZO) ====================
+export interface FluxSchnellInput {
+  prompt: string;
+  num_steps?: number;
+  seed?: number;
+  height?: number;
+  width?: number;
+}
 
 // ==================== SORA 2 API Types ====================
 // According to KIE.AI API Documentation

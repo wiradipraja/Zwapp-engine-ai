@@ -18,6 +18,12 @@ export const CREDIT_PRICING: Record<string, number> = {
   
   // Z-Image
   'z-image': 15,
+
+  // Pixazo Stable Diffusion (not billed via KIE credits)
+  'pixazo/sdxl-image': 0,
+  'pixazo/sd-inpaint': 0,
+  'pixazo/flux-schnell': 0,
+  'pixazo/kling-motion-control': 0,
   
   // Other common models (for reference)
   'flux-2/pro-text-to-image': 50,

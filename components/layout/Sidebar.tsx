@@ -1,14 +1,14 @@
-// components/layout/Sidebar.tsx
 import React, { useState } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
 
-export type MenuSection = 'image' | 'video' | 'settings';
+export type MenuSection = 'image' | 'video' | 'labs' | 'settings';
 export type ModuleType = 
   | 'landing'
   | 'gallery'
   | 'image-catalog'
   | 'model-admin'
   | 'motion-control' 
+  | 'kling-motion-control-pixazo'
   | 'nano-banana-gen' 
   | 'nano-banana-edit' 
   | 'nano-banana-pro' 
@@ -19,6 +19,9 @@ export type ModuleType =
   | 'flux2-pro-image' 
   | 'flux2-flex-text' 
   | 'flux2-flex-image' 
+  | 'flux-schnell'
+  | 'stable-diffusion-text'
+  | 'stable-diffusion-inpaint'
   | 'sora2-characters'
   | 'sora2-text-to-video'
   | 'sora2-image-to-video'
@@ -56,6 +59,7 @@ interface SidebarProps {
   onLogout: () => void;
   userEmail?: string;
   apiConnected: boolean;
+  isAdmin: boolean;
 }
 
 const Sidebar: React.FC<SidebarProps> = ({
@@ -67,6 +71,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   onLogout,
   userEmail,
   apiConnected,
+  isAdmin,
 }) => {
   const { theme, toggleTheme } = useTheme();
   const isDark = theme === 'dark';
@@ -106,7 +111,8 @@ const Sidebar: React.FC<SidebarProps> = ({
         </svg>
       ),
       subItems: [
-        { id: 'motion-control', label: 'Kling Motion Control', group: 'KLING' },
+        { id: 'motion-control', label: 'Kling Motion Control', group: 'KIE AI' },
+        { id: 'kling-motion-control-pixazo', label: 'Kling 2.6 Motion Control', group: 'PIXAZO' },
         { id: 'sora2-characters', label: 'Characters', group: 'SORA 2' },
         { id: 'sora2-text-to-video', label: 'Text to Video', group: 'SORA 2' },
         { id: 'sora2-image-to-video', label: 'Image to Video', group: 'SORA 2' },
@@ -116,6 +122,21 @@ const Sidebar: React.FC<SidebarProps> = ({
         { id: 'veo3-image-to-video', label: 'Image to Video', group: 'VEO 3.1' },
         { id: 'veo3-reference-to-video', label: 'Reference to Video', group: 'VEO 3.1' },
         { id: 'grok-image-to-video', label: 'Image to Video', group: 'GROK' },
+      ],
+    },
+    {
+      id: 'flux-schnell',
+      label: 'LABS',
+      section: 'labs',
+      icon: (
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+        </svg>
+      ),
+      subItems: [
+        { id: 'flux-schnell', label: 'Flux Schnell (Free)', group: 'PIXAZO' },
+        { id: 'stable-diffusion-text', label: 'Stable Diffusion Text-to-Image', group: 'PIXAZO' },
+        { id: 'stable-diffusion-inpaint', label: 'Stable Diffusion Inpainting', group: 'PIXAZO' },
       ],
     },
     {
@@ -161,6 +182,7 @@ const Sidebar: React.FC<SidebarProps> = ({
       case 'video':
         return [
           'motion-control',
+          'kling-motion-control-pixazo',
           'sora2-characters',
           'sora2-text-to-video',
           'sora2-image-to-video',
@@ -171,6 +193,8 @@ const Sidebar: React.FC<SidebarProps> = ({
           'veo3-reference-to-video',
           'grok-image-to-video',
         ].includes(module);
+      case 'labs':
+        return ['flux-schnell', 'stable-diffusion-text', 'stable-diffusion-inpaint'].includes(module);
       default:
         return false;
     }
@@ -194,6 +218,20 @@ const Sidebar: React.FC<SidebarProps> = ({
     
     return { groups, noGroup };
   };
+
+  const visibleMenuItems = menuItems
+    .filter((item) => {
+      if (!isAdmin && item.section === 'labs') return false;
+      if (!isAdmin && item.id === 'model-admin') return false;
+      return true;
+    })
+    .map((item) => {
+      if (item.section === 'video' && item.subItems) {
+        const subItems = isAdmin ? item.subItems : item.subItems.filter((sub) => sub.id !== 'kling-motion-control-pixazo');
+        return { ...item, subItems };
+      }
+      return item;
+    });
 
   return (
     <aside 
@@ -231,7 +269,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 
       {/* Main Navigation */}
       <nav className="flex-1 py-2 overflow-y-auto overflow-x-hidden">
-        {menuItems.map((item) => {
+        {visibleMenuItems.map((item) => {
           const isActive = activeModule === item.id || 
             (item.section && isModuleInSection(activeModule, item.section));
           const hasSubItems = item.subItems && item.subItems.length > 0;
