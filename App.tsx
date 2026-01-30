@@ -35,6 +35,8 @@ import { AuthForm } from './components/AuthForm';
 import { SettingsModal } from './components/SettingsModal';
 import SpacesWorkspace from './components/Spaces/SpacesWorkspace';
 import GalleryView from './components/Gallery/GalleryView';
+import ImageCatalogView from './components/Models/ImageCatalogView';
+import ModelAdminView from './components/Models/ModelAdminView';
 import Sidebar, { MenuSection, ModuleType } from './components/layout/Sidebar';
 import PublicLanding from './components/layout/PublicLanding';
 import Toast, { useToast, ToastMessage } from './components/ui/Toast';
@@ -123,7 +125,7 @@ const AppContent: React.FC = () => {
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [logs, setLogs] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [activeModule, setActiveModule] = useState<ModuleType>('motion-control');
+  const [activeModule, setActiveModule] = useState<ModuleType>('image-catalog');
   const [expandedSection, setExpandedSection] = useState<MenuSection | null>(null);
   const [nanoBananaType, setNanoBananaType] = useState<NanoBananaType>('gen');
   const [flux2Type, setFlux2Type] = useState<Flux2Type>('pro-text');
@@ -502,21 +504,43 @@ const AppContent: React.FC = () => {
   const handleModuleChange = (module: ModuleType) => {
     setActiveModule(module);
     // Auto-expand section based on module
-    if (module === 'motion-control') {
+    if ([
+      'motion-control',
+      'sora2-characters',
+      'sora2-text-to-video',
+      'sora2-image-to-video',
+      'sora2-pro-text-to-video',
+      'sora2-pro-image-to-video',
+      'veo3-text-to-video',
+      'veo3-image-to-video',
+      'veo3-reference-to-video',
+      'grok-image-to-video',
+    ].includes(module)) {
       setExpandedSection('video');
-    } else if (['nano-banana-gen', 'nano-banana-edit', 'nano-banana-pro'].includes(module)) {
-      setExpandedSection('nano-banana');
-    } else if (['qwen-text-to-image', 'qwen-image-to-image', 'z-image'].includes(module)) {
-      setExpandedSection('qwen');
-    } else if (['flux2-pro-text', 'flux2-pro-image', 'flux2-flex-text', 'flux2-flex-image'].includes(module)) {
-      setExpandedSection('flux');
-    } else if (['sora2-characters', 'sora2-text-to-video', 'sora2-image-to-video', 'sora2-pro-text-to-video', 'sora2-pro-image-to-video'].includes(module)) {
-      setExpandedSection('sora2');
-    } else if (['grok-image-to-video', 'grok-image-to-image', 'grok-text-to-image', 'grok-upscale'].includes(module)) {
-      setExpandedSection('grok');
-    } else if (['veo3-text-to-video', 'veo3-image-to-video', 'veo3-reference-to-video'].includes(module)) {
-      setExpandedSection('veo3');
+      return;
     }
+
+    if ([
+      'image-catalog',
+      'nano-banana-gen',
+      'nano-banana-edit',
+      'nano-banana-pro',
+      'qwen-text-to-image',
+      'qwen-image-to-image',
+      'z-image',
+      'flux2-pro-text',
+      'flux2-pro-image',
+      'flux2-flex-text',
+      'flux2-flex-image',
+      'grok-text-to-image',
+      'grok-image-to-image',
+      'grok-upscale',
+    ].includes(module)) {
+      setExpandedSection('image');
+      return;
+    }
+
+    setExpandedSection(null);
   };
 
   // Render active form
@@ -566,6 +590,10 @@ const AppContent: React.FC = () => {
         return <GrokTextToImageForm onSubmit={handleCreateTask} isLoading={isSubmitting} />;
       case 'grok-image-to-image':
         return <GrokImageToImageForm onSubmit={handleCreateTask} isLoading={isSubmitting} apiKey={apiKey} />;
+      case 'image-catalog':
+        return null;
+      case 'model-admin':
+        return null;
       case 'gallery':
         return null;
       case 'ugc':
@@ -609,6 +637,8 @@ const AppContent: React.FC = () => {
       'grok-text-to-image': 'Grok Text→Image',
       'grok-image-to-image': 'Grok Image→Image',
       'grok-upscale': 'Grok Upscale',
+      'image-catalog': 'Image Catalog',
+      'model-admin': 'Catalog Admin',
       'landing': 'Home',
     };
     return titles[activeModule] || 'Workspace';
@@ -737,6 +767,17 @@ const AppContent: React.FC = () => {
           ) : activeModule === 'gallery' ? (
             <div className="flex-1">
               <GalleryView />
+            </div>
+          ) : activeModule === 'image-catalog' ? (
+            <div className="flex-1">
+              <ImageCatalogView
+                onSelectModule={handleModuleChange}
+                onOpenAdmin={() => handleModuleChange('model-admin')}
+              />
+            </div>
+          ) : activeModule === 'model-admin' ? (
+            <div className="flex-1">
+              <ModelAdminView onBackToCatalog={() => handleModuleChange('image-catalog')} />
             </div>
           ) : (
             <>

@@ -277,3 +277,33 @@ export interface ParsedResult {
 export interface ApiConfig {
   apiKey: string;
 }
+
+// ==================== MODEL CATALOG TYPES ====================
+export type ModelOutputType = 'image' | 'video' | 'text';
+
+export interface ModelCapabilities {
+  textToImage?: boolean;
+  imageToImage?: boolean;
+  upscale?: boolean;
+  textToVideo?: boolean;
+  imageToVideo?: boolean;
+}
+
+export interface ModelCatalogItem {
+  id: string;
+  slug: string;
+  name: string;
+  family: string;
+  provider?: string;
+  apiModel: string;
+  appModule: string;
+  modelType: ModelOutputType;
+  shortDescription?: string;
+  pricePerOutput?: number;
+  priceCurrency?: string;
+  thumbnailUrl?: string;
+  sampleUrls?: string[];
+  capabilities?: ModelCapabilities;
+  active?: boolean;
+  displayOrder?: number;
+}

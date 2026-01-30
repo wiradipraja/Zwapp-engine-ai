@@ -2,10 +2,12 @@
 import React, { useState } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
 
-export type MenuSection = 'home' | 'video' | 'nano-banana' | 'qwen' | 'flux' | 'sora2' | 'veo3' | 'grok' | 'settings';
+export type MenuSection = 'image' | 'video' | 'settings';
 export type ModuleType = 
   | 'landing'
   | 'gallery'
+  | 'image-catalog'
+  | 'model-admin'
   | 'motion-control' 
   | 'nano-banana-gen' 
   | 'nano-banana-edit' 
@@ -74,7 +76,6 @@ const Sidebar: React.FC<SidebarProps> = ({
   // Auto expand when hovered, collapse when not
   const sidebarExpanded = !isCollapsed || isHovered;
 
-  // Main menu items - Flux Kontext REMOVED
   const menuItems: MenuItem[] = [
     {
       id: 'gallery',
@@ -82,6 +83,16 @@ const Sidebar: React.FC<SidebarProps> = ({
       icon: (
         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M4 6h16M4 12h16M4 18h16" />
+        </svg>
+      ),
+    },
+    {
+      id: 'image-catalog',
+      label: 'IMAGE',
+      section: 'image',
+      icon: (
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
         </svg>
       ),
     },
@@ -95,102 +106,26 @@ const Sidebar: React.FC<SidebarProps> = ({
         </svg>
       ),
       subItems: [
-        { id: 'motion-control', label: 'Kling Motion Control' },
+        { id: 'motion-control', label: 'Kling Motion Control', group: 'KLING' },
+        { id: 'sora2-characters', label: 'Characters', group: 'SORA 2' },
+        { id: 'sora2-text-to-video', label: 'Text to Video', group: 'SORA 2' },
+        { id: 'sora2-image-to-video', label: 'Image to Video', group: 'SORA 2' },
+        { id: 'sora2-pro-text-to-video', label: 'Pro Text to Video', group: 'SORA 2 PRO' },
+        { id: 'sora2-pro-image-to-video', label: 'Pro Image to Video', group: 'SORA 2 PRO' },
+        { id: 'veo3-text-to-video', label: 'Text to Video', group: 'VEO 3.1' },
+        { id: 'veo3-image-to-video', label: 'Image to Video', group: 'VEO 3.1' },
+        { id: 'veo3-reference-to-video', label: 'Reference to Video', group: 'VEO 3.1' },
+        { id: 'grok-image-to-video', label: 'Image to Video', group: 'GROK' },
       ],
     },
     {
-      id: 'nano-banana-gen',
-      label: 'NANO',
-      section: 'nano-banana',
+      id: 'model-admin',
+      label: 'CATALOG',
       icon: (
         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M13 10V3L4 14h7v7l9-11h-7z" />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
         </svg>
       ),
-      subItems: [
-        { id: 'nano-banana-gen', label: 'Nano Banana Gen' },
-        { id: 'nano-banana-edit', label: 'Nano Banana Edit' },
-        { id: 'nano-banana-pro', label: 'Nano Banana Pro' },
-      ],
-    },
-    {
-      id: 'qwen-text-to-image',
-      label: 'QWEN',
-      section: 'qwen',
-      icon: (
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-        </svg>
-      ),
-      subItems: [
-        { id: 'qwen-text-to-image', label: 'Text→Image' },
-        { id: 'qwen-image-to-image', label: 'Image→Image' },
-        { id: 'z-image', label: 'Z-Image Gen' },
-      ],
-    },
-    {
-      id: 'flux2-pro-text',
-      label: 'FLUX',
-      section: 'flux',
-      icon: (
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-        </svg>
-      ),
-      subItems: [
-        { id: 'flux2-pro-text', label: 'Pro Text→Image', group: 'FLUX 2 PRO' },
-        { id: 'flux2-pro-image', label: 'Pro Image→Image', group: 'FLUX 2 PRO' },
-        { id: 'flux2-flex-text', label: 'Flex Text→Image', group: 'FLUX 2 FLEX' },
-        { id: 'flux2-flex-image', label: 'Flex Image→Image', group: 'FLUX 2 FLEX' },
-      ],
-    },
-    {
-      id: 'sora2-text-to-video',
-      label: 'SORA 2',
-      section: 'sora2',
-      icon: (
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M7 4v16M17 4v16M3 8h4m10 0h4M3 12h18M3 16h4m10 0h4M4 20h16a1 1 0 001-1V5a1 1 0 00-1-1H4a1 1 0 00-1 1v14a1 1 0 001 1z" />
-        </svg>
-      ),
-      subItems: [
-        { id: 'sora2-characters', label: 'Characters' },
-        { id: 'sora2-text-to-video', label: 'Text→Video' },
-        { id: 'sora2-image-to-video', label: 'Image→Video' },
-        { id: 'sora2-pro-text-to-video', label: 'Pro Text→Video', group: 'SORA 2 PRO' },
-        { id: 'sora2-pro-image-to-video', label: 'Pro Image→Video', group: 'SORA 2 PRO' },
-      ],
-    },
-    {
-      id: 'veo3-text-to-video',
-      label: 'VEO 3.1',
-      section: 'veo3',
-      icon: (
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-        </svg>
-      ),
-      subItems: [
-        { id: 'veo3-text-to-video', label: 'Text→Video' },
-        { id: 'veo3-image-to-video', label: 'Image→Video' },
-        { id: 'veo3-reference-to-video', label: 'Reference→Video' },
-      ],
-    },
-    {
-      id: 'grok-image-to-video',
-      label: 'GROK',
-      section: 'grok',
-      icon: (
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M12 3l3 6 6 .5-4.5 4 1.2 6.5L12 17l-5.7 3 1.2-6.5L3 9.5 9 9l3-6z" />
-        </svg>
-      ),
-      subItems: [
-        { id: 'grok-text-to-image', label: 'Text→Image' },
-        { id: 'grok-image-to-image', label: 'Image→Image' },
-        { id: 'grok-image-to-video', label: 'Image→Video' },
-        { id: 'grok-upscale', label: 'Upscale' },
-      ],
     },
     {
       id: 'spaces',
@@ -206,20 +141,36 @@ const Sidebar: React.FC<SidebarProps> = ({
   // Check if a module belongs to a section
   const isModuleInSection = (module: ModuleType, section: MenuSection): boolean => {
     switch (section) {
+      case 'image':
+        return [
+          'image-catalog',
+          'nano-banana-gen',
+          'nano-banana-edit',
+          'nano-banana-pro',
+          'qwen-text-to-image',
+          'qwen-image-to-image',
+          'z-image',
+          'flux2-pro-text',
+          'flux2-pro-image',
+          'flux2-flex-text',
+          'flux2-flex-image',
+          'grok-text-to-image',
+          'grok-image-to-image',
+          'grok-upscale',
+        ].includes(module);
       case 'video':
-        return module === 'motion-control';
-      case 'nano-banana':
-        return ['nano-banana-gen', 'nano-banana-edit', 'nano-banana-pro'].includes(module);
-      case 'qwen':
-        return ['qwen-text-to-image', 'qwen-image-to-image', 'z-image'].includes(module);
-      case 'flux':
-        return ['flux2-pro-text', 'flux2-pro-image', 'flux2-flex-text', 'flux2-flex-image'].includes(module);
-      case 'sora2':
-        return ['sora2-characters', 'sora2-text-to-video', 'sora2-image-to-video', 'sora2-pro-text-to-video', 'sora2-pro-image-to-video'].includes(module);
-      case 'veo3':
-        return ['veo3-text-to-video', 'veo3-image-to-video', 'veo3-reference-to-video'].includes(module);
-      case 'grok':
-        return ['grok-text-to-image', 'grok-image-to-image', 'grok-image-to-video', 'grok-upscale'].includes(module);
+        return [
+          'motion-control',
+          'sora2-characters',
+          'sora2-text-to-video',
+          'sora2-image-to-video',
+          'sora2-pro-text-to-video',
+          'sora2-pro-image-to-video',
+          'veo3-text-to-video',
+          'veo3-image-to-video',
+          'veo3-reference-to-video',
+          'grok-image-to-video',
+        ].includes(module);
       default:
         return false;
     }
@@ -481,5 +432,3 @@ const Sidebar: React.FC<SidebarProps> = ({
 };
 
 export default Sidebar;
-
-
