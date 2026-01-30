@@ -30,7 +30,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
-    onSave(tempKieKey, tempPixazoKey);
+    onSave(tempKieKey.trim(), tempPixazoKey.trim());
     onClose();
   };
 

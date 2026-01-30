@@ -243,10 +243,12 @@ const AppContent: React.FC = () => {
   };
 
   const handleSaveApiKey = (kieKey: string, pixazoApiKey: string) => {
-      setApiKey(kieKey);
-      setPixazoKey(pixazoApiKey);
-      localStorage.setItem('kie_api_key', kieKey);
-      localStorage.setItem('pixazo_api_key', pixazoApiKey);
+      const cleanedKieKey = (kieKey || '').trim();
+      const cleanedPixazoKey = (pixazoApiKey || '').trim();
+      setApiKey(cleanedKieKey);
+      setPixazoKey(cleanedPixazoKey);
+      localStorage.setItem('kie_api_key', cleanedKieKey);
+      localStorage.setItem('pixazo_api_key', cleanedPixazoKey);
       
       addLog('System Configuration Updated: API Keys Saved.');
   };
@@ -260,8 +262,9 @@ const AppContent: React.FC = () => {
 
   const handleCreateTask = async (input: AppInput) => {
     const isPixazoTask = activeModule === 'stable-diffusion-text' || activeModule === 'stable-diffusion-inpaint';
+    const resolvedPixazoKey = (pixazoKey || localStorage.getItem('pixazo_api_key') || '').trim();
     if (isPixazoTask) {
-        if (!pixazoKey) {
+        if (!resolvedPixazoKey) {
             setIsSettingsOpen(true);
             addLog('ERROR: Pixazo API Key missing. Please configure in Settings.', true);
             return;
@@ -326,10 +329,10 @@ const AppContent: React.FC = () => {
         try {
           let imageUrl = '';
           if (activeModule === 'stable-diffusion-text') {
-            const result = await generateSDXLImage(pixazoKey, input as StableDiffusionTextInput);
+            const result = await generateSDXLImage(resolvedPixazoKey, input as StableDiffusionTextInput);
             imageUrl = result.imageUrl;
           } else {
-            const result = await generateInpaintImage(pixazoKey, input as StableDiffusionInpaintInput);
+            const result = await generateInpaintImage(resolvedPixazoKey, input as StableDiffusionInpaintInput);
             imageUrl = result.imageUrl;
           }
 

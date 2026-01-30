@@ -28,24 +28,28 @@ const cleanPayload = (payload: Record<string, any>) =>
 
 const parseErrorMessage = async (response: Response): Promise<string> => {
   try {
-    const data = await response.json();
-    if (data?.error) return String(data.error);
-    if (data?.message) return String(data.message);
-    return JSON.stringify(data).slice(0, 200);
-  } catch (_err) {
+    const text = await response.text();
+    if (!text) return response.statusText || 'Unknown error';
     try {
-      const text = await response.text();
+      const data = JSON.parse(text);
+      if (data?.error) return String(data.error);
+      if (data?.message) return String(data.message);
+      return JSON.stringify(data).slice(0, 200);
+    } catch (_err) {
       return text.slice(0, 200);
-    } catch (_err2) {
-      return 'Unknown error';
     }
+  } catch (_err2) {
+    return response.statusText || 'Unknown error';
   }
 };
 
 const requestPixazo = async (url: string, apiKey: string, body: Record<string, any>) => {
+  if (!apiKey || !apiKey.trim()) {
+    throw new Error('Pixazo API key missing');
+  }
   const response = await fetch(url, {
     method: 'POST',
-    headers: buildHeaders(apiKey),
+    headers: buildHeaders(apiKey.trim()),
     body: JSON.stringify(body),
   });
 
