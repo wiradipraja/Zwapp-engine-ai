@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { StableDiffusionInpaintInput } from '../types';
 import { Button } from './ui/Button';
 import { useTheme } from '../contexts/ThemeContext';
+import { Dropzone } from './ui/Dropzone';
+import { uploadAsset } from '../services/supabase';
 
 interface StableDiffusionInpaintFormProps {
   onSubmit: (input: StableDiffusionInpaintInput) => void;
@@ -27,9 +29,33 @@ export const StableDiffusionInpaintForm: React.FC<StableDiffusionInpaintFormProp
     num_steps: 20,
     guidance: 5,
   });
+  const [imageValue, setImageValue] = useState('');
+  const [maskValue, setMaskValue] = useState('');
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [uploadingMask, setUploadingMask] = useState(false);
+  const [uploadError, setUploadError] = useState('');
 
   const handleChange = (field: keyof StableDiffusionInpaintInput, value: any) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleUpload = async (
+    file: File,
+    setValue: (val: string) => void,
+    setUploading: (val: boolean) => void,
+    field: 'imageUrl' | 'maskUrl'
+  ) => {
+    setUploadError('');
+    setUploading(true);
+    try {
+      const url = await uploadAsset(file);
+      setValue(url);
+      setFormData((prev) => ({ ...prev, [field]: url }));
+    } catch (error: any) {
+      setUploadError(error?.message || 'Upload failed.');
+    } finally {
+      setUploading(false);
+    }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -44,7 +70,8 @@ export const StableDiffusionInpaintForm: React.FC<StableDiffusionInpaintFormProp
     onSubmit(payload);
   };
 
-  const canSubmit = !!formData.prompt.trim() && !!apiKey && !isLoading;
+  const canSubmit =
+    !!formData.prompt.trim() && !!apiKey && !isLoading && !uploadingImage && !uploadingMask;
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
@@ -84,42 +111,45 @@ export const StableDiffusionInpaintForm: React.FC<StableDiffusionInpaintFormProp
         />
       </div>
 
-      <div>
-        <label className={`block text-xs font-mono mb-2 ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>
-          IMAGE URL
-        </label>
-        <input
-          type="url"
-          value={formData.imageUrl || ''}
-          onChange={(e) => handleChange('imageUrl', e.target.value)}
-          placeholder="https://.../image.png"
-          className={`w-full px-3 py-2 border font-mono text-sm transition-colors ${
-            isDark
-              ? 'bg-zinc-900 border-zinc-700 text-white placeholder-zinc-600 focus:border-orange-500'
-              : 'bg-white border-zinc-300 text-zinc-900 placeholder-zinc-400 focus:border-orange-500'
-          } focus:outline-none`}
-        />
-      </div>
+      {uploadError && (
+        <div className="border border-red-800/60 bg-red-950/30 text-[10px] font-mono text-red-400 px-3 py-2">
+          {uploadError}
+        </div>
+      )}
 
-      <div>
-        <label className={`block text-xs font-mono mb-2 ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>
-          MASK URL
-        </label>
-        <input
-          type="url"
-          value={formData.maskUrl || ''}
-          onChange={(e) => handleChange('maskUrl', e.target.value)}
-          placeholder="https://.../mask.png"
-          className={`w-full px-3 py-2 border font-mono text-sm transition-colors ${
-            isDark
-              ? 'bg-zinc-900 border-zinc-700 text-white placeholder-zinc-600 focus:border-orange-500'
-              : 'bg-white border-zinc-300 text-zinc-900 placeholder-zinc-400 focus:border-orange-500'
-          } focus:outline-none`}
-        />
-        <p className={`mt-1 text-[10px] font-mono ${isDark ? 'text-zinc-600' : 'text-zinc-500'}`}>
-          Mask should indicate areas to change (white) vs keep (black).
-        </p>
-      </div>
+      <Dropzone
+        label="Inpaint Image"
+        subLabel="PNG/JPG • Max 10MB"
+        accept="image/*"
+        value={imageValue || formData.imageUrl || ''}
+        isUploading={uploadingImage}
+        onFileSelect={async (base64, file) => {
+          if (!file) return;
+          setImageValue(base64);
+          await handleUpload(file, setImageValue, setUploadingImage, 'imageUrl');
+        }}
+        onTextChange={(val) => {
+          setImageValue(val);
+          handleChange('imageUrl', val);
+        }}
+      />
+
+      <Dropzone
+        label="Mask Image"
+        subLabel="PNG/JPG • White = edit, Black = keep"
+        accept="image/*"
+        value={maskValue || formData.maskUrl || ''}
+        isUploading={uploadingMask}
+        onFileSelect={async (base64, file) => {
+          if (!file) return;
+          setMaskValue(base64);
+          await handleUpload(file, setMaskValue, setUploadingMask, 'maskUrl');
+        }}
+        onTextChange={(val) => {
+          setMaskValue(val);
+          handleChange('maskUrl', val);
+        }}
+      />
 
       <div>
         <label className={`block text-xs font-mono mb-2 ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>
