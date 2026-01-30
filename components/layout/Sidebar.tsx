@@ -57,6 +57,7 @@ interface SidebarProps {
   onLogout: () => void;
   userEmail?: string;
   apiConnected: boolean;
+  isAdmin: boolean;
 }
 
 const Sidebar: React.FC<SidebarProps> = ({
@@ -68,6 +69,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   onLogout,
   userEmail,
   apiConnected,
+  isAdmin,
 }) => {
   const { theme, toggleTheme } = useTheme();
   const isDark = theme === 'dark';
@@ -264,6 +266,16 @@ const Sidebar: React.FC<SidebarProps> = ({
     return { groups, noGroup };
   };
 
+  const visibleMenuItems = menuItems
+    .filter((item) => isAdmin || item.section !== 'stable-diffusion')
+    .map((item) => {
+      if (item.section === 'flux' && item.subItems) {
+        const subItems = isAdmin ? item.subItems : item.subItems.filter((sub) => sub.id !== 'flux-schnell');
+        return { ...item, subItems };
+      }
+      return item;
+    });
+
   return (
     <aside 
       className={`h-screen flex flex-col fixed left-0 top-0 z-50 border-r transition-all duration-300 ${
@@ -300,7 +312,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 
       {/* Main Navigation */}
       <nav className="flex-1 py-2 overflow-y-auto overflow-x-hidden">
-        {menuItems.map((item) => {
+        {visibleMenuItems.map((item) => {
           const isActive = activeModule === item.id || 
             (item.section && isModuleInSection(activeModule, item.section));
           const hasSubItems = item.subItems && item.subItems.length > 0;

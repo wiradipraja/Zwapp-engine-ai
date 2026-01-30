@@ -44,6 +44,7 @@ import PublicLanding from './components/layout/PublicLanding';
 import Toast, { useToast, ToastMessage } from './components/ui/Toast';
 import { ThemeProvider, useTheme } from './contexts/ThemeContext';
 import { normalizeTaskState, getFailureReason } from './services/taskState';
+import { isAdminUser } from './services/admin';
 
 type NanoBananaType = 'gen' | 'edit' | 'pro';
 type Flux2Type = 'pro-text' | 'pro-image' | 'flex-text' | 'flex-image';
@@ -143,6 +144,7 @@ const AppContent: React.FC = () => {
   // App State
   const [apiKey, setApiKey] = useState('');
   const [pixazoKey, setPixazoKey] = useState('');
+  const [isAdmin, setIsAdmin] = useState(false);
   const [tasks, setTasks] = useState<LocalTask[]>([]);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [logs, setLogs] = useState<string[]>([]);
@@ -205,6 +207,17 @@ const AppContent: React.FC = () => {
     return () => subscription.unsubscribe();
   }, []);
 
+  useEffect(() => {
+    const nextIsAdmin = isAdminUser(session?.user?.id);
+    setIsAdmin(nextIsAdmin);
+    if (!nextIsAdmin) {
+      if (activeModule === 'stable-diffusion-text' || activeModule === 'stable-diffusion-inpaint' || activeModule === 'flux-schnell') {
+        setActiveModule('motion-control');
+        setExpandedSection('video');
+      }
+    }
+  }, [session, activeModule]);
+
   // Fetch credits when apiKey changes or when creditRefreshTrigger changes
   useEffect(() => {
     const loadCredits = async () => {
@@ -266,6 +279,10 @@ const AppContent: React.FC = () => {
       activeModule === 'stable-diffusion-text' ||
       activeModule === 'stable-diffusion-inpaint' ||
       activeModule === 'flux-schnell';
+    if (isPixazoTask && !isAdmin) {
+        toast.error('Admin only: Pixazo features are restricted.');
+        return;
+    }
     const resolvedPixazoKey = (pixazoKey || localStorage.getItem('pixazo_api_key') || '').trim();
     if (isPixazoTask) {
         if (!resolvedPixazoKey) {
@@ -612,6 +629,10 @@ const AppContent: React.FC = () => {
 
   // Handle module change from sidebar
   const handleModuleChange = (module: ModuleType) => {
+    if (!isAdmin && (module === 'stable-diffusion-text' || module === 'stable-diffusion-inpaint' || module === 'flux-schnell')) {
+      toast.error('Admin only: Pixazo features are restricted.');
+      return;
+    }
     setActiveModule(module);
     // Auto-expand section based on module
     if (module === 'motion-control') {
@@ -792,6 +813,7 @@ const AppContent: React.FC = () => {
         onSave={handleSaveApiKey}
         currentKieKey={apiKey}
         currentPixazoKey={pixazoKey}
+        showPixazo={isAdmin}
       />
 
       {/* Sidebar - Narrow icon-based */}
@@ -804,6 +826,7 @@ const AppContent: React.FC = () => {
         onLogout={handleLogout}
         userEmail={session?.user?.email}
         apiConnected={!!apiKey}
+        isAdmin={isAdmin}
       />
 
       {/* Main Content Area - Fixed margin for collapsed sidebar, sidebar expands over content on hover */}
