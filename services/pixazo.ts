@@ -1,7 +1,7 @@
 // services/pixazo.ts
 // Pixazo Stable Diffusion integration (per provided MD docs)
 
-import { StableDiffusionTextInput, StableDiffusionInpaintInput } from '../types';
+import { StableDiffusionTextInput, StableDiffusionInpaintInput, PixazoKlingMotionControlInput } from '../types';
 
 export interface PixazoImageResult {
   imageUrl: string;
@@ -9,10 +9,18 @@ export interface PixazoImageResult {
   raw?: any;
 }
 
+export interface PixazoVideoResult {
+  outputUrl: string;
+  requestId?: string;
+  raw?: any;
+}
+
 const SDXL_ENDPOINT = '/api/pixazo/sdxl';
 const FLUX_SCHNELL_ENDPOINT = '/api/pixazo/flux-schnell';
 const INPAINT_ENDPOINT = '/api/pixazo/inpaint';
 const POLL_ENDPOINT = '/api/pixazo/poll';
+const KLING_MOTION_ENDPOINT = '/api/pixazo/kling-motion-control';
+const KLING_MOTION_RESULT_ENDPOINT = '/api/pixazo/kling-motion-control-result';
 
 const buildHeaders = (apiKey: string) => ({
   'Content-Type': 'application/json',
@@ -90,6 +98,30 @@ const pollPixazoJob = async (apiKey: string, jobSetId: string): Promise<string> 
   throw new Error('Pixazo job timed out');
 };
 
+const pollKlingMotionJob = async (apiKey: string, requestId: string): Promise<string> => {
+  const maxAttempts = 60;
+  const delayMs = 2000;
+
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    const data = await requestPixazo(KLING_MOTION_RESULT_ENDPOINT, apiKey, { request_id: requestId });
+    const status = String(data?.status || '').toUpperCase();
+    const outputUrl = data?.output_url || data?.outputUrl;
+
+    if (outputUrl) {
+      return outputUrl;
+    }
+
+    if (status === 'FAILED') {
+      const message = data?.error_message || data?.message || 'Pixazo motion control failed';
+      throw new Error(String(message));
+    }
+
+    await sleep(delayMs);
+  }
+
+  throw new Error('Pixazo motion control timed out');
+};
+
 export const generateSDXLImage = async (
   apiKey: string,
   input: StableDiffusionTextInput
@@ -165,4 +197,31 @@ export const generateInpaintImage = async (
   }
 
   throw new Error('Pixazo response missing imageUrl');
+};
+
+export const generateKlingMotionControlVideo = async (
+  apiKey: string,
+  input: PixazoKlingMotionControlInput
+): Promise<PixazoVideoResult> => {
+  const payload = cleanPayload({
+    image_url: input.image_url,
+    video_url: input.video_url,
+    character_orientation: input.character_orientation,
+    keep_original_sound: input.keep_original_sound,
+  });
+
+  const data = await requestPixazo(KLING_MOTION_ENDPOINT, apiKey, payload);
+  const requestId = data?.request_id || data?.requestId;
+  const outputUrl = data?.output_url || data?.outputUrl;
+
+  if (outputUrl) {
+    return { outputUrl, requestId: requestId ? String(requestId) : undefined, raw: data };
+  }
+
+  if (!requestId) {
+    throw new Error('Pixazo response missing request_id');
+  }
+
+  const finalUrl = await pollKlingMotionJob(apiKey, String(requestId));
+  return { outputUrl: finalUrl, requestId: String(requestId), raw: data };
 };

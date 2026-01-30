@@ -75,6 +75,14 @@ export interface StableDiffusionInpaintInput {
 
 export type StableDiffusionInput = StableDiffusionTextInput | StableDiffusionInpaintInput;
 
+// ==================== PIXAZO KLING MOTION CONTROL ====================
+export interface PixazoKlingMotionControlInput {
+  image_url: string;
+  video_url: string;
+  character_orientation?: 'image' | 'video';
+  keep_original_sound?: boolean;
+}
+
 // ==================== QWEN API Types ====================
 // According to KIE.AI API Documentation
 

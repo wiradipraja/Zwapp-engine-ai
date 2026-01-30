@@ -7,6 +7,7 @@ export type ModuleType =
   | 'landing'
   | 'gallery'
   | 'motion-control' 
+  | 'kling-motion-control-pixazo'
   | 'nano-banana-gen' 
   | 'nano-banana-edit' 
   | 'nano-banana-pro' 
@@ -100,7 +101,8 @@ const Sidebar: React.FC<SidebarProps> = ({
         </svg>
       ),
       subItems: [
-        { id: 'motion-control', label: 'Kling Motion Control' },
+        { id: 'motion-control', label: 'Kling Motion Control', group: 'KIE AI' },
+        { id: 'kling-motion-control-pixazo', label: 'Kling 2.6 Motion Control', group: 'PIXAZO' },
       ],
     },
     {
@@ -227,7 +229,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   const isModuleInSection = (module: ModuleType, section: MenuSection): boolean => {
     switch (section) {
       case 'video':
-        return module === 'motion-control';
+        return module === 'motion-control' || module === 'kling-motion-control-pixazo';
       case 'nano-banana':
         return ['nano-banana-gen', 'nano-banana-edit', 'nano-banana-pro'].includes(module);
       case 'qwen':
@@ -269,6 +271,10 @@ const Sidebar: React.FC<SidebarProps> = ({
   const visibleMenuItems = menuItems
     .filter((item) => isAdmin || item.section !== 'stable-diffusion')
     .map((item) => {
+      if (item.section === 'video' && item.subItems) {
+        const subItems = isAdmin ? item.subItems : item.subItems.filter((sub) => sub.id !== 'kling-motion-control-pixazo');
+        return { ...item, subItems };
+      }
       if (item.section === 'flux' && item.subItems) {
         const subItems = isAdmin ? item.subItems : item.subItems.filter((sub) => sub.id !== 'flux-schnell');
         return { ...item, subItems };

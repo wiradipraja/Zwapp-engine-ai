@@ -17,6 +17,14 @@
       "destination": "https://gateway.pixazo.ai/ai-model-api-polling/getGenerationResults"
     },
     {
+      "source": "/api/pixazo/kling-motion-control",
+      "destination": "https://gateway.pixazo.ai/kling-video-v2-6-standard-motion-control/v1/kling-video-v2-6-standard-motion-control-request"
+    },
+    {
+      "source": "/api/pixazo/kling-motion-control-result",
+      "destination": "https://gateway.pixazo.ai/kling-video-v2-6-standard-motion-control/v1/kling-video-v2-6-standard-motion-control-request-result"
+    },
+    {
       "source": "/api/proxy/veo/:path*",
       "destination": "https://api.kie.ai/api/v1/veo/:path*"
     },

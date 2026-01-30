@@ -9,6 +9,7 @@ interface DropzoneProps {
   value?: string;
   onTextChange?: (val: string) => void;
   isUploading?: boolean;
+  maxSizeMB?: number;
 }
 
 export const Dropzone: React.FC<DropzoneProps> = ({ 
@@ -19,7 +20,8 @@ export const Dropzone: React.FC<DropzoneProps> = ({
   placeholder,
   value,
   onTextChange,
-  isUploading
+  isUploading,
+  maxSizeMB = 10
 }) => {
   const [isDragging, setIsDragging] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -73,9 +75,9 @@ export const Dropzone: React.FC<DropzoneProps> = ({
         return;
     }
 
-    // Size check (e.g. 10MB soft limit based on docs)
-    if (file.size > 10 * 1024 * 1024) {
-        setError("FILE TOO LARGE (MAX 10MB)");
+    // Size check (default 10MB)
+    if (file.size > maxSizeMB * 1024 * 1024) {
+        setError(`FILE TOO LARGE (MAX ${maxSizeMB}MB)`);
         return;
     }
 

@@ -23,6 +23,7 @@ export const CREDIT_PRICING: Record<string, number> = {
   'pixazo/sdxl-image': 0,
   'pixazo/sd-inpaint': 0,
   'pixazo/flux-schnell': 0,
+  'pixazo/kling-motion-control': 0,
   
   // Other common models (for reference)
   'flux-2/pro-text-to-image': 50,

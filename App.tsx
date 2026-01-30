@@ -5,8 +5,8 @@ import { supabase, signOut } from './services/supabase';
 import { generateVeo3Video } from './services/veo3Generation';
 import { fetchUserCredits, formatCreditsShort, getCreditCost } from './services/credits';
 import { saveOutputToSupabase, getOutputByTaskId } from './services/outputSaving';
-import { generateSDXLImage, generateInpaintImage, generateFluxSchnellImage } from './services/pixazo';
-import { MotionControlInput, NanoBananaInput, ImageEditInput, ZImageInput, Flux2Input, Flux2ProTextInput, Flux2ProImageInput, Flux2FlexTextInput, Flux2FlexImageInput, FluxSchnellInput, QwenTextToImageInput, Sora2CharactersInput, Sora2TextToVideoInput, Sora2ImageToVideoInput, Sora2ProTextToVideoInput, Sora2ProImageToVideoInput, Veo3TextToVideoInput, Veo3ImageToVideoInput, Veo3ReferenceToVideoInput, Veo3Input, GrokImageToVideoInput, GrokImageToImageInput, GrokTextToImageInput, GrokUpscaleInput, StableDiffusionTextInput, StableDiffusionInpaintInput, LocalTask } from './types';
+import { generateSDXLImage, generateInpaintImage, generateFluxSchnellImage, generateKlingMotionControlVideo } from './services/pixazo';
+import { MotionControlInput, NanoBananaInput, ImageEditInput, ZImageInput, Flux2Input, Flux2ProTextInput, Flux2ProImageInput, Flux2FlexTextInput, Flux2FlexImageInput, FluxSchnellInput, QwenTextToImageInput, Sora2CharactersInput, Sora2TextToVideoInput, Sora2ImageToVideoInput, Sora2ProTextToVideoInput, Sora2ProImageToVideoInput, Veo3TextToVideoInput, Veo3ImageToVideoInput, Veo3ReferenceToVideoInput, Veo3Input, GrokImageToVideoInput, GrokImageToImageInput, GrokTextToImageInput, GrokUpscaleInput, StableDiffusionTextInput, StableDiffusionInpaintInput, PixazoKlingMotionControlInput, LocalTask } from './types';
 import { TaskForm } from './components/TaskForm';
 import { NanoBananaGenForm } from './components/NanoBananaGenForm';
 import { NanoBananaEditForm } from './components/NanoBananaEditForm';
@@ -21,6 +21,7 @@ import { Flux2FlexImageForm } from './components/Flux2FlexImageForm';
 import { FluxSchnellForm } from './components/FluxSchnellForm';
 import { StableDiffusionTextForm } from './components/StableDiffusionTextForm';
 import { StableDiffusionInpaintForm } from './components/StableDiffusionInpaintForm';
+import { KlingMotionControlPixazoForm } from './components/KlingMotionControlPixazoForm';
 import { Sora2CharactersForm } from './components/Sora2CharactersForm';
 import { Sora2TextToVideoForm } from './components/Sora2TextToVideoForm';
 import { Sora2ImageToVideoForm } from './components/Sora2ImageToVideoForm';
@@ -66,7 +67,7 @@ type KieInput =
   | GrokImageToImageInput
   | GrokTextToImageInput
   | GrokUpscaleInput;
-type PixazoInput = StableDiffusionTextInput | StableDiffusionInpaintInput | FluxSchnellInput;
+type PixazoInput = StableDiffusionTextInput | StableDiffusionInpaintInput | FluxSchnellInput | PixazoKlingMotionControlInput;
 type AppInput = KieInput | PixazoInput;
 
 const extractOutputUrl = (resultJson?: string): string => {
@@ -211,7 +212,7 @@ const AppContent: React.FC = () => {
     const nextIsAdmin = isAdminUser(session?.user?.id);
     setIsAdmin(nextIsAdmin);
     if (!nextIsAdmin) {
-      if (activeModule === 'stable-diffusion-text' || activeModule === 'stable-diffusion-inpaint' || activeModule === 'flux-schnell') {
+      if (activeModule === 'stable-diffusion-text' || activeModule === 'stable-diffusion-inpaint' || activeModule === 'flux-schnell' || activeModule === 'kling-motion-control-pixazo') {
         setActiveModule('motion-control');
         setExpandedSection('video');
       }
@@ -278,7 +279,8 @@ const AppContent: React.FC = () => {
     const isPixazoTask =
       activeModule === 'stable-diffusion-text' ||
       activeModule === 'stable-diffusion-inpaint' ||
-      activeModule === 'flux-schnell';
+      activeModule === 'flux-schnell' ||
+      activeModule === 'kling-motion-control-pixazo';
     if (isPixazoTask && !isAdmin) {
         toast.error('Admin only: Pixazo features are restricted.');
         return;
@@ -303,6 +305,7 @@ const AppContent: React.FC = () => {
     
     let modelName = '';
     if (activeModule === 'motion-control') modelName = 'kling-2.6/motion-control';
+    else if (activeModule === 'kling-motion-control-pixazo') modelName = 'pixazo/kling-motion-control';
     else if (activeModule === 'nano-banana-gen') modelName = 'google/nano-banana';
     else if (activeModule === 'nano-banana-edit') modelName = 'google/nano-banana-edit';
     else if (activeModule === 'nano-banana-pro') modelName = 'nano-banana-pro';
@@ -349,16 +352,19 @@ const AppContent: React.FC = () => {
         setSelectedTaskId(taskId);
 
         try {
-          let imageUrl = '';
+          let outputUrl = '';
           if (activeModule === 'stable-diffusion-text') {
             const result = await generateSDXLImage(resolvedPixazoKey, input as StableDiffusionTextInput);
-            imageUrl = result.imageUrl;
+            outputUrl = result.imageUrl;
           } else if (activeModule === 'stable-diffusion-inpaint') {
             const result = await generateInpaintImage(resolvedPixazoKey, input as StableDiffusionInpaintInput);
-            imageUrl = result.imageUrl;
+            outputUrl = result.imageUrl;
+          } else if (activeModule === 'kling-motion-control-pixazo') {
+            const result = await generateKlingMotionControlVideo(resolvedPixazoKey, input as PixazoKlingMotionControlInput);
+            outputUrl = result.outputUrl;
           } else {
             const result = await generateFluxSchnellImage(resolvedPixazoKey, input as FluxSchnellInput);
-            imageUrl = result.imageUrl;
+            outputUrl = result.imageUrl;
           }
 
           setTasks((prev) =>
@@ -368,7 +374,7 @@ const AppContent: React.FC = () => {
                     ...task,
                     state: 'success',
                     progress: 100,
-                    resultJson: imageUrl,
+                    resultJson: outputUrl,
                     completeTime: Date.now(),
                     costTime: Date.now() - createdAt,
                   }
@@ -629,13 +635,13 @@ const AppContent: React.FC = () => {
 
   // Handle module change from sidebar
   const handleModuleChange = (module: ModuleType) => {
-    if (!isAdmin && (module === 'stable-diffusion-text' || module === 'stable-diffusion-inpaint' || module === 'flux-schnell')) {
+    if (!isAdmin && (module === 'stable-diffusion-text' || module === 'stable-diffusion-inpaint' || module === 'flux-schnell' || module === 'kling-motion-control-pixazo')) {
       toast.error('Admin only: Pixazo features are restricted.');
       return;
     }
     setActiveModule(module);
     // Auto-expand section based on module
-    if (module === 'motion-control') {
+    if (module === 'motion-control' || module === 'kling-motion-control-pixazo') {
       setExpandedSection('video');
     } else if (['nano-banana-gen', 'nano-banana-edit', 'nano-banana-pro'].includes(module)) {
       setExpandedSection('nano-banana');
@@ -661,6 +667,8 @@ const AppContent: React.FC = () => {
     switch (activeModule) {
       case 'motion-control':
         return <TaskForm onSubmit={handleCreateTask} isLoading={isSubmitting} apiKey={apiKey} />;
+      case 'kling-motion-control-pixazo':
+        return <KlingMotionControlPixazoForm onSubmit={handleCreateTask} isLoading={isSubmitting} apiKey={pixazoKey} />;
       case 'nano-banana-gen':
         return <NanoBananaGenForm onSubmit={handleCreateTask} isLoading={isSubmitting} apiKey={apiKey} />;
       case 'nano-banana-edit':
@@ -728,6 +736,7 @@ const AppContent: React.FC = () => {
   const getModuleTitle = () => {
     const titles: Record<string, string> = {
       'motion-control': 'Kling Motion Control',
+      'kling-motion-control-pixazo': 'Kling 2.6 Motion Control (Pixazo)',
       'nano-banana-gen': 'Nano Banana Generate',
       'nano-banana-edit': 'Nano Banana Edit',
       'nano-banana-pro': 'Nano Banana Pro',

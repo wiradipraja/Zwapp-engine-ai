@@ -39,6 +39,18 @@ export default defineConfig(({ mode }) => {
             rewrite: () => '/getImage',
             secure: true,
           },
+          '/api/pixazo/kling-motion-control': {
+            target: 'https://gateway.pixazo.ai',
+            changeOrigin: true,
+            rewrite: () => '/kling-video-v2-6-standard-motion-control/v1/kling-video-v2-6-standard-motion-control-request',
+            secure: true,
+          },
+          '/api/pixazo/kling-motion-control-result': {
+            target: 'https://gateway.pixazo.ai',
+            changeOrigin: true,
+            rewrite: () => '/kling-video-v2-6-standard-motion-control/v1/kling-video-v2-6-standard-motion-control-request-result',
+            secure: true,
+          },
         }
       },
       plugins: [react()],
