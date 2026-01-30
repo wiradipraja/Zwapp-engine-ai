@@ -10,6 +10,7 @@ export interface PixazoImageResult {
 }
 
 const SDXL_ENDPOINT = '/api/pixazo/sdxl';
+const FLUX_SCHNELL_ENDPOINT = '/api/pixazo/flux-schnell';
 const INPAINT_ENDPOINT = '/api/pixazo/inpaint';
 const POLL_ENDPOINT = '/api/pixazo/poll';
 
@@ -108,6 +109,28 @@ export const generateSDXLImage = async (
 
   if (!imageUrl) {
     throw new Error('Pixazo response missing imageUrl');
+  }
+
+  return { imageUrl, raw: data };
+};
+
+export const generateFluxSchnellImage = async (
+  apiKey: string,
+  input: { prompt: string; num_steps?: number; seed?: number; height?: number; width?: number }
+): Promise<PixazoImageResult> => {
+  const payload = cleanPayload({
+    prompt: input.prompt,
+    num_steps: input.num_steps,
+    seed: input.seed,
+    height: input.height,
+    width: input.width,
+  });
+
+  const data = await requestPixazo(FLUX_SCHNELL_ENDPOINT, apiKey, payload);
+  const imageUrl = data?.output || data?.imageUrl || data?.results?.[0]?.imageUrl;
+
+  if (!imageUrl) {
+    throw new Error('Pixazo response missing output');
   }
 
   return { imageUrl, raw: data };

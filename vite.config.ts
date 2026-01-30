@@ -21,6 +21,12 @@ export default defineConfig(({ mode }) => {
             rewrite: () => '/getImage/v1/getSDXLImage',
             secure: true,
           },
+          '/api/pixazo/flux-schnell': {
+            target: 'https://gateway.pixazo.ai',
+            changeOrigin: true,
+            rewrite: () => '/flux-1-schnell/v1/getData',
+            secure: true,
+          },
           '/api/pixazo/poll': {
             target: 'https://gateway.pixazo.ai',
             changeOrigin: true,

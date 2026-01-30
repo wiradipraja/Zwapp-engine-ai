@@ -135,6 +135,15 @@ export interface Flux2FlexImageInput {
 
 export type Flux2Input = Flux2ProTextInput | Flux2ProImageInput | Flux2FlexTextInput | Flux2FlexImageInput;
 
+// ==================== FLUX SCHNELL (PIXAZO) ====================
+export interface FluxSchnellInput {
+  prompt: string;
+  num_steps?: number;
+  seed?: number;
+  height?: number;
+  width?: number;
+}
+
 // ==================== SORA 2 API Types ====================
 // According to KIE.AI API Documentation
 

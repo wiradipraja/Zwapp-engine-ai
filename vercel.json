@@ -1,6 +1,10 @@
 {
   "rewrites": [
     {
+      "source": "/api/pixazo/flux-schnell",
+      "destination": "https://gateway.pixazo.ai/flux-1-schnell/v1/getData"
+    },
+    {
       "source": "/api/pixazo/sdxl",
       "destination": "https://gateway.pixazo.ai/getImage/v1/getSDXLImage"
     },

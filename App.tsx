@@ -1,12 +1,12 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+﻿import React, { useState, useEffect, useRef, useCallback } from 'react';
 import 'reactflow/dist/style.css';
 import { createTask, queryTask } from './services/api';
 import { supabase, signOut } from './services/supabase';
 import { generateVeo3Video } from './services/veo3Generation';
 import { fetchUserCredits, formatCreditsShort, getCreditCost } from './services/credits';
 import { saveOutputToSupabase, getOutputByTaskId } from './services/outputSaving';
-import { generateSDXLImage, generateInpaintImage } from './services/pixazo';
-import { MotionControlInput, NanoBananaInput, ImageEditInput, ZImageInput, Flux2Input, Flux2ProTextInput, Flux2ProImageInput, Flux2FlexTextInput, Flux2FlexImageInput, QwenTextToImageInput, Sora2CharactersInput, Sora2TextToVideoInput, Sora2ImageToVideoInput, Sora2ProTextToVideoInput, Sora2ProImageToVideoInput, Veo3TextToVideoInput, Veo3ImageToVideoInput, Veo3ReferenceToVideoInput, Veo3Input, GrokImageToVideoInput, GrokImageToImageInput, GrokTextToImageInput, GrokUpscaleInput, StableDiffusionTextInput, StableDiffusionInpaintInput, LocalTask } from './types';
+import { generateSDXLImage, generateInpaintImage, generateFluxSchnellImage } from './services/pixazo';
+import { MotionControlInput, NanoBananaInput, ImageEditInput, ZImageInput, Flux2Input, Flux2ProTextInput, Flux2ProImageInput, Flux2FlexTextInput, Flux2FlexImageInput, FluxSchnellInput, QwenTextToImageInput, Sora2CharactersInput, Sora2TextToVideoInput, Sora2ImageToVideoInput, Sora2ProTextToVideoInput, Sora2ProImageToVideoInput, Veo3TextToVideoInput, Veo3ImageToVideoInput, Veo3ReferenceToVideoInput, Veo3Input, GrokImageToVideoInput, GrokImageToImageInput, GrokTextToImageInput, GrokUpscaleInput, StableDiffusionTextInput, StableDiffusionInpaintInput, LocalTask } from './types';
 import { TaskForm } from './components/TaskForm';
 import { NanoBananaGenForm } from './components/NanoBananaGenForm';
 import { NanoBananaEditForm } from './components/NanoBananaEditForm';
@@ -18,6 +18,7 @@ import { Flux2ProTextForm } from './components/Flux2ProTextForm';
 import { Flux2ProImageForm } from './components/Flux2ProImageForm';
 import { Flux2FlexTextForm } from './components/Flux2FlexTextForm';
 import { Flux2FlexImageForm } from './components/Flux2FlexImageForm';
+import { FluxSchnellForm } from './components/FluxSchnellForm';
 import { StableDiffusionTextForm } from './components/StableDiffusionTextForm';
 import { StableDiffusionInpaintForm } from './components/StableDiffusionInpaintForm';
 import { Sora2CharactersForm } from './components/Sora2CharactersForm';
@@ -64,7 +65,7 @@ type KieInput =
   | GrokImageToImageInput
   | GrokTextToImageInput
   | GrokUpscaleInput;
-type PixazoInput = StableDiffusionTextInput | StableDiffusionInpaintInput;
+type PixazoInput = StableDiffusionTextInput | StableDiffusionInpaintInput | FluxSchnellInput;
 type AppInput = KieInput | PixazoInput;
 
 const extractOutputUrl = (resultJson?: string): string => {
@@ -235,9 +236,9 @@ const AppContent: React.FC = () => {
   const addLog = (msg: string, isError: boolean = false) => {
     setLogs(prev => [`> ${msg}`, ...prev].slice(0, 50));
     // Show toast notification for important messages
-    if (isError || msg.includes('ERROR') || msg.includes('Critical') || msg.includes('✗')) {
+    if (isError || msg.includes('ERROR') || msg.includes('Critical') || msg.includes('âœ—')) {
       toast.error(msg);
-    } else if (msg.includes('success') || msg.includes('Success') || msg.includes('✓')) {
+    } else if (msg.includes('success') || msg.includes('Success') || msg.includes('âœ“')) {
       toast.success(msg);
     }
   };
@@ -261,7 +262,10 @@ const AppContent: React.FC = () => {
   };
 
   const handleCreateTask = async (input: AppInput) => {
-    const isPixazoTask = activeModule === 'stable-diffusion-text' || activeModule === 'stable-diffusion-inpaint';
+    const isPixazoTask =
+      activeModule === 'stable-diffusion-text' ||
+      activeModule === 'stable-diffusion-inpaint' ||
+      activeModule === 'flux-schnell';
     const resolvedPixazoKey = (pixazoKey || localStorage.getItem('pixazo_api_key') || '').trim();
     if (isPixazoTask) {
         if (!resolvedPixazoKey) {
@@ -306,6 +310,7 @@ const AppContent: React.FC = () => {
     else if (activeModule === 'grok-upscale') modelName = 'grok-imagine/upscale';
     else if (activeModule === 'stable-diffusion-text') modelName = 'pixazo/sdxl-image';
     else if (activeModule === 'stable-diffusion-inpaint') modelName = 'pixazo/sd-inpaint';
+    else if (activeModule === 'flux-schnell') modelName = 'pixazo/flux-schnell';
 
     addLog(`Initiating generation sequence [${modelName}]...`);
     
@@ -331,8 +336,11 @@ const AppContent: React.FC = () => {
           if (activeModule === 'stable-diffusion-text') {
             const result = await generateSDXLImage(resolvedPixazoKey, input as StableDiffusionTextInput);
             imageUrl = result.imageUrl;
-          } else {
+          } else if (activeModule === 'stable-diffusion-inpaint') {
             const result = await generateInpaintImage(resolvedPixazoKey, input as StableDiffusionInpaintInput);
+            imageUrl = result.imageUrl;
+          } else {
+            const result = await generateFluxSchnellImage(resolvedPixazoKey, input as FluxSchnellInput);
             imageUrl = result.imageUrl;
           }
 
@@ -504,10 +512,10 @@ const AppContent: React.FC = () => {
                     : (apiProgress !== null ? Math.max(t.progress, apiProgress) : t.progress);
                   
                   if (newState !== t.state) {
-                      const stateEmoji = newState === 'success' ? '✓' : newState === 'fail' ? '✗' : '⏳';
+                      const stateEmoji = newState === 'success' ? 'âœ“' : newState === 'fail' ? 'âœ—' : 'â³';
                       const rawSuffix = normalized.raw && normalized.raw !== newState ? ` [${normalized.raw}]` : '';
                       const reason = newState === 'fail' ? (getFailureReason(update.data) || update.data.failMsg || update.data.errorMsg) : '';
-                      addLog(`${stateEmoji} Task ${t.taskId.slice(-4)}: ${t.state} → ${newState}${rawSuffix}${reason ? ` (${reason})` : ''}`);
+                      addLog(`${stateEmoji} Task ${t.taskId.slice(-4)}: ${t.state} â†’ ${newState}${rawSuffix}${reason ? ` (${reason})` : ''}`);
                       
                       // Trigger credit refresh when task completes (success or fail)
                       if (newState === 'success' || newState === 'fail') {
@@ -614,6 +622,8 @@ const AppContent: React.FC = () => {
       setExpandedSection('qwen');
     } else if (['flux2-pro-text', 'flux2-pro-image', 'flux2-flex-text', 'flux2-flex-image'].includes(module)) {
       setExpandedSection('flux');
+    } else if (module === 'flux-schnell') {
+      setExpandedSection('flux');
     } else if (['sora2-characters', 'sora2-text-to-video', 'sora2-image-to-video', 'sora2-pro-text-to-video', 'sora2-pro-image-to-video'].includes(module)) {
       setExpandedSection('sora2');
     } else if (['grok-image-to-video', 'grok-image-to-image', 'grok-text-to-image', 'grok-upscale'].includes(module)) {
@@ -650,6 +660,8 @@ const AppContent: React.FC = () => {
         return <Flux2FlexTextForm onSubmit={handleCreateTask} isLoading={isSubmitting} apiKey={apiKey} />;
       case 'flux2-flex-image':
         return <Flux2FlexImageForm onSubmit={handleCreateTask} isLoading={isSubmitting} apiKey={apiKey} />;
+      case 'flux-schnell':
+        return <FluxSchnellForm onSubmit={handleCreateTask} isLoading={isSubmitting} apiKey={pixazoKey} />;
       case 'stable-diffusion-text':
         return <StableDiffusionTextForm onSubmit={handleCreateTask} isLoading={isSubmitting} apiKey={pixazoKey} />;
       case 'stable-diffusion-inpaint':
@@ -698,28 +710,29 @@ const AppContent: React.FC = () => {
       'nano-banana-gen': 'Nano Banana Generate',
       'nano-banana-edit': 'Nano Banana Edit',
       'nano-banana-pro': 'Nano Banana Pro',
-      'qwen-text-to-image': 'Qwen Text→Image',
-      'qwen-image-to-image': 'Qwen Image→Image',
+      'qwen-text-to-image': 'Qwen Textâ†’Image',
+      'qwen-image-to-image': 'Qwen Imageâ†’Image',
       'z-image': 'Z-Image Generation',
-      'flux2-pro-text': 'Flux 2 Pro Text→Image',
-      'flux2-pro-image': 'Flux 2 Pro Image→Image',
-      'flux2-flex-text': 'Flux 2 Flex Text→Image',
-      'flux2-flex-image': 'Flux 2 Flex Image→Image',
+      'flux2-pro-text': 'Flux 2 Pro Textâ†’Image',
+      'flux2-pro-image': 'Flux 2 Pro Imageâ†’Image',
+      'flux2-flex-text': 'Flux 2 Flex Textâ†’Image',
+      'flux2-flex-image': 'Flux 2 Flex Imageâ†’Image',
+      'flux-schnell': 'Flux Schnell (Free)',
       'stable-diffusion-text': 'Stable Diffusion Text-to-Image',
       'stable-diffusion-inpaint': 'Stable Diffusion Inpainting',
       'sora2-characters': 'Sora 2 Characters',
-      'sora2-text-to-video': 'Sora 2 Text→Video',
-      'sora2-image-to-video': 'Sora 2 Image→Video',
-      'sora2-pro-text-to-video': 'Sora 2 Pro Text→Video',
-      'sora2-pro-image-to-video': 'Sora 2 Pro Image→Video',
-      'veo3-text-to-video': 'Veo 3.1 Text→Video',
-      'veo3-image-to-video': 'Veo 3.1 Image→Video',
-      'veo3-reference-to-video': 'Veo 3.1 Reference→Video',
+      'sora2-text-to-video': 'Sora 2 Textâ†’Video',
+      'sora2-image-to-video': 'Sora 2 Imageâ†’Video',
+      'sora2-pro-text-to-video': 'Sora 2 Pro Textâ†’Video',
+      'sora2-pro-image-to-video': 'Sora 2 Pro Imageâ†’Video',
+      'veo3-text-to-video': 'Veo 3.1 Textâ†’Video',
+      'veo3-image-to-video': 'Veo 3.1 Imageâ†’Video',
+      'veo3-reference-to-video': 'Veo 3.1 Referenceâ†’Video',
       'gallery': 'Output Gallery',
       'spaces': 'Spaces Studio',
-      'grok-image-to-video': 'Grok Image→Video',
-      'grok-text-to-image': 'Grok Text→Image',
-      'grok-image-to-image': 'Grok Image→Image',
+      'grok-image-to-video': 'Grok Imageâ†’Video',
+      'grok-text-to-image': 'Grok Textâ†’Image',
+      'grok-image-to-image': 'Grok Imageâ†’Image',
       'grok-upscale': 'Grok Upscale',
       'landing': 'Home',
     };
@@ -830,7 +843,7 @@ const AppContent: React.FC = () => {
                   creditBalance < 500 ? 'text-yellow-500' :
                   'text-green-500'
                 }`}>
-                  {creditBalance !== null ? formatCreditsShort(creditBalance) : '—'}
+                  {creditBalance !== null ? formatCreditsShort(creditBalance) : 'â€”'}
                 </span>
               )}
             </div>

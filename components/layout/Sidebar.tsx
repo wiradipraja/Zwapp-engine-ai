@@ -1,4 +1,4 @@
-// components/layout/Sidebar.tsx
+﻿// components/layout/Sidebar.tsx
 import React, { useState } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
 
@@ -17,6 +17,7 @@ export type ModuleType =
   | 'flux2-pro-image' 
   | 'flux2-flex-text' 
   | 'flux2-flex-image' 
+  | 'flux-schnell'
   | 'stable-diffusion-text'
   | 'stable-diffusion-inpaint'
   | 'sora2-characters'
@@ -125,8 +126,8 @@ const Sidebar: React.FC<SidebarProps> = ({
         </svg>
       ),
       subItems: [
-        { id: 'qwen-text-to-image', label: 'Text→Image' },
-        { id: 'qwen-image-to-image', label: 'Image→Image' },
+        { id: 'qwen-text-to-image', label: 'Textâ†’Image' },
+        { id: 'qwen-image-to-image', label: 'Imageâ†’Image' },
         { id: 'z-image', label: 'Z-Image Gen' },
       ],
     },
@@ -140,10 +141,11 @@ const Sidebar: React.FC<SidebarProps> = ({
         </svg>
       ),
       subItems: [
-        { id: 'flux2-pro-text', label: 'Pro Text→Image', group: 'FLUX 2 PRO' },
-        { id: 'flux2-pro-image', label: 'Pro Image→Image', group: 'FLUX 2 PRO' },
-        { id: 'flux2-flex-text', label: 'Flex Text→Image', group: 'FLUX 2 FLEX' },
-        { id: 'flux2-flex-image', label: 'Flex Image→Image', group: 'FLUX 2 FLEX' },
+        { id: 'flux2-pro-text', label: 'Pro Textâ†’Image', group: 'FLUX 2 PRO' },
+        { id: 'flux2-pro-image', label: 'Pro Imageâ†’Image', group: 'FLUX 2 PRO' },
+        { id: 'flux2-flex-text', label: 'Flex Textâ†’Image', group: 'FLUX 2 FLEX' },
+        { id: 'flux2-flex-image', label: 'Flex Imageâ†’Image', group: 'FLUX 2 FLEX' },
+        { id: 'flux-schnell', label: 'Flux Schnell (Free)', group: 'PIXAZO' },
       ],
     },
     {
@@ -171,10 +173,10 @@ const Sidebar: React.FC<SidebarProps> = ({
       ),
       subItems: [
         { id: 'sora2-characters', label: 'Characters' },
-        { id: 'sora2-text-to-video', label: 'Text→Video' },
-        { id: 'sora2-image-to-video', label: 'Image→Video' },
-        { id: 'sora2-pro-text-to-video', label: 'Pro Text→Video', group: 'SORA 2 PRO' },
-        { id: 'sora2-pro-image-to-video', label: 'Pro Image→Video', group: 'SORA 2 PRO' },
+        { id: 'sora2-text-to-video', label: 'Textâ†’Video' },
+        { id: 'sora2-image-to-video', label: 'Imageâ†’Video' },
+        { id: 'sora2-pro-text-to-video', label: 'Pro Textâ†’Video', group: 'SORA 2 PRO' },
+        { id: 'sora2-pro-image-to-video', label: 'Pro Imageâ†’Video', group: 'SORA 2 PRO' },
       ],
     },
     {
@@ -187,9 +189,9 @@ const Sidebar: React.FC<SidebarProps> = ({
         </svg>
       ),
       subItems: [
-        { id: 'veo3-text-to-video', label: 'Text→Video' },
-        { id: 'veo3-image-to-video', label: 'Image→Video' },
-        { id: 'veo3-reference-to-video', label: 'Reference→Video' },
+        { id: 'veo3-text-to-video', label: 'Textâ†’Video' },
+        { id: 'veo3-image-to-video', label: 'Imageâ†’Video' },
+        { id: 'veo3-reference-to-video', label: 'Referenceâ†’Video' },
       ],
     },
     {
@@ -202,9 +204,9 @@ const Sidebar: React.FC<SidebarProps> = ({
         </svg>
       ),
       subItems: [
-        { id: 'grok-text-to-image', label: 'Text→Image' },
-        { id: 'grok-image-to-image', label: 'Image→Image' },
-        { id: 'grok-image-to-video', label: 'Image→Video' },
+        { id: 'grok-text-to-image', label: 'Textâ†’Image' },
+        { id: 'grok-image-to-image', label: 'Imageâ†’Image' },
+        { id: 'grok-image-to-video', label: 'Imageâ†’Video' },
         { id: 'grok-upscale', label: 'Upscale' },
       ],
     },
@@ -229,7 +231,7 @@ const Sidebar: React.FC<SidebarProps> = ({
       case 'qwen':
         return ['qwen-text-to-image', 'qwen-image-to-image', 'z-image'].includes(module);
       case 'flux':
-        return ['flux2-pro-text', 'flux2-pro-image', 'flux2-flex-text', 'flux2-flex-image'].includes(module);
+        return ['flux2-pro-text', 'flux2-pro-image', 'flux2-flex-text', 'flux2-flex-image', 'flux-schnell'].includes(module);
       case 'stable-diffusion':
         return ['stable-diffusion-text', 'stable-diffusion-inpaint'].includes(module);
       case 'sora2':
