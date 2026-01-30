@@ -1,6 +1,18 @@
 {
   "rewrites": [
     {
+      "source": "/api/pixazo/sdxl",
+      "destination": "https://gateway.pixazo.ai/getImage/v1/getSDXLImage"
+    },
+    {
+      "source": "/api/pixazo/inpaint",
+      "destination": "https://gateway-stable-diffusion-v1-5-inpainting.appypie.workers.dev/getImage"
+    },
+    {
+      "source": "/api/pixazo/poll",
+      "destination": "https://gateway.pixazo.ai/ai-model-api-polling/getGenerationResults"
+    },
+    {
       "source": "/api/proxy/veo/:path*",
       "destination": "https://api.kie.ai/api/v1/veo/:path*"
     },

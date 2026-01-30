@@ -9,13 +9,13 @@ export interface PixazoImageResult {
   raw?: any;
 }
 
-const SDXL_ENDPOINT = 'https://gateway.pixazo.ai/getImage/v1/getSDXLImage';
-const INPAINT_ENDPOINT = 'https://gateway-stable-diffusion-v1-5-inpainting.appypie.workers.dev/getImage';
-const POLL_ENDPOINT = 'https://gateway.pixazo.ai/ai-model-api-polling/getGenerationResults';
+const SDXL_ENDPOINT = '/api/pixazo/sdxl';
+const INPAINT_ENDPOINT = '/api/pixazo/inpaint';
+const POLL_ENDPOINT = '/api/pixazo/poll';
 
 const buildHeaders = (apiKey: string) => ({
   'Content-Type': 'application/json',
-  'Cache-Control': 'no-cache',
+  'Accept': 'application/json',
   'Ocp-Apim-Subscription-Key': apiKey,
 });
 
