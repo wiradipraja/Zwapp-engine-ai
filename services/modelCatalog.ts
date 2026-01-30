@@ -1,6 +1,9 @@
 import { supabase } from './supabase';
 import type { ModelCatalogItem, ModelOutputType, ModelCapabilities } from '../types';
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const isValidUuid = (value?: string) => !!value && UUID_REGEX.test(value);
+
 export interface ModelCatalogForm {
   id?: string;
   slug?: string;
@@ -503,7 +506,7 @@ const mapRowToItem = (row: any): ModelCatalogItem => {
 
 const mapFormToRow = (form: ModelCatalogForm) => {
   return {
-    id: form.id,
+    id: isValidUuid(form.id) ? form.id : undefined,
     slug: form.slug,
     name: form.name,
     family: form.family,
@@ -551,8 +554,9 @@ export const fetchModelCatalog = async (type?: ModelOutputType): Promise<ModelCa
 
 export const upsertModel = async (form: ModelCatalogForm): Promise<ModelCatalogItem> => {
   const payload = mapFormToRow(form);
+  const isUpdate = isValidUuid(form.id);
 
-  if (form.id) {
+  if (isUpdate && payload.id) {
     const { data, error } = await supabase
       .from('ai_models')
       .update(payload)

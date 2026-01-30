@@ -56,6 +56,9 @@ const EMPTY_FORM: ModelCatalogForm = {
   displayOrder: 0,
 };
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const isValidUuid = (value?: string) => !!value && UUID_REGEX.test(value);
+
 const ModelAdminView: React.FC<ModelAdminViewProps> = ({ onBackToCatalog }) => {
   const { theme } = useTheme();
   const isDark = theme === 'dark';
@@ -471,7 +474,7 @@ const ModelAdminView: React.FC<ModelAdminViewProps> = ({ onBackToCatalog }) => {
                     <div className="flex flex-wrap gap-2">
                       <button
                         onClick={() => setForm({
-                          id: item.id,
+                          id: isValidUuid(item.id) ? item.id : undefined,
                           slug: item.slug,
                           name: item.name,
                           family: item.family,
