@@ -9,7 +9,9 @@ export const getFailureReason = (dataOrText: any): string | null => {
       ? dataOrText
       : `${dataOrText?.state ?? ''} ${dataOrText?.status ?? ''} ${dataOrText?.failMsg ?? ''} ${
           dataOrText?.errorMsg ?? ''
-        } ${dataOrText?.error ?? ''}`;
+        } ${dataOrText?.error ?? ''} ${dataOrText?.msg ?? ''} ${dataOrText?.message ?? ''} ${
+          dataOrText?.reason ?? ''
+        } ${dataOrText?.detail ?? ''}`;
   const lower = text.toLowerCase();
 
   const has = (value: string) => lower.includes(value);
@@ -57,10 +59,13 @@ export const normalizeTaskState = (data: any): { state: NormalizedTaskState; raw
   const rawState = String(statusValue ?? '').toLowerCase();
   const failMsg = String(data?.failMsg ?? '');
   const errorMsg = String(data?.errorMsg ?? data?.error ?? '');
-  const combined = `${rawState} ${failMsg} ${errorMsg}`.toLowerCase();
+  const metaMsg = String(data?.msg ?? data?.message ?? data?.reason ?? data?.detail ?? '');
+  const combined = `${rawState} ${failMsg} ${errorMsg} ${metaMsg}`.toLowerCase();
   const numericState = Number(statusValue);
   const hasNumericState = Number.isFinite(numericState);
-  const hasFailureDetails = Boolean(data?.failMsg || data?.failCode || data?.errorMsg || data?.error);
+  const hasFailureDetails = Boolean(
+    data?.failMsg || data?.failCode || data?.errorMsg || data?.error || data?.msg || data?.message || data?.reason || data?.detail
+  );
   const hasOutput = Boolean(
     data?.resultJson ||
       data?.result ||

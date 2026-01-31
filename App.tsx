@@ -532,8 +532,9 @@ const AppContent: React.FC = () => {
                   const res = isVeo3Model(task.model)
                     ? await queryVeoTask(apiKey, task.taskId)
                     : await queryTask(apiKey, task.taskId);
-                  if (res?.data) {
-                      return { taskId: task.taskId, data: res.data };
+                  const data = res?.data ?? res?.result ?? res?.task ?? res;
+                  if (data) {
+                      return { taskId: task.taskId, data };
                   }
               } catch (e: any) {
                   // Log error only once per few seconds to avoid spamming
@@ -560,7 +561,16 @@ const AppContent: React.FC = () => {
                   if (newState !== t.state) {
                       const stateEmoji = newState === 'success' ? 'âœ“' : newState === 'fail' ? 'âœ—' : 'â³';
                       const rawSuffix = normalized.raw && normalized.raw !== newState ? ` [${normalized.raw}]` : '';
-                      const reason = newState === 'fail' ? (getFailureReason(update.data) || update.data.failMsg || update.data.errorMsg) : '';
+                  const reason =
+                    newState === 'fail'
+                      ? (getFailureReason(update.data) ||
+                          update.data.failMsg ||
+                          update.data.errorMsg ||
+                          update.data.msg ||
+                          update.data.message ||
+                          update.data.reason ||
+                          update.data.detail)
+                      : '';
                       addLog(`${stateEmoji} Task ${t.taskId.slice(-4)}: ${t.state} -> ${newState}${rawSuffix}${reason ? ` (${reason})` : ''}`);
                       
                       // Trigger credit refresh when task completes (success or fail)
@@ -577,7 +587,14 @@ const AppContent: React.FC = () => {
                       progress: newProgress,
                       resultJson: (update.data as any).resultJson || (update.data as any).result || t.resultJson,
                       failCode: update.data.failCode,
-                      failMsg: update.data.failMsg,
+                      failMsg:
+                        update.data.failMsg ||
+                        update.data.msg ||
+                        update.data.message ||
+                        update.data.reason ||
+                        update.data.detail ||
+                        update.data.errorMsg ||
+                        update.data.error,
                   };
               }
               return t;
