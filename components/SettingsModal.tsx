@@ -54,16 +54,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         <form onSubmit={handleSave} className="p-6 space-y-6">
            {/* KIE.AI API Key */}
            <div>
-              <label className="block text-xs text-orange-500 mb-2 font-mono uppercase">KIE.AI API Key</label>
-              <p className="mb-3 text-[10px] text-zinc-400 font-mono">
-                If you don&apos;t have an API KEY <a
-                  href="https://kie.ai?ref=8f1f806be6c8f38ff8ef3d6fc4567944"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-orange-400 hover:text-orange-300 underline"
-                >CLICK HERE</a>
-                <span className="ml-2">Kalau mau dapat 100 kredit gratis klik link ini.</span>
-              </p>
+              <label className="block text-xs text-orange-500 mb-2 font-mono uppercase">Authorized API Key</label>
               <div className="relative">
                 <input 
                     type="password" 
