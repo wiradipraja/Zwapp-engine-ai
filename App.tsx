@@ -124,6 +124,44 @@ const inferOutputType = (url: string, model: string): 'image' | 'video' | 'text'
   return 'image';
 };
 
+const isTaskLike = (value: any): boolean => {
+  if (!value || typeof value !== 'object') return false;
+  return (
+    'state' in value ||
+    'status' in value ||
+    'progress' in value ||
+    'resultJson' in value ||
+    'result' in value ||
+    'taskId' in value ||
+    'failMsg' in value ||
+    'errorMsg' in value ||
+    'error' in value
+  );
+};
+
+const unwrapTaskData = (payload: any): any => {
+  if (!payload || typeof payload !== 'object') return payload;
+
+  const directCandidates = [
+    payload.data,
+    payload.result,
+    payload.task,
+    payload.record,
+    payload.output,
+    payload,
+  ];
+
+  for (const candidate of directCandidates) {
+    if (!candidate) continue;
+    if (isTaskLike(candidate)) return candidate;
+    if (candidate?.data && isTaskLike(candidate.data)) return candidate.data;
+    if (candidate?.result && isTaskLike(candidate.result)) return candidate.result;
+    if (candidate?.task && isTaskLike(candidate.task)) return candidate.task;
+  }
+
+  return payload.data ?? payload;
+};
+
 const normalizeProgress = (value: any): number | null => {
   if (value === undefined || value === null) return null;
   const num = Number(value);
@@ -532,7 +570,7 @@ const AppContent: React.FC = () => {
                   const res = isVeo3Model(task.model)
                     ? await queryVeoTask(apiKey, task.taskId)
                     : await queryTask(apiKey, task.taskId);
-                  const data = res?.data ?? res?.result ?? res?.task ?? res;
+                  const data = unwrapTaskData(res);
                   if (data) {
                       return { taskId: task.taskId, data };
                   }
@@ -585,7 +623,15 @@ const AppContent: React.FC = () => {
                       ...update.data,
                       state: newState,
                       progress: newProgress,
-                      resultJson: (update.data as any).resultJson || (update.data as any).result || t.resultJson,
+                      resultJson:
+                        (update.data as any).resultJson ||
+                        (update.data as any).result ||
+                        (update.data as any).output ||
+                        (update.data as any).imageUrl ||
+                        (update.data as any).image_url ||
+                        (update.data as any).videoUrl ||
+                        (update.data as any).video_url ||
+                        t.resultJson,
                       failCode: update.data.failCode,
                       failMsg:
                         update.data.failMsg ||

@@ -56,12 +56,15 @@ export const getFailureReason = (dataOrText: any): string | null => {
 
 export const normalizeTaskState = (data: any): { state: NormalizedTaskState; raw: string } => {
   const statusValue = data?.state ?? data?.status;
-  const rawState = String(statusValue ?? '').toLowerCase();
+  const altStatusValue =
+    data?.taskStatus ?? data?.task_status ?? data?.stateCode ?? data?.state_code ?? data?.statusCode ?? data?.status_code;
+  const rawStateSource = statusValue ?? altStatusValue;
+  const rawState = String(rawStateSource ?? '').toLowerCase();
   const failMsg = String(data?.failMsg ?? '');
   const errorMsg = String(data?.errorMsg ?? data?.error ?? '');
   const metaMsg = String(data?.msg ?? data?.message ?? data?.reason ?? data?.detail ?? '');
   const combined = `${rawState} ${failMsg} ${errorMsg} ${metaMsg}`.toLowerCase();
-  const numericState = Number(statusValue);
+  const numericState = Number(statusValue ?? altStatusValue);
   const hasNumericState = Number.isFinite(numericState);
   const hasFailureDetails = Boolean(
     data?.failMsg || data?.failCode || data?.errorMsg || data?.error || data?.msg || data?.message || data?.reason || data?.detail
