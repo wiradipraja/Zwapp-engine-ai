@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
-import { deleteModel, fetchModelCatalog, normalizeSlug, upsertModel, type ModelCatalogForm } from '../../services/modelCatalog';
+import { deleteModel, fetchModelCatalog, normalizeSlug, seedModelCatalogDefaults, upsertModel, type ModelCatalogForm } from '../../services/modelCatalog';
 import { uploadAsset } from '../../services/supabase';
 import type { ModelCatalogItem, ModelOutputType } from '../../types';
 
@@ -76,6 +76,11 @@ const ModelAdminView: React.FC<ModelAdminViewProps> = ({ onBackToCatalog }) => {
 
   const loadModels = async () => {
     setLoading(true);
+    try {
+      await seedModelCatalogDefaults();
+    } catch (error) {
+      console.warn('Model catalog seed skipped:', error);
+    }
     const data = await fetchModelCatalog();
     setItems(data);
     setLoading(false);

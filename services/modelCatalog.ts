@@ -527,6 +527,28 @@ const mapFormToRow = (form: ModelCatalogForm) => {
   };
 };
 
+const mapItemToRow = (item: ModelCatalogItem) => {
+  return {
+    slug: item.slug,
+    name: item.name,
+    family: item.family,
+    provider: item.provider,
+    api_model: item.apiModel,
+    app_module: item.appModule,
+    model_type: item.modelType,
+    short_description: item.shortDescription,
+    price_per_output: item.pricePerOutput ?? 0,
+    price_currency: item.priceCurrency || 'CREDITS',
+    price_unit: item.priceUnit || 'per_output',
+    thumbnail_url: item.thumbnailUrl,
+    sample_urls: item.sampleUrls || [],
+    capabilities: item.capabilities || {},
+    active: item.active ?? true,
+    display_order: item.displayOrder ?? 0,
+    updated_at: new Date().toISOString(),
+  };
+};
+
 export const fetchModelCatalog = async (type?: ModelOutputType): Promise<ModelCatalogItem[]> => {
   try {
     let query = supabase
@@ -550,6 +572,27 @@ export const fetchModelCatalog = async (type?: ModelOutputType): Promise<ModelCa
     console.warn('Model catalog fallback mode:', error);
     return type ? FALLBACK_MODELS.filter((item) => item.modelType === type) : FALLBACK_MODELS;
   }
+};
+
+export const seedModelCatalogDefaults = async (type?: ModelOutputType): Promise<number> => {
+  const seeds = type ? FALLBACK_MODELS.filter((item) => item.modelType === type) : FALLBACK_MODELS;
+  if (seeds.length === 0) return 0;
+
+  const { data, error } = await supabase
+    .from('ai_models')
+    .select('slug')
+    .in('slug', seeds.map((item) => item.slug));
+
+  if (error) throw error;
+
+  const existing = new Set((data || []).map((row: any) => row.slug));
+  const missing = seeds.filter((item) => !existing.has(item.slug));
+  if (missing.length === 0) return 0;
+
+  const { error: insertError } = await supabase.from('ai_models').insert(missing.map(mapItemToRow));
+  if (insertError) throw insertError;
+
+  return missing.length;
 };
 
 export const upsertModel = async (form: ModelCatalogForm): Promise<ModelCatalogItem> => {
