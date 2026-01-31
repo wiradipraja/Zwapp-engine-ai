@@ -99,6 +99,23 @@ const extractOutputUrl = (resultJson?: string): string => {
   return '';
 };
 
+const isVeo3Model = (model?: string): boolean => {
+  return (model || '').toLowerCase().startsWith('veo3/');
+};
+
+const queryVeoTask = async (apiKey: string, taskId: string) => {
+  const response = await fetch(`/api/proxy/veo/recordInfo?taskId=${encodeURIComponent(taskId)}`, {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+    },
+  });
+  if (!response.ok) {
+    throw new Error(`Veo status check failed: ${response.status}`);
+  }
+  return response.json();
+};
+
 const inferOutputType = (url: string, model: string): 'image' | 'video' | 'text' => {
   const lowerUrl = (url || '').toLowerCase();
   if (lowerUrl.startsWith('data:text')) return 'text';
@@ -512,8 +529,10 @@ const AppContent: React.FC = () => {
         try {
           const updates = await Promise.all(tasksToPoll.map(async (task) => {
               try {
-                  const res = await queryTask(apiKey, task.taskId);
-                  if (res.code === 200) {
+                  const res = isVeo3Model(task.model)
+                    ? await queryVeoTask(apiKey, task.taskId)
+                    : await queryTask(apiKey, task.taskId);
+                  if (res?.data) {
                       return { taskId: task.taskId, data: res.data };
                   }
               } catch (e: any) {

@@ -53,10 +53,24 @@ export const getFailureReason = (dataOrText: any): string | null => {
 };
 
 export const normalizeTaskState = (data: any): { state: NormalizedTaskState; raw: string } => {
-  const rawState = String(data?.state ?? data?.status ?? '').toLowerCase();
+  const statusValue = data?.state ?? data?.status;
+  const rawState = String(statusValue ?? '').toLowerCase();
   const failMsg = String(data?.failMsg ?? '');
   const errorMsg = String(data?.errorMsg ?? data?.error ?? '');
   const combined = `${rawState} ${failMsg} ${errorMsg}`.toLowerCase();
+  const numericState = Number(statusValue);
+  const hasNumericState = Number.isFinite(numericState);
+  const hasFailureDetails = Boolean(data?.failMsg || data?.failCode || data?.errorMsg || data?.error);
+  const hasOutput = Boolean(
+    data?.resultJson ||
+      data?.result ||
+      data?.output ||
+      data?.imageUrl ||
+      data?.image_url ||
+      data?.videoUrl ||
+      data?.video_url ||
+      data?.url
+  );
 
   const successKeywords = ['success', 'succeeded', 'complete', 'completed', 'done', 'finish', 'finished'];
   const failKeywords = ['fail', 'failed', 'error', 'blocked', 'rejected', 'filtered', 'safety', 'canceled', 'cancelled', 'timeout', 'invalid'];
@@ -69,8 +83,16 @@ export const normalizeTaskState = (data: any): { state: NormalizedTaskState; raw
     if (failMsg || errorMsg) return { state: 'fail', raw: rawState || 'fail' };
     return { state: 'success', raw: rawState || 'success' };
   }
-  if (failMsg || errorMsg) {
+  if (hasNumericState) {
+    if (numericState === 2) return { state: 'success', raw: rawState || 'success' };
+    if (numericState === 3) return { state: 'fail', raw: rawState || 'fail' };
+    if (numericState === 0 || numericState === 1) return { state: 'waiting', raw: rawState || 'waiting' };
+  }
+  if (hasFailureDetails) {
     return { state: 'fail', raw: rawState || 'fail' };
+  }
+  if (hasOutput) {
+    return { state: 'success', raw: rawState || 'success' };
   }
   if (waitingKeywords.some((key) => rawState.includes(key))) {
     return { state: 'waiting', raw: rawState || 'waiting' };
