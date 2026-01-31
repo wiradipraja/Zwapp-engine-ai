@@ -42,14 +42,54 @@ export const queryTask = async (apiKey: string, taskId: string): Promise<QueryTa
     });
 
     if (!response.ok) {
-        // Jika 404/500, jangan throw error object agar polling bisa mencoba lagi, 
-        // tapi log ke console
-        console.warn(`Query Task Warning: ${response.status} ${response.statusText}`);
-        throw new Error(`Status Check Failed: ${response.status}`);
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
     }
 
-    return response.json();
+    // ✅ NEW: Validate JSON parsing
+    let data: any;
+    try {
+      data = await response.json();
+    } catch (parseError) {
+      throw new Error(`Invalid JSON response: ${parseError}`);
+    }
+
+    // ✅ NEW: Check for empty response
+    if (!data) {
+      throw new Error('Empty response from API');
+    }
+
+    // ✅ NEW: Handle KIE API error codes
+    if (data.code && data.code !== 200) {
+      const errorMsg = data.msg || data.error || data.message || 'Unknown error';
+      const error = new Error(`API Error (${data.code}): ${errorMsg}`);
+      (error as any).apiCode = data.code;
+      (error as any).apiMsg = errorMsg;
+      throw error;
+    }
+
+    // ✅ NEW: Ensure data structure
+    if (!data.data) {
+      console.warn('[queryTask] Response has no data field:', data);
+      return {
+        code: data.code || 200,
+        msg: data.msg || 'No data in response',
+        data: {
+          taskId: taskId,
+          model: '',
+          state: 'waiting',
+          param: '',
+          createTime: Date.now(),
+        }
+      };
+    }
+
+    return data as QueryTaskResponse;
   } catch (error: any) {
+    console.error(`[queryTask] Error for ${taskId}:`, {
+      message: error.message,
+      apiCode: (error as any).apiCode,
+      apiMsg: (error as any).apiMsg
+    });
     throw error;
   }
 };

@@ -59,6 +59,17 @@ export const saveOutputToSupabase = async (
   metadata: Record<string, any> = {}
 ): Promise<SavedOutput> => {
   try {
+    // ✅ NEW: Input validation
+    if (!taskId || typeof taskId !== 'string') {
+      throw new Error('Invalid taskId: must be a non-empty string');
+    }
+    if (!outputUrl || typeof outputUrl !== 'string') {
+      throw new Error('Invalid outputUrl: must be a non-empty string');
+    }
+    if (!model || typeof model !== 'string') {
+      throw new Error('Invalid model: must be a non-empty string');
+    }
+
     const userId = await getCurrentUserId();
     if (!userId) {
       throw new Error('Authentication required to save output.');
@@ -76,6 +87,36 @@ export const saveOutputToSupabase = async (
       created_at: now,
     };
 
+    // ✅ NEW: Check for duplicate before inserting
+    const { data: existing, error: checkError } = await supabase
+      .from('generated_outputs')
+      .select('id')
+      .eq('task_id', taskId)
+      .maybeSingle();
+
+    if (checkError) {
+      console.warn(`Duplicate check warning: ${checkError.message}`);
+    }
+
+    if (existing) {
+      console.info(`Output already saved for task ${taskId}, returning existing record`);
+      // Return the data from previous save
+      return {
+        id: existing.id,
+        taskId: taskId,
+        model: model,
+        prompt: prompt,
+        outputUrl: outputUrl,
+        outputType: outputType,
+        metadata: metadata,
+        creditsCost: creditsCost,
+        createdAt: now,
+        userId: userId,
+        featured: false,
+        featuredOrder: null,
+      };
+    }
+
     // Insert into 'generated_outputs' table
     const { data, error } = await supabase
       .from('generated_outputs')
@@ -83,8 +124,31 @@ export const saveOutputToSupabase = async (
       .select()
       .single();
 
+    // ✅ NEW: Specific error code handling
     if (error) {
-      throw new Error(`Database error: ${error.message}`);
+      // PostgreSQL error code 23505 = unique violation (duplicate key)
+      if (error.code === '23505') {
+        console.warn(`Duplicate entry for task ${taskId}, continuing...`);
+        return {
+          id: taskId,
+          taskId: taskId,
+          model: model,
+          prompt: prompt,
+          outputUrl: outputUrl,
+          outputType: outputType,
+          metadata: metadata,
+          creditsCost: creditsCost,
+          createdAt: now,
+          userId: userId,
+          featured: false,
+          featuredOrder: null,
+        };
+      }
+      // PostgreSQL error code 42501 = insufficient privilege (RLS policy)
+      if (error.code === '42501') {
+        throw new Error(`Access denied: RLS policy prevents saving. User may not have permission. Details: ${error.message}`);
+      }
+      throw new Error(`Database error [${error.code}]: ${error.message}`);
     }
 
     return {
@@ -102,6 +166,12 @@ export const saveOutputToSupabase = async (
       featuredOrder: data.featured_order ?? null,
     };
   } catch (error: any) {
+    // ✅ NEW: Better error logging with context
+    console.error(`Failed to save output for task ${taskId}:`, {
+      errorMessage: error.message,
+      taskId,
+      outputUrl: outputUrl ? '***REDACTED***' : 'missing',
+    });
     throw new Error(`Failed to save output: ${error.message}`);
   }
 };

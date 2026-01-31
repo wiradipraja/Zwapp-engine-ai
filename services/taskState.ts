@@ -55,9 +55,21 @@ export const getFailureReason = (dataOrText: any): string | null => {
 };
 
 export const normalizeTaskState = (data: any): { state: NormalizedTaskState; raw: string } => {
-  const statusValue = data?.state ?? data?.status;
+  // ✅ NEW: Support more field name variations
+  const statusValue = data?.state ?? 
+                     data?.status ?? 
+                     data?.stateCode ?? 
+                     data?.statusCode ?? 
+                     data?.taskState ?? 
+                     data?.stage;
+  
   const altStatusValue =
-    data?.taskStatus ?? data?.task_status ?? data?.stateCode ?? data?.state_code ?? data?.statusCode ?? data?.status_code;
+    data?.taskStatus ?? 
+    data?.task_status ?? 
+    data?.state_code ?? 
+    data?.statusCode ?? 
+    data?.status_code;
+  
   const rawStateSource = statusValue ?? altStatusValue;
   const rawState = String(rawStateSource ?? '').toLowerCase();
   const failMsg = String(data?.failMsg ?? '');
@@ -69,20 +81,27 @@ export const normalizeTaskState = (data: any): { state: NormalizedTaskState; raw
   const hasFailureDetails = Boolean(
     data?.failMsg || data?.failCode || data?.errorMsg || data?.error || data?.msg || data?.message || data?.reason || data?.detail
   );
+  // ✅ NEW: Extended output detection
   const hasOutput = Boolean(
     data?.resultJson ||
-      data?.result ||
-      data?.output ||
-      data?.imageUrl ||
-      data?.image_url ||
-      data?.videoUrl ||
-      data?.video_url ||
-      data?.url
+    data?.resultUrls ||
+    data?.result ||
+    data?.output ||
+    data?.resultBody ||
+    data?.imageUrl ||
+    data?.image_url ||
+    data?.videoUrl ||
+    data?.video_url ||
+    data?.url ||
+    data?.data?.url ||
+    data?.data?.image ||
+    data?.data?.video ||
+    data?.value?.url
   );
 
-  const successKeywords = ['success', 'succeeded', 'complete', 'completed', 'done', 'finish', 'finished'];
-  const failKeywords = ['fail', 'failed', 'error', 'blocked', 'rejected', 'filtered', 'safety', 'canceled', 'cancelled', 'timeout', 'invalid'];
-  const waitingKeywords = ['waiting', 'queued', 'queue', 'pending', 'running', 'processing', 'created', 'in_progress', 'in-progress', 'progress'];
+  const successKeywords = ['success', 'succeeded', 'complete', 'completed', 'done', 'finish', 'finished', '2'];
+  const failKeywords = ['fail', 'failed', 'error', 'blocked', 'rejected', 'filtered', 'safety', 'canceled', 'cancelled', 'timeout', 'invalid', '3'];
+  const waitingKeywords = ['waiting', 'queued', 'queue', 'pending', 'running', 'processing', 'created', 'in_progress', 'in-progress', 'progress', '0', '1'];
 
   if (failKeywords.some((key) => combined.includes(key))) {
     return { state: 'fail', raw: rawState || 'fail' };
@@ -91,20 +110,22 @@ export const normalizeTaskState = (data: any): { state: NormalizedTaskState; raw
     if (failMsg || errorMsg) return { state: 'fail', raw: rawState || 'fail' };
     return { state: 'success', raw: rawState || 'success' };
   }
+  // ✅ NEW: Better numeric code mapping
   if (hasNumericState) {
-    if (numericState === 2) return { state: 'success', raw: rawState || 'success' };
-    if (numericState === 3) return { state: 'fail', raw: rawState || 'fail' };
-    if (numericState === 0 || numericState === 1) return { state: 'waiting', raw: rawState || 'waiting' };
+    if (numericState === 2 || numericState === 200) return { state: 'success', raw: String(numericState) };
+    if (numericState === 3 || numericState === 400 || numericState === 500) return { state: 'fail', raw: String(numericState) };
+    if (numericState === 0 || numericState === 1 || numericState === 100) return { state: 'waiting', raw: String(numericState) };
   }
   if (hasFailureDetails) {
     return { state: 'fail', raw: rawState || 'fail' };
   }
-  if (hasOutput) {
-    return { state: 'success', raw: rawState || 'success' };
+  // ✅ NEW: If we have output, consider it success
+  if (hasOutput && !failMsg && !errorMsg) {
+    return { state: 'success', raw: 'has_output' };
   }
   if (waitingKeywords.some((key) => rawState.includes(key))) {
     return { state: 'waiting', raw: rawState || 'waiting' };
   }
 
-  return { state: 'waiting', raw: rawState || 'waiting' };
+  return { state: 'waiting', raw: rawState || 'unknown' };
 };

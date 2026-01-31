@@ -501,6 +501,11 @@ const AppContent: React.FC = () => {
   useEffect(() => {
     if (!session || !apiKey) return;
 
+    // ✅ NEW: Polling attempt tracking for timeout detection
+    const pollAttempts = new Map<string, number>();
+    const MAX_POLL_ATTEMPTS = 300; // ~5 minutes at 1 second interval
+    const TIMEOUT_ERROR_MSG = 'Task polling timeout (5+ minutes) - check API status or try again';
+
     // Background Progress Simulator (Visual Only)
     const PROGRESS_TICK_MS = 250;
     const PROGRESS_FAST_CAP = 90;
@@ -566,6 +571,16 @@ const AppContent: React.FC = () => {
         // Poll all waiting tasks
         try {
           const updates = await Promise.all(tasksToPoll.map(async (task) => {
+              // ✅ NEW: Increment polling attempt counter
+              const attempts = (pollAttempts.get(task.taskId) ?? 0) + 1;
+              pollAttempts.set(task.taskId, attempts);
+
+              // ✅ NEW: Timeout detection
+              if (attempts > MAX_POLL_ATTEMPTS) {
+                console.warn(`[TIMEOUT] Task ${task.taskId} exceeded ${MAX_POLL_ATTEMPTS} poll attempts`);
+                return { taskId: task.taskId, timeout: true };
+              }
+
               try {
                   const res = isVeo3Model(task.model)
                     ? await queryVeoTask(apiKey, task.taskId)
@@ -627,10 +642,17 @@ const AppContent: React.FC = () => {
                         (update.data as any).resultJson ||
                         (update.data as any).result ||
                         (update.data as any).output ||
+                        (update.data as any).resultUrls?.[0] ||
+                        (update.data as any).resultBody ||
                         (update.data as any).imageUrl ||
                         (update.data as any).image_url ||
                         (update.data as any).videoUrl ||
                         (update.data as any).video_url ||
+                        (update.data as any).url ||
+                        (update.data as any).data?.url ||
+                        (update.data as any).data?.image ||
+                        (update.data as any).data?.video ||
+                        (update.data as any).value?.url ||
                         t.resultJson,
                       failCode: update.data.failCode,
                       failMsg:
