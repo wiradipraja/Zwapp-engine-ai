@@ -1304,11 +1304,19 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
   };
 
   const pollTaskForResult = async (taskId: string, provider: 'jobs' | 'veo' = 'jobs') => {
-    for (let attempt = 0; attempt < 60; attempt += 1) {
-      const result = provider === 'veo' ? await queryVeoTask(taskId) : await queryTask(apiKey, taskId);
+    const intervalMs = 3000;
+    while (true) {
+      let result: any = null;
+      try {
+        result = provider === 'veo' ? await queryVeoTask(taskId) : await queryTask(apiKey, taskId);
+      } catch (_error) {
+        await new Promise((resolve) => setTimeout(resolve, intervalMs));
+        continue;
+      }
+
       const data = result?.data;
       if (!data) {
-        await new Promise((resolve) => setTimeout(resolve, 3000));
+        await new Promise((resolve) => setTimeout(resolve, intervalMs));
         continue;
       }
 
@@ -1325,9 +1333,8 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
         const reason = getFailureReason(data) || data.failMsg || data.errorMsg || 'Generation failed.';
         throw new Error(reason);
       }
-      await new Promise((resolve) => setTimeout(resolve, 3000));
+      await new Promise((resolve) => setTimeout(resolve, intervalMs));
     }
-    throw new Error('Task timed out.');
   };
 
   const saveOutputToGallery = async (params: {

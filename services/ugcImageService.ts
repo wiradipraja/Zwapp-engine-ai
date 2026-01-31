@@ -93,12 +93,13 @@ async function createImageTask(
 async function pollTaskResult(
   taskId: string,
   apiKey: string,
-  maxAttempts: number = 60,
+  maxAttempts: number = 0,
   intervalMs: number = 3000
 ): Promise<string> {
   console.log('[UGC Image] Polling task:', taskId);
 
-  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+  const shouldLimit = maxAttempts > 0;
+  for (let attempt = 0; !shouldLimit || attempt < maxAttempts; attempt++) {
     try {
       const response = await fetch(`${BASE_URL}/recordInfo?taskId=${taskId}`, {
         method: 'GET',
@@ -192,7 +193,7 @@ async function pollTaskResult(
       // Still waiting, continue polling
       await new Promise((r) => setTimeout(r, intervalMs));
     } catch (error) {
-      if (attempt === maxAttempts - 1) {
+      if (shouldLimit && attempt === maxAttempts - 1) {
         throw error;
       }
       await new Promise((r) => setTimeout(r, intervalMs));
