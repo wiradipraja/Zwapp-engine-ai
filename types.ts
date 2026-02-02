@@ -284,6 +284,7 @@ export interface CreateTaskResponse {
   msg: string;
   data: {
     taskId: string;
+    recordId?: string;
   };
 }
 

@@ -298,6 +298,7 @@ const AppContent: React.FC = () => {
   // Polling Interval Ref
   const pollIntervalRef = useRef<number | null>(null);
   const savedTaskIdsRef = useRef<Set<string>>(new Set());
+  const tasksRef = useRef<LocalTask[]>([]);
 
   // 1. Check for Supabase Session and LocalStorage API Key on Mount
   useEffect(() => {
@@ -333,6 +334,10 @@ const AppContent: React.FC = () => {
 
     return () => subscription.unsubscribe();
   }, []);
+
+  useEffect(() => {
+    tasksRef.current = tasks;
+  }, [tasks]);
 
   useEffect(() => {
     const nextIsAdmin = isAdminUser(session?.user?.id);
@@ -539,11 +544,12 @@ const AppContent: React.FC = () => {
       }
       
       if (response.code === 200) {
-        addLog(`Task created successfully. ID: ${response.data.taskId}`);
+        const taskIdentifier = response.data.recordId || response.data.taskId;
+        addLog(`Task created successfully. ID: ${taskIdentifier}`);
         
         // Buat task lokal awal
         const newTask: LocalTask = {
-            taskId: response.data.taskId,
+            taskId: taskIdentifier,
             model: modelName,
             state: 'waiting',
             param: JSON.stringify(input),
@@ -553,7 +559,7 @@ const AppContent: React.FC = () => {
         };
 
         setTasks(prev => [newTask, ...prev]);
-        setSelectedTaskId(response.data.taskId); 
+        setSelectedTaskId(taskIdentifier); 
       } else {
         addLog(`Error: ${response.msg}`, true);
       }
@@ -566,7 +572,7 @@ const AppContent: React.FC = () => {
 
   // Central Polling Logic
   useEffect(() => {
-    if (!session || !apiKey) return;
+    if (!apiKey || currentView !== 'app') return;
 
     // ✅ NEW: Polling attempt tracking for timeout detection
     const pollAttempts = new Map<string, number>();
@@ -622,13 +628,9 @@ const AppContent: React.FC = () => {
         if (polling) return;
         polling = true;
         // Get current tasks that need polling
-        let tasksToPoll: LocalTask[] = [];
-        setTasks(prevTasks => {
-            tasksToPoll = prevTasks.filter(
-              (t) => t.state === 'waiting' && !t.model.startsWith('pixazo/')
-            );
-            return prevTasks;
-        });
+        const tasksToPoll = tasksRef.current.filter(
+          (t) => t.state === 'waiting' && !t.model.startsWith('pixazo/')
+        );
 
         if (tasksToPoll.length === 0) {
             polling = false;
@@ -669,6 +671,21 @@ const AppContent: React.FC = () => {
           setTasks(prev => prev.map(t => {
               const update = updates.find(u => u && u.taskId === t.taskId);
               
+              if (update && (update as any).timeout) {
+                  if (t.state !== 'fail') {
+                    addLog(`X Task ${t.taskId.slice(-4)}: waiting -> fail (polling timeout)`, true);
+                  }
+                  return {
+                      ...t,
+                      state: 'fail',
+                      progress: 100,
+                      failMsg: TIMEOUT_ERROR_MSG,
+                      failCode: 'timeout',
+                      completeTime: Date.now(),
+                      costTime: Date.now() - t.createTime,
+                  };
+              }
+
               if (update && update.data) {
                   const normalized = normalizeTaskState(update.data);
                   const newState = normalized.state;
@@ -754,7 +771,7 @@ const AppContent: React.FC = () => {
           pollIntervalRef.current = null;
         }
     };
-  }, [apiKey, session]);
+  }, [apiKey, currentView]);
 
   useEffect(() => {
     if (!session) return;
