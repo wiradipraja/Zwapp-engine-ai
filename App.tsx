@@ -33,7 +33,6 @@ import { Veo3ReferenceToVideoForm } from './components/Veo3ReferenceToVideoForm'
 import { GrokImageToVideoForm } from './components/GrokImageToVideoForm';
 import { GrokTextToImageForm } from './components/GrokTextToImageForm';
 import { GrokImageToImageForm } from './components/GrokImageToImageForm';
-import { GrokUpscaleForm } from './components/GrokUpscaleForm';
 import { StatusTerminal } from './components/StatusTerminal';
 import { QueueList } from './components/QueueList';
 import { AuthForm } from './components/AuthForm';
@@ -406,6 +405,50 @@ const AppContent: React.FC = () => {
       setCurrentView('landing');
   };
 
+  const handleGrokUpscale = useCallback(async (sourceTaskId: string) => {
+      if (!apiKey) {
+        setIsSettingsOpen(true);
+        addLog('ERROR: API Key missing. Please configure in Settings.', true);
+        return;
+      }
+
+      const existingUpscale = tasksRef.current.find(
+        (task) => task.model === 'grok-imagine/upscale' && (task.param || '').includes(sourceTaskId)
+      );
+      if (existingUpscale) {
+        setSelectedTaskId(existingUpscale.taskId);
+        addLog(`Upscale already queued for ${sourceTaskId.slice(-4)}.`);
+        return;
+      }
+
+      const payload: GrokUpscaleInput = { task_id: sourceTaskId };
+      addLog(`Initiating Grok Upscale for task ${sourceTaskId.slice(-4)}...`);
+
+      try {
+        const response = await createTask(apiKey, 'grok-imagine/upscale', payload);
+        if (response.code === 200) {
+          const taskIdentifier = response.data.recordId || response.data.taskId;
+          const newTask: LocalTask = {
+            taskId: taskIdentifier,
+            model: 'grok-imagine/upscale',
+            state: 'waiting',
+            param: JSON.stringify(payload),
+            createTime: Date.now(),
+            progress: 1,
+            isRead: false,
+          };
+
+          setTasks((prev) => [newTask, ...prev]);
+          setSelectedTaskId(taskIdentifier);
+          addLog(`Upscale task created successfully. ID: ${taskIdentifier}`);
+        } else {
+          addLog(`Error: ${response.msg}`, true);
+        }
+      } catch (error: any) {
+        addLog(`Upscale Failure: ${error.message}`, true);
+      }
+  }, [apiKey, addLog]);
+
   const handleCreateTask = async (input: AppInput) => {
     const isPixazoTask =
       activeModule === 'stable-diffusion-text' ||
@@ -458,7 +501,6 @@ const AppContent: React.FC = () => {
     else if (activeModule === 'grok-image-to-video') modelName = 'grok-imagine/image-to-video';
     else if (activeModule === 'grok-image-to-image') modelName = 'grok-imagine/image-to-image';
     else if (activeModule === 'grok-text-to-image') modelName = 'grok-imagine/text-to-image';
-    else if (activeModule === 'grok-upscale') modelName = 'grok-imagine/upscale';
     else if (activeModule === 'stable-diffusion-text') modelName = 'pixazo/sdxl-image';
     else if (activeModule === 'stable-diffusion-inpaint') modelName = 'pixazo/sd-inpaint';
     else if (activeModule === 'flux-schnell') modelName = 'pixazo/flux-schnell';
@@ -878,7 +920,6 @@ const AppContent: React.FC = () => {
       'flux2-flex-image',
       'grok-text-to-image',
       'grok-image-to-image',
-      'grok-upscale',
     ].includes(module)) {
       setExpandedSection('image');
       return;
@@ -1000,7 +1041,6 @@ const AppContent: React.FC = () => {
       'grok-image-to-video': 'Grok Image-to-Video',
       'grok-text-to-image': 'Grok Text-to-Image',
       'grok-image-to-image': 'Grok Image-to-Image',
-      'grok-upscale': 'Grok Upscale',
       'image-catalog': 'Image Catalog',
       'video-catalog': 'Video Catalog',
       'model-admin': 'Catalog Admin',
@@ -1183,7 +1223,7 @@ const AppContent: React.FC = () => {
                       onSelectTask={setSelectedTaskId} 
                       selectedTaskId={selectedTaskId} 
                     />
-                    <StatusTerminal task={activeTask} logs={logs} />
+                    <StatusTerminal task={activeTask} logs={logs} onGrokUpscale={handleGrokUpscale} />
                   </div>
                 </div>
               </div>

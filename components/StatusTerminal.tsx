@@ -9,9 +9,10 @@ import { ProgressBar } from './ui/ProgressBar';
 interface StatusTerminalProps {
   task: LocalTask | null;
   logs: string[];
+  onGrokUpscale?: (taskId: string) => Promise<void> | void;
 }
 
-export const StatusTerminal: React.FC<StatusTerminalProps> = ({ task, logs }) => {
+export const StatusTerminal: React.FC<StatusTerminalProps> = ({ task, logs, onGrokUpscale }) => {
   const extractResultUrl = (resultJson?: string): string => {
     if (!resultJson) return '';
     let parsed: any = resultJson;
@@ -85,9 +86,16 @@ export const StatusTerminal: React.FC<StatusTerminalProps> = ({ task, logs }) =>
   const [isSaving, setIsSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [downloadError, setDownloadError] = useState('');
+  const [isUpscaling, setIsUpscaling] = useState(false);
+  const [upscaleError, setUpscaleError] = useState('');
 
   useEffect(() => {
     setSaved(false);
+  }, [task?.taskId]);
+
+  useEffect(() => {
+    setIsUpscaling(false);
+    setUpscaleError('');
   }, [task?.taskId]);
 
   useEffect(() => {
@@ -167,10 +175,29 @@ export const StatusTerminal: React.FC<StatusTerminalProps> = ({ task, logs }) =>
     }
   };
 
+  const handleUpscale = async () => {
+    if (!task || !onGrokUpscale) return;
+    setUpscaleError('');
+    setIsUpscaling(true);
+    try {
+      await onGrokUpscale(task.taskId);
+    } catch (err: any) {
+      setUpscaleError(err?.message || 'Upscale failed.');
+    } finally {
+      setIsUpscaling(false);
+    }
+  };
+
   // Check if task is complete
   const isTaskComplete = task && (task.state === 'success' || task.state === 'fail');
   // Show logs only if task is pending or failed
   const shouldShowLogs = logs.length > 0 && (!isTaskComplete);
+  const canUpscale =
+    !!task &&
+    task.state === 'success' &&
+    task.model === 'grok-imagine/image-to-video' &&
+    isVideo &&
+    typeof onGrokUpscale === 'function';
 
   return (
     <div className="flex flex-col h-full gap-4 relative">
@@ -210,9 +237,23 @@ export const StatusTerminal: React.FC<StatusTerminalProps> = ({ task, logs }) =>
             >
               {saved ? 'SAVED TO GALLERY' : isSaving ? 'SAVING...' : 'SAVE TO GALLERY'}
             </button>
+            {canUpscale && (
+              <button
+                onClick={handleUpscale}
+                disabled={isUpscaling}
+                className={`inline-block text-xs underline decoration-dotted underline-offset-4 ${
+                  isUpscaling ? 'text-zinc-500' : 'text-sky-300 hover:text-sky-200'
+                }`}
+              >
+                {isUpscaling ? 'UPSCALING...' : 'UPSCALE (GROK)'}
+              </button>
+            )}
           </div>
           {downloadError && (
             <div className="mt-2 text-[10px] font-mono text-red-400 text-center">{downloadError}</div>
+          )}
+          {upscaleError && (
+            <div className="mt-2 text-[10px] font-mono text-red-400 text-center">{upscaleError}</div>
           )}
         </div>
       )}

@@ -49,6 +49,7 @@ const ImageCatalogView: React.FC<ImageCatalogViewProps> = ({ onSelectModule, onO
   const filteredItems = useMemo(() => {
     const q = query.trim().toLowerCase();
     return items.filter((item) => {
+      if (item.appModule === 'grok-upscale') return false;
       if (q) {
         const hay = `${item.name} ${item.family} ${item.apiModel} ${item.shortDescription || ''}`.toLowerCase();
         if (!hay.includes(q)) return false;
