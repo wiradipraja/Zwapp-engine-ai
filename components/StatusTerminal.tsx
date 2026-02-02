@@ -25,14 +25,32 @@ export const StatusTerminal: React.FC<StatusTerminalProps> = ({ task, logs }) =>
     }
 
     if (!parsed) return '';
+    if (Array.isArray(parsed)) {
+      const first = parsed[0];
+      if (typeof first === 'string') return first;
+      if (first?.url) return first.url;
+    }
     if (parsed.resultUrls?.[0]) return parsed.resultUrls[0];
+    if (parsed.result_urls?.[0]) return parsed.result_urls[0];
+    if (parsed.resultUrl) return parsed.resultUrl;
+    if (parsed.result_url) return parsed.result_url;
     if (parsed.images?.[0]?.url) return parsed.images[0].url;
     if (parsed.image?.url) return parsed.image.url;
     if (parsed.output?.[0]) return parsed.output[0];
+    if (parsed.output_urls?.[0]) return parsed.output_urls[0];
+    if (parsed.outputUrl) return parsed.outputUrl;
+    if (parsed.output_url) return parsed.output_url;
     if (parsed.url) return parsed.url;
+    if (parsed.result?.url) return parsed.result.url;
+    if (typeof parsed.result === 'string' && parsed.result.startsWith('http')) return parsed.result;
+    if (parsed.output?.url) return parsed.output.url;
+    if (typeof parsed.output === 'string' && parsed.output.startsWith('http')) return parsed.output;
+    if (parsed.imageUrl) return parsed.imageUrl;
+    if (parsed.image_url) return parsed.image_url;
     if (parsed.data?.url) return parsed.data.url;
     if (parsed.data?.images?.[0]?.url) return parsed.data.images[0].url;
     if (parsed.video?.url) return parsed.video.url;
+    if (parsed.videoUrl) return parsed.videoUrl;
     if (parsed.video_url) return parsed.video_url;
     if (typeof parsed === 'string' && parsed.startsWith('http')) return parsed;
     return '';

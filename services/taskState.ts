@@ -81,12 +81,21 @@ export const normalizeTaskState = (data: any): { state: NormalizedTaskState; raw
   const hasFailureDetails = Boolean(
     data?.failMsg || data?.failCode || data?.errorMsg || data?.error || data?.msg || data?.message || data?.reason || data?.detail
   );
+  const successFlag = data?.success === true || data?.ok === true;
   // ✅ NEW: Extended output detection
   const hasOutput = Boolean(
     data?.resultJson ||
+    data?.result_json ||
+    data?.resultUrl ||
+    data?.result_url ||
     data?.resultUrls ||
+    data?.result_urls ||
     data?.result ||
     data?.output ||
+    data?.outputUrl ||
+    data?.output_url ||
+    data?.outputUrls ||
+    data?.output_urls ||
     data?.resultBody ||
     data?.imageUrl ||
     data?.image_url ||
@@ -105,6 +114,9 @@ export const normalizeTaskState = (data: any): { state: NormalizedTaskState; raw
 
   if (failKeywords.some((key) => combined.includes(key))) {
     return { state: 'fail', raw: rawState || 'fail' };
+  }
+  if (successFlag && !hasFailureDetails) {
+    return { state: 'success', raw: rawState || 'success_flag' };
   }
   if (successKeywords.some((key) => rawState.includes(key))) {
     if (failMsg || errorMsg) return { state: 'fail', raw: rawState || 'fail' };

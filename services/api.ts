@@ -34,7 +34,7 @@ export const createTask = async (apiKey: string, model: string, input: MotionCon
 
 export const queryTask = async (apiKey: string, taskId: string): Promise<QueryTaskResponse> => {
   try {
-    const response = await fetch(`${BASE_URL}/recordInfo?taskId=${taskId}`, {
+    const response = await fetch(`${BASE_URL}/recordInfo?taskId=${encodeURIComponent(taskId)}`, {
       method: 'GET',
       headers: {
         'Authorization': `Bearer ${apiKey}`,
@@ -59,28 +59,27 @@ export const queryTask = async (apiKey: string, taskId: string): Promise<QueryTa
     }
 
     // ✅ NEW: Handle KIE API error codes
-    if (data.code && data.code !== 200) {
+    const rawCode = data.code;
+    const normalizedCode = typeof rawCode === 'string' ? Number(rawCode) : rawCode;
+    if (normalizedCode && normalizedCode !== 200) {
       const errorMsg = data.msg || data.error || data.message || 'Unknown error';
-      const error = new Error(`API Error (${data.code}): ${errorMsg}`);
+      const error = new Error(`API Error (${rawCode}): ${errorMsg}`);
       (error as any).apiCode = data.code;
       (error as any).apiMsg = errorMsg;
       throw error;
     }
 
-    // ✅ NEW: Ensure data structure
+    // ✅ NEW: Normalize response shape when provider uses non-standard field names
     if (!data.data) {
+      const fallback = data.result || data.record || data.task || data.output || data.value;
+      if (fallback) {
+        return {
+          ...data,
+          data: fallback,
+        } as QueryTaskResponse;
+      }
       console.warn('[queryTask] Response has no data field:', data);
-      return {
-        code: data.code || 200,
-        msg: data.msg || 'No data in response',
-        data: {
-          taskId: taskId,
-          model: '',
-          state: 'waiting',
-          param: '',
-          createTime: Date.now(),
-        }
-      };
+      return data as QueryTaskResponse;
     }
 
     return data as QueryTaskResponse;

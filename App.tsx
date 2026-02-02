@@ -86,14 +86,32 @@ const extractOutputUrl = (resultJson?: string): string => {
   }
 
   if (!parsed) return '';
+  if (Array.isArray(parsed)) {
+    const first = parsed[0];
+    if (typeof first === 'string') return first;
+    if (first?.url) return first.url;
+  }
   if (parsed.resultUrls?.[0]) return parsed.resultUrls[0];
+  if (parsed.result_urls?.[0]) return parsed.result_urls[0];
+  if (parsed.resultUrl) return parsed.resultUrl;
+  if (parsed.result_url) return parsed.result_url;
   if (parsed.images?.[0]?.url) return parsed.images[0].url;
   if (parsed.image?.url) return parsed.image.url;
   if (parsed.output?.[0]) return parsed.output[0];
+  if (parsed.output_urls?.[0]) return parsed.output_urls[0];
+  if (parsed.outputUrl) return parsed.outputUrl;
+  if (parsed.output_url) return parsed.output_url;
   if (parsed.url) return parsed.url;
+  if (parsed.result?.url) return parsed.result.url;
+  if (typeof parsed.result === 'string' && parsed.result.startsWith('http')) return parsed.result;
+  if (parsed.output?.url) return parsed.output.url;
+  if (typeof parsed.output === 'string' && parsed.output.startsWith('http')) return parsed.output;
+  if (parsed.imageUrl) return parsed.imageUrl;
+  if (parsed.image_url) return parsed.image_url;
   if (parsed.data?.url) return parsed.data.url;
   if (parsed.data?.images?.[0]?.url) return parsed.data.images[0].url;
   if (parsed.video?.url) return parsed.video.url;
+  if (parsed.videoUrl) return parsed.videoUrl;
   if (parsed.video_url) return parsed.video_url;
   if (typeof parsed === 'string' && parsed.startsWith('http')) return parsed;
   return '';
@@ -129,10 +147,24 @@ const isTaskLike = (value: any): boolean => {
   return (
     'state' in value ||
     'status' in value ||
+    'taskStatus' in value ||
+    'task_status' in value ||
+    'status_code' in value ||
+    'state_code' in value ||
     'progress' in value ||
     'resultJson' in value ||
+    'result_json' in value ||
     'result' in value ||
+    'resultUrl' in value ||
+    'result_url' in value ||
+    'resultUrls' in value ||
+    'result_urls' in value ||
+    'outputUrl' in value ||
+    'output_url' in value ||
+    'outputUrls' in value ||
+    'output_urls' in value ||
     'taskId' in value ||
+    'task_id' in value ||
     'failMsg' in value ||
     'errorMsg' in value ||
     'error' in value
@@ -141,6 +173,44 @@ const isTaskLike = (value: any): boolean => {
 
 const unwrapTaskData = (payload: any): any => {
   if (!payload || typeof payload !== 'object') return payload;
+
+  const pickFromArray = (items: any[]) => {
+    const direct = items.find(isTaskLike);
+    if (direct) return direct;
+    const objectLike = items.find((item) => item && typeof item === 'object');
+    return objectLike ?? null;
+  };
+
+  const tryCandidate = (candidate: any): any => {
+    if (!candidate) return null;
+    if (Array.isArray(candidate)) {
+      const picked = pickFromArray(candidate);
+      if (picked) return picked;
+      return null;
+    }
+    if (isTaskLike(candidate)) return candidate;
+    if (candidate?.data) {
+      const nested = tryCandidate(candidate.data);
+      if (nested) return nested;
+    }
+    if (candidate?.result) {
+      const nested = tryCandidate(candidate.result);
+      if (nested) return nested;
+    }
+    if (candidate?.record) {
+      const nested = tryCandidate(candidate.record);
+      if (nested) return nested;
+    }
+    if (candidate?.task) {
+      const nested = tryCandidate(candidate.task);
+      if (nested) return nested;
+    }
+    if (candidate?.output) {
+      const nested = tryCandidate(candidate.output);
+      if (nested) return nested;
+    }
+    return null;
+  };
 
   const directCandidates = [
     payload.data,
@@ -152,14 +222,11 @@ const unwrapTaskData = (payload: any): any => {
   ];
 
   for (const candidate of directCandidates) {
-    if (!candidate) continue;
-    if (isTaskLike(candidate)) return candidate;
-    if (candidate?.data && isTaskLike(candidate.data)) return candidate.data;
-    if (candidate?.result && isTaskLike(candidate.result)) return candidate.result;
-    if (candidate?.task && isTaskLike(candidate.task)) return candidate.task;
+    const picked = tryCandidate(candidate);
+    if (picked) return picked;
   }
 
-  return payload.data ?? payload;
+  return payload.data ?? payload.result ?? payload.record ?? payload.task ?? payload;
 };
 
 const normalizeProgress = (value: any): number | null => {
@@ -640,9 +707,17 @@ const AppContent: React.FC = () => {
                       progress: newProgress,
                       resultJson:
                         (update.data as any).resultJson ||
+                        (update.data as any).result_json ||
+                        (update.data as any).resultUrl ||
+                        (update.data as any).result_url ||
+                        (update.data as any).resultUrls?.[0] ||
+                        (update.data as any).result_urls?.[0] ||
+                        (update.data as any).outputUrl ||
+                        (update.data as any).output_url ||
+                        (update.data as any).outputUrls?.[0] ||
+                        (update.data as any).output_urls?.[0] ||
                         (update.data as any).result ||
                         (update.data as any).output ||
-                        (update.data as any).resultUrls?.[0] ||
                         (update.data as any).resultBody ||
                         (update.data as any).imageUrl ||
                         (update.data as any).image_url ||
