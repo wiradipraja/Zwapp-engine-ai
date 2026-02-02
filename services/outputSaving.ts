@@ -270,7 +270,7 @@ export const getOutputByTaskId = async (taskId: string): Promise<SavedOutput | n
       .from('generated_outputs')
       .select('*')
       .eq('task_id', taskId)
-      .single();
+      .maybeSingle();
 
     if (error) {
       return null;
