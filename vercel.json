@@ -29,6 +29,10 @@
       "destination": "https://api.kie.ai/api/v1/veo/:path*"
     },
     {
+      "source": "/api/proxy/gemini-3-flash/:path*",
+      "destination": "https://api.kie.ai/gemini-3-flash/:path*"
+    },
+    {
       "source": "/api/proxy/:path*",
       "destination": "https://api.kie.ai/api/v1/:path*"
     },

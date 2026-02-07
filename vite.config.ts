@@ -9,6 +9,12 @@ export default defineConfig(({ mode }) => {
         port: 3000,
         host: '0.0.0.0',
         proxy: {
+          '/api/proxy/gemini-3-flash': {
+            target: 'https://api.kie.ai',
+            changeOrigin: true,
+            rewrite: (path) => path.replace(/^\/api\/proxy/, ''),
+            secure: true,
+          },
           '/api/proxy': {
             target: 'https://api.kie.ai',
             changeOrigin: true,
