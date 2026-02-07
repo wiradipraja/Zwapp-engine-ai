@@ -5,6 +5,7 @@ export type MenuSection = 'image' | 'video' | 'labs' | 'settings';
 export type ModuleType = 
   | 'landing'
   | 'gallery'
+  | 'chat-engine'
   | 'image-catalog'
   | 'video-catalog'
   | 'model-admin'
@@ -89,6 +90,15 @@ const Sidebar: React.FC<SidebarProps> = ({
       icon: (
         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M4 6h16M4 12h16M4 18h16" />
+        </svg>
+      ),
+    },
+    {
+      id: 'chat-engine',
+      label: 'CHAT',
+      icon: (
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M8 10h8M8 14h5m-7 6l-2.5 1 1-2.5A8 8 0 114 12a8 8 0 012 5.657V20z" />
         </svg>
       ),
     },

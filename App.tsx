@@ -42,6 +42,7 @@ import GalleryView from './components/Gallery/GalleryView';
 import ImageCatalogView from './components/Models/ImageCatalogView';
 import VideoCatalogView from './components/Models/VideoCatalogView';
 import ModelAdminView from './components/Models/ModelAdminView';
+import ChatEngineView from './components/ChatEngineView';
 import Sidebar, { MenuSection, ModuleType } from './components/layout/Sidebar';
 import PublicLanding from './components/layout/PublicLanding';
 import Toast, { useToast, ToastMessage } from './components/ui/Toast';
@@ -997,6 +998,8 @@ const AppContent: React.FC = () => {
         return null;
       case 'gallery':
         return null;
+      case 'chat-engine':
+        return null;
       case 'ugc':
         return null; // UGC has its own workspace in the right panel
       case 'spaces':
@@ -1037,6 +1040,7 @@ const AppContent: React.FC = () => {
       'veo3-image-to-video': 'Veo 3.1 Image-to-Video',
       'veo3-reference-to-video': 'Veo 3.1 Reference-to-Video',
       'gallery': 'Output Gallery',
+      'chat-engine': 'Gemini Chat Engine',
       'spaces': 'Spaces Studio',
       'grok-image-to-video': 'Grok Image-to-Video',
       'grok-text-to-image': 'Grok Text-to-Image',
@@ -1175,6 +1179,10 @@ const AppContent: React.FC = () => {
           ) : activeModule === 'gallery' ? (
             <div className="flex-1">
               <GalleryView />
+            </div>
+          ) : activeModule === 'chat-engine' ? (
+            <div className="flex-1">
+              <ChatEngineView apiKey={apiKey} onOpenSettings={() => setIsSettingsOpen(true)} />
             </div>
           ) : activeModule === 'image-catalog' ? (
             <div className="flex-1">
