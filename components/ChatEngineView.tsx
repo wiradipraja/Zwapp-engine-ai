@@ -32,8 +32,8 @@ const ChatEngineView: React.FC<ChatEngineViewProps> = ({ apiKey, onOpenSettings 
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [prompt, setPrompt] = useState('');
-  const [includeThoughts, setIncludeThoughts] = useState(true);
-  const [reasoningEffort, setReasoningEffort] = useState<ReasoningEffort>('high');
+  const [includeThoughts, setIncludeThoughts] = useState(false);
+  const [reasoningEffort, setReasoningEffort] = useState<ReasoningEffort>('low');
   const [isSending, setIsSending] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const endRef = useRef<HTMLDivElement | null>(null);
@@ -93,6 +93,8 @@ const ChatEngineView: React.FC<ChatEngineViewProps> = ({ apiKey, onOpenSettings 
       },
       ...[...messages, userMessage]
         .slice(-CHAT_CONTEXT_LIMIT)
+        .filter((message) => message.status !== 'error')
+        .filter((message) => (message.content || '').trim().length > 0)
         .map((message) => ({
           role: message.role,
           content: message.content,

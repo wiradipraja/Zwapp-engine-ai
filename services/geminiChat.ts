@@ -25,6 +25,8 @@ export const DEFAULT_GEMINI_CHAT_DEVELOPER_PROMPT =
 
 const GEMINI_CHAT_COMPLETIONS_ENDPOINT = '/api/proxy/gemini-3-flash/v1/chat/completions';
 
+type MessageFormatMode = 'array' | 'string';
+
 const extractTextValue = (value: any): string => {
   if (value === null || value === undefined) return '';
   if (typeof value === 'string') return value;
@@ -44,10 +46,24 @@ const extractTextValue = (value: any): string => {
   return '';
 };
 
-const normalizeMessages = (messages: GeminiChatMessage[]) => {
+const toSafeRole = (role: GeminiChatRole): GeminiChatRole => {
+  if (role === 'developer') return 'system';
+  return role;
+};
+
+const normalizeMessages = (messages: GeminiChatMessage[], mode: MessageFormatMode = 'array') => {
+  if (mode === 'string') {
+    return messages
+      .map((message) => ({
+        role: toSafeRole(message.role),
+        content: (message.content || '').trim(),
+      }))
+      .filter((message) => message.content.length > 0);
+  }
+
   return messages
     .map((message) => ({
-      role: message.role,
+      role: toSafeRole(message.role),
       content: [{ type: 'text', text: (message.content || '').trim() }],
     }))
     .filter((message) => message.content[0].text.length > 0);
@@ -179,39 +195,99 @@ export const createGemini3FlashChatCompletion = async (
     throw new Error('KIE API key is required.');
   }
 
-  const normalizedMessages = normalizeMessages(messages);
-  if (normalizedMessages.length === 0) {
-    throw new Error('At least one chat message is required.');
-  }
+  const requestOnce = async (
+    normalizedMessages: any[],
+    stream: boolean,
+    includeThoughts: boolean,
+    reasoningEffort: 'low' | 'high',
+    useCallbacks: boolean
+  ): Promise<GeminiChatResult> => {
+    if (normalizedMessages.length === 0) {
+      throw new Error('At least one chat message is required.');
+    }
 
-  const payload = {
-    messages: normalizedMessages,
-    stream: options.stream ?? true,
-    include_thoughts: options.includeThoughts ?? true,
-    reasoning_effort: options.reasoningEffort ?? 'high',
+    const payload = {
+      messages: normalizedMessages,
+      stream,
+      include_thoughts: includeThoughts,
+      reasoning_effort: reasoningEffort,
+    };
+
+    const response = await fetch(GEMINI_CHAT_COMPLETIONS_ENDPOINT, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'text/event-stream, application/json',
+        Authorization: `Bearer ${cleanedApiKey}`,
+      },
+      body: JSON.stringify(payload),
+      signal: options.signal,
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      const error = new Error(`Gemini chat request failed (${response.status}): ${errorText.substring(0, 240)}`);
+      (error as any).status = response.status;
+      (error as any).raw = errorText;
+      throw error;
+    }
+
+    const contentType = (response.headers.get('content-type') || '').toLowerCase();
+    if (contentType.includes('text/event-stream')) {
+      return parseSseCompletion(
+        response,
+        useCallbacks ? options.onContentDelta : undefined,
+        useCallbacks ? options.onReasoningDelta : undefined
+      );
+    }
+
+    const payloadJson = await response.json();
+    return parseJsonCompletion(
+      payloadJson,
+      useCallbacks ? options.onContentDelta : undefined,
+      useCallbacks ? options.onReasoningDelta : undefined
+    );
   };
 
-  const response = await fetch(GEMINI_CHAT_COMPLETIONS_ENDPOINT, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Accept: 'text/event-stream, application/json',
-      Authorization: `Bearer ${cleanedApiKey}`,
-    },
-    body: JSON.stringify(payload),
-    signal: options.signal,
-  });
+  const initialStream = options.stream ?? true;
+  const initialIncludeThoughts = options.includeThoughts ?? true;
+  const initialReasoningEffort = options.reasoningEffort ?? 'high';
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Gemini chat request failed (${response.status}): ${errorText.substring(0, 240)}`);
+  const primaryMessages = normalizeMessages(messages, 'array');
+
+  try {
+    return await requestOnce(
+      primaryMessages,
+      initialStream,
+      initialIncludeThoughts,
+      initialReasoningEffort,
+      true
+    );
+  } catch (primaryError: any) {
+    const status = Number(primaryError?.status || 0);
+    const raw = String(primaryError?.raw || primaryError?.message || '');
+    const isRetriable =
+      status >= 500 ||
+      status === 429 ||
+      raw.toLowerCase().includes('server exception') ||
+      raw.toLowerCase().includes('internal');
+
+    if (!isRetriable) {
+      throw primaryError;
+    }
+
+    const fallbackMessages = normalizeMessages(messages, 'string');
+    try {
+      return await requestOnce(
+        fallbackMessages,
+        false,
+        false,
+        'low',
+        true
+      );
+    } catch (fallbackError: any) {
+      const fallbackMsg = fallbackError?.message || String(fallbackError);
+      throw new Error(`${primaryError?.message || 'Gemini request failed'} | fallback failed: ${fallbackMsg}`);
+    }
   }
-
-  const contentType = (response.headers.get('content-type') || '').toLowerCase();
-  if (contentType.includes('text/event-stream')) {
-    return parseSseCompletion(response, options.onContentDelta, options.onReasoningDelta);
-  }
-
-  const payloadJson = await response.json();
-  return parseJsonCompletion(payloadJson, options.onContentDelta, options.onReasoningDelta);
 };
