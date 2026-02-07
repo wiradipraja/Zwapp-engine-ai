@@ -36,6 +36,7 @@ const ChatEngineView: React.FC<ChatEngineViewProps> = ({ apiKey, onOpenSettings 
   const [reasoningEffort, setReasoningEffort] = useState<ReasoningEffort>('low');
   const [isSending, setIsSending] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const [lastResolvedModel, setLastResolvedModel] = useState('gemini-3-flash');
   const endRef = useRef<HTMLDivElement | null>(null);
 
   const resolvedApiKey = useMemo(() => {
@@ -125,6 +126,9 @@ const ChatEngineView: React.FC<ChatEngineViewProps> = ({ apiKey, onOpenSettings 
         onContentDelta: (delta) => appendAssistantField('content', delta),
         onReasoningDelta: (delta) => appendAssistantField('reasoning', delta),
       });
+      if (response.model) {
+        setLastResolvedModel(response.model);
+      }
 
       setMessages((prev) =>
         prev.map((message) => {
@@ -193,7 +197,7 @@ const ChatEngineView: React.FC<ChatEngineViewProps> = ({ apiKey, onOpenSettings 
         >
           <div>
             <p className={`text-xs font-mono ${isDark ? 'text-zinc-500' : 'text-zinc-500'}`}>MODEL</p>
-            <p className={`text-sm font-semibold ${isDark ? 'text-white' : 'text-zinc-900'}`}>gemini-3-flash</p>
+            <p className={`text-sm font-semibold ${isDark ? 'text-white' : 'text-zinc-900'}`}>{lastResolvedModel}</p>
           </div>
 
           <div className="flex items-center gap-3">

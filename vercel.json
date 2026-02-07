@@ -33,6 +33,14 @@
       "destination": "https://api.kie.ai/gemini-3-flash/:path*"
     },
     {
+      "source": "/api/proxy/gemini-2.5-flash/:path*",
+      "destination": "https://api.kie.ai/gemini-2.5-flash/:path*"
+    },
+    {
+      "source": "/api/proxy/gemini-3-pro/:path*",
+      "destination": "https://api.kie.ai/gemini-3-pro/:path*"
+    },
+    {
       "source": "/api/proxy/:path*",
       "destination": "https://api.kie.ai/api/v1/:path*"
     },

@@ -18,12 +18,27 @@ export interface GeminiChatResult {
   content: string;
   reasoningContent: string;
   raw: any;
+  model?: string;
+  endpoint?: string;
 }
 
 export const DEFAULT_GEMINI_CHAT_DEVELOPER_PROMPT =
   'You are Zwapp Engine Chat Assistant. Give practical, concise, and actionable answers.';
 
-const GEMINI_CHAT_COMPLETIONS_ENDPOINT = '/api/proxy/gemini-3-flash/v1/chat/completions';
+const GEMINI_CHAT_COMPLETIONS_ENDPOINTS = [
+  {
+    model: 'gemini-3-flash',
+    url: '/api/proxy/gemini-3-flash/v1/chat/completions',
+  },
+  {
+    model: 'gemini-2.5-flash',
+    url: '/api/proxy/gemini-2.5-flash/v1/chat/completions',
+  },
+  {
+    model: 'gemini-3-pro',
+    url: '/api/proxy/gemini-3-pro/v1/chat/completions',
+  },
+] as const;
 
 type MessageFormatMode = 'array' | 'string';
 
@@ -131,6 +146,7 @@ const parseJsonCompletion = (
     content,
     reasoningContent,
     raw: envelope,
+    model: envelope?.model || payload?.model,
   };
 };
 
@@ -217,6 +233,7 @@ const parseSseCompletion = async (
     content,
     reasoningContent,
     raw: lastChunk,
+    model: lastChunk?.model,
   };
 };
 
@@ -231,6 +248,7 @@ export const createGemini3FlashChatCompletion = async (
   }
 
   const requestOnce = async (params: {
+    endpoint: string;
     normalizedMessages: any[];
     stream: boolean;
     includeThoughts?: boolean;
@@ -238,6 +256,7 @@ export const createGemini3FlashChatCompletion = async (
     useCallbacks: boolean;
   }): Promise<GeminiChatResult> => {
     const {
+      endpoint,
       normalizedMessages,
       stream,
       includeThoughts,
@@ -260,7 +279,7 @@ export const createGemini3FlashChatCompletion = async (
       payload.reasoning_effort = reasoningEffort;
     }
 
-    const response = await fetch(GEMINI_CHAT_COMPLETIONS_ENDPOINT, {
+    const response = await fetch(endpoint, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -282,22 +301,39 @@ export const createGemini3FlashChatCompletion = async (
     const contentType = (response.headers.get('content-type') || '').toLowerCase();
     const parsed = contentType.includes('text/event-stream')
       ? await parseSseCompletion(
-        response,
-        useCallbacks ? options.onContentDelta : undefined,
-        useCallbacks ? options.onReasoningDelta : undefined
-      )
-      : parseJsonCompletion(
-          await response.json(),
+          response,
           useCallbacks ? options.onContentDelta : undefined,
           useCallbacks ? options.onReasoningDelta : undefined
-        );
+        )
+      : (() => {
+          const jsonParser = async () => {
+            const rawPayload = await response.json();
+            const rawCode = Number(rawPayload?.code);
+            if (!Number.isNaN(rawCode) && rawCode !== 200) {
+              const providerError = new Error(
+                `Gemini provider error (${rawCode}): ${rawPayload?.msg || 'Unknown provider error'}`
+              );
+              (providerError as any).status = rawCode;
+              (providerError as any).raw = rawPayload;
+              throw providerError;
+            }
+            return parseJsonCompletion(
+              rawPayload,
+              useCallbacks ? options.onContentDelta : undefined,
+              useCallbacks ? options.onReasoningDelta : undefined
+            );
+          };
+          return jsonParser();
+        })();
 
-    const hasContent = (parsed.content || '').trim().length > 0;
-    const hasReasoning = (parsed.reasoningContent || '').trim().length > 0;
+    const resolved = await parsed;
+
+    const hasContent = (resolved.content || '').trim().length > 0;
+    const hasReasoning = (resolved.reasoningContent || '').trim().length > 0;
     if (!hasContent && !hasReasoning) {
       const rawText = (() => {
         try {
-          return JSON.stringify(parsed.raw).slice(0, 300);
+          return JSON.stringify(resolved.raw).slice(0, 300);
         } catch (_error) {
           return '';
         }
@@ -307,7 +343,10 @@ export const createGemini3FlashChatCompletion = async (
       throw emptyError;
     }
 
-    return parsed;
+    return {
+      ...resolved,
+      endpoint,
+    };
   };
 
   const initialStream = options.stream ?? false;
@@ -322,7 +361,7 @@ export const createGemini3FlashChatCompletion = async (
     ? [{ role: 'user' as const, content: lastUserMessage.content }]
     : [];
 
-  const attempts = [
+  const attemptPayloads = [
     {
       normalizedMessages: normalizeMessages(messages, 'array'),
       stream: initialStream,
@@ -361,21 +400,39 @@ export const createGemini3FlashChatCompletion = async (
   ];
 
   const errors: string[] = [];
+  let attemptCounter = 0;
 
-  for (let index = 0; index < attempts.length; index += 1) {
-    const attempt = attempts[index];
-    if (!attempt.normalizedMessages.length) continue;
+  for (const endpointConfig of GEMINI_CHAT_COMPLETIONS_ENDPOINTS) {
+    let skipRemainingPayloadVariants = false;
+    for (const payload of attemptPayloads) {
+      if (skipRemainingPayloadVariants) break;
+      if (!payload.normalizedMessages.length) continue;
+      attemptCounter += 1;
 
-    try {
-      return await requestOnce(attempt);
-    } catch (error: any) {
-      const status = Number(error?.status || 0);
-      const message = error?.message || String(error);
-      errors.push(`attempt ${index + 1}: ${message}`);
+      try {
+        const result = await requestOnce({
+          ...payload,
+          endpoint: endpointConfig.url,
+        });
+        return {
+          ...result,
+          model: result.model || endpointConfig.model,
+        };
+      } catch (error: any) {
+        const status = Number(error?.status || 0);
+        const message = error?.message || String(error);
+        errors.push(`attempt ${attemptCounter} [${endpointConfig.model}]: ${message}`);
 
-      const isAuthError = status === 401 || status === 403;
-      if (isAuthError) {
-        break;
+        const isAuthError = status === 401 || status === 403;
+        if (isAuthError) {
+          throw new Error(errors.join(' | '));
+        }
+
+        const isProviderServerError =
+          status === 500 && (message.includes('Gemini provider error') || message.includes('Server exception'));
+        if (isProviderServerError) {
+          skipRemainingPayloadVariants = true;
+        }
       }
     }
   }

@@ -15,6 +15,18 @@ export default defineConfig(({ mode }) => {
             rewrite: (path) => path.replace(/^\/api\/proxy/, ''),
             secure: true,
           },
+          '/api/proxy/gemini-2.5-flash': {
+            target: 'https://api.kie.ai',
+            changeOrigin: true,
+            rewrite: (path) => path.replace(/^\/api\/proxy/, ''),
+            secure: true,
+          },
+          '/api/proxy/gemini-3-pro': {
+            target: 'https://api.kie.ai',
+            changeOrigin: true,
+            rewrite: (path) => path.replace(/^\/api\/proxy/, ''),
+            secure: true,
+          },
           '/api/proxy': {
             target: 'https://api.kie.ai',
             changeOrigin: true,
