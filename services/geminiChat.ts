@@ -46,16 +46,20 @@ const extractTextValue = (value: any): string => {
   return '';
 };
 
-const toSafeRole = (role: GeminiChatRole): GeminiChatRole => {
-  if (role === 'developer') return 'system';
-  return role;
-};
+const normalizeMessages = (
+  messages: GeminiChatMessage[],
+  mode: MessageFormatMode = 'array',
+  options?: { developerToSystem?: boolean }
+) => {
+  const mapRole = (role: GeminiChatRole): GeminiChatRole => {
+    if (options?.developerToSystem && role === 'developer') return 'system';
+    return role;
+  };
 
-const normalizeMessages = (messages: GeminiChatMessage[], mode: MessageFormatMode = 'array') => {
   if (mode === 'string') {
     return messages
       .map((message) => ({
-        role: toSafeRole(message.role),
+        role: mapRole(message.role),
         content: (message.content || '').trim(),
       }))
       .filter((message) => message.content.length > 0);
@@ -63,10 +67,32 @@ const normalizeMessages = (messages: GeminiChatMessage[], mode: MessageFormatMod
 
   return messages
     .map((message) => ({
-      role: toSafeRole(message.role),
+      role: mapRole(message.role),
       content: [{ type: 'text', text: (message.content || '').trim() }],
     }))
     .filter((message) => message.content[0].text.length > 0);
+};
+
+const unwrapCompletionEnvelope = (payload: any): any => {
+  const candidates = [
+    payload,
+    payload?.data,
+    payload?.result,
+    payload?.response,
+    payload?.output,
+    payload?.data?.data,
+    payload?.data?.result,
+    payload?.result?.data,
+  ];
+
+  for (const candidate of candidates) {
+    if (!candidate || typeof candidate !== 'object') continue;
+    if (candidate.choices || candidate.message || candidate.output_text || candidate.content) {
+      return candidate;
+    }
+  }
+
+  return payload;
 };
 
 const parseJsonCompletion = (
@@ -74,18 +100,27 @@ const parseJsonCompletion = (
   onContentDelta?: (delta: string) => void,
   onReasoningDelta?: (delta: string) => void
 ): GeminiChatResult => {
-  const firstChoice = payload?.choices?.[0] || {};
+  const envelope = unwrapCompletionEnvelope(payload);
+  const firstChoice = envelope?.choices?.[0] || {};
   const message = firstChoice?.message || firstChoice?.delta || firstChoice || {};
 
   const content =
     extractTextValue(message?.content) ||
-    extractTextValue(payload?.message?.content) ||
+    extractTextValue(message?.output_text) ||
+    extractTextValue(firstChoice?.content) ||
+    extractTextValue(envelope?.message?.content) ||
+    extractTextValue(envelope?.output_text) ||
+    extractTextValue(payload?.data?.choices?.[0]?.message?.content) ||
+    extractTextValue(payload?.result?.choices?.[0]?.message?.content) ||
+    extractTextValue(payload?.data?.message?.content) ||
     extractTextValue(payload?.data?.content) ||
     '';
 
   const reasoningContent =
     extractTextValue(message?.reasoning_content) ||
+    extractTextValue(message?.reasoning) ||
     extractTextValue(firstChoice?.reasoning_content) ||
+    extractTextValue(envelope?.reasoning_content) ||
     extractTextValue(payload?.reasoning_content) ||
     '';
 
@@ -95,7 +130,7 @@ const parseJsonCompletion = (
   return {
     content,
     reasoningContent,
-    raw: payload,
+    raw: envelope,
   };
 };
 
@@ -245,20 +280,34 @@ export const createGemini3FlashChatCompletion = async (
     }
 
     const contentType = (response.headers.get('content-type') || '').toLowerCase();
-    if (contentType.includes('text/event-stream')) {
-      return parseSseCompletion(
+    const parsed = contentType.includes('text/event-stream')
+      ? await parseSseCompletion(
         response,
         useCallbacks ? options.onContentDelta : undefined,
         useCallbacks ? options.onReasoningDelta : undefined
-      );
+      )
+      : parseJsonCompletion(
+          await response.json(),
+          useCallbacks ? options.onContentDelta : undefined,
+          useCallbacks ? options.onReasoningDelta : undefined
+        );
+
+    const hasContent = (parsed.content || '').trim().length > 0;
+    const hasReasoning = (parsed.reasoningContent || '').trim().length > 0;
+    if (!hasContent && !hasReasoning) {
+      const rawText = (() => {
+        try {
+          return JSON.stringify(parsed.raw).slice(0, 300);
+        } catch (_error) {
+          return '';
+        }
+      })();
+      const emptyError = new Error(`Gemini returned empty payload${rawText ? `: ${rawText}` : ''}`);
+      (emptyError as any).status = 200;
+      throw emptyError;
     }
 
-    const payloadJson = await response.json();
-    return parseJsonCompletion(
-      payloadJson,
-      useCallbacks ? options.onContentDelta : undefined,
-      useCallbacks ? options.onReasoningDelta : undefined
-    );
+    return parsed;
   };
 
   const initialStream = options.stream ?? false;
@@ -279,6 +328,13 @@ export const createGemini3FlashChatCompletion = async (
       stream: initialStream,
       includeThoughts: initialIncludeThoughts,
       reasoningEffort: initialReasoningEffort,
+      useCallbacks: true,
+    },
+    {
+      normalizedMessages: normalizeMessages(messages, 'array', { developerToSystem: true }),
+      stream: false,
+      includeThoughts: false,
+      reasoningEffort: 'low' as const,
       useCallbacks: true,
     },
     {

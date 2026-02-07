@@ -131,7 +131,17 @@ const ChatEngineView: React.FC<ChatEngineViewProps> = ({ apiKey, onOpenSettings 
           if (message.id !== assistantMessageId) return message;
 
           const finalContent = (message.content || response.content || '').trim();
+          const finalReasoning = (message.reasoning || response.reasoningContent || '').trim();
           if (!finalContent) {
+            if (finalReasoning) {
+              return {
+                ...message,
+                content: finalReasoning,
+                reasoning: '',
+                status: 'done',
+              };
+            }
+
             return {
               ...message,
               content: 'Error: Model tidak mengembalikan konten.',
@@ -140,7 +150,6 @@ const ChatEngineView: React.FC<ChatEngineViewProps> = ({ apiKey, onOpenSettings 
             };
           }
 
-          const finalReasoning = message.reasoning || response.reasoningContent || '';
           return {
             ...message,
             content: finalContent,
