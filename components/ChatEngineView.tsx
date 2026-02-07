@@ -95,6 +95,8 @@ const ChatEngineView: React.FC<ChatEngineViewProps> = ({ apiKey, onOpenSettings 
         .slice(-CHAT_CONTEXT_LIMIT)
         .filter((message) => message.status !== 'error')
         .filter((message) => (message.content || '').trim().length > 0)
+        .filter((message) => message.content !== 'Model tidak mengembalikan konten.')
+        .filter((message) => !message.content.startsWith('Error:'))
         .map((message) => ({
           role: message.role,
           content: message.content,
@@ -117,7 +119,7 @@ const ChatEngineView: React.FC<ChatEngineViewProps> = ({ apiKey, onOpenSettings 
 
     try {
       const response = await createGemini3FlashChatCompletion(resolvedApiKey, history, {
-        stream: true,
+        stream: false,
         includeThoughts,
         reasoningEffort,
         onContentDelta: (delta) => appendAssistantField('content', delta),
@@ -128,7 +130,16 @@ const ChatEngineView: React.FC<ChatEngineViewProps> = ({ apiKey, onOpenSettings 
         prev.map((message) => {
           if (message.id !== assistantMessageId) return message;
 
-          const finalContent = message.content || response.content || 'Model tidak mengembalikan konten.';
+          const finalContent = (message.content || response.content || '').trim();
+          if (!finalContent) {
+            return {
+              ...message,
+              content: 'Error: Model tidak mengembalikan konten.',
+              reasoning: '',
+              status: 'error',
+            };
+          }
+
           const finalReasoning = message.reasoning || response.reasoningContent || '';
           return {
             ...message,

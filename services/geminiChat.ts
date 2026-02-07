@@ -195,23 +195,35 @@ export const createGemini3FlashChatCompletion = async (
     throw new Error('KIE API key is required.');
   }
 
-  const requestOnce = async (
-    normalizedMessages: any[],
-    stream: boolean,
-    includeThoughts: boolean,
-    reasoningEffort: 'low' | 'high',
-    useCallbacks: boolean
-  ): Promise<GeminiChatResult> => {
+  const requestOnce = async (params: {
+    normalizedMessages: any[];
+    stream: boolean;
+    includeThoughts?: boolean;
+    reasoningEffort?: 'low' | 'high';
+    useCallbacks: boolean;
+  }): Promise<GeminiChatResult> => {
+    const {
+      normalizedMessages,
+      stream,
+      includeThoughts,
+      reasoningEffort,
+      useCallbacks,
+    } = params;
+
     if (normalizedMessages.length === 0) {
       throw new Error('At least one chat message is required.');
     }
 
-    const payload = {
+    const payload: any = {
       messages: normalizedMessages,
       stream,
-      include_thoughts: includeThoughts,
-      reasoning_effort: reasoningEffort,
     };
+    if (typeof includeThoughts === 'boolean') {
+      payload.include_thoughts = includeThoughts;
+    }
+    if (reasoningEffort) {
+      payload.reasoning_effort = reasoningEffort;
+    }
 
     const response = await fetch(GEMINI_CHAT_COMPLETIONS_ENDPOINT, {
       method: 'POST',
@@ -249,45 +261,68 @@ export const createGemini3FlashChatCompletion = async (
     );
   };
 
-  const initialStream = options.stream ?? true;
-  const initialIncludeThoughts = options.includeThoughts ?? true;
-  const initialReasoningEffort = options.reasoningEffort ?? 'high';
+  const initialStream = options.stream ?? false;
+  const initialIncludeThoughts = options.includeThoughts ?? false;
+  const initialReasoningEffort = options.reasoningEffort ?? 'low';
 
-  const primaryMessages = normalizeMessages(messages, 'array');
+  const lastUserMessage = [...messages]
+    .reverse()
+    .find((message) => message.role === 'user' && (message.content || '').trim().length > 0);
 
-  try {
-    return await requestOnce(
-      primaryMessages,
-      initialStream,
-      initialIncludeThoughts,
-      initialReasoningEffort,
-      true
-    );
-  } catch (primaryError: any) {
-    const status = Number(primaryError?.status || 0);
-    const raw = String(primaryError?.raw || primaryError?.message || '');
-    const isRetriable =
-      status >= 500 ||
-      status === 429 ||
-      raw.toLowerCase().includes('server exception') ||
-      raw.toLowerCase().includes('internal');
+  const minimalUserMessages = lastUserMessage
+    ? [{ role: 'user' as const, content: lastUserMessage.content }]
+    : [];
 
-    if (!isRetriable) {
-      throw primaryError;
-    }
+  const attempts = [
+    {
+      normalizedMessages: normalizeMessages(messages, 'array'),
+      stream: initialStream,
+      includeThoughts: initialIncludeThoughts,
+      reasoningEffort: initialReasoningEffort,
+      useCallbacks: true,
+    },
+    {
+      normalizedMessages: normalizeMessages(messages, 'string'),
+      stream: false,
+      includeThoughts: false,
+      reasoningEffort: 'low' as const,
+      useCallbacks: true,
+    },
+    {
+      normalizedMessages: normalizeMessages(minimalUserMessages, 'array'),
+      stream: false,
+      includeThoughts: false,
+      reasoningEffort: 'low' as const,
+      useCallbacks: true,
+    },
+    {
+      normalizedMessages: normalizeMessages(minimalUserMessages, 'string'),
+      stream: false,
+      includeThoughts: false,
+      reasoningEffort: undefined,
+      useCallbacks: true,
+    },
+  ];
 
-    const fallbackMessages = normalizeMessages(messages, 'string');
+  const errors: string[] = [];
+
+  for (let index = 0; index < attempts.length; index += 1) {
+    const attempt = attempts[index];
+    if (!attempt.normalizedMessages.length) continue;
+
     try {
-      return await requestOnce(
-        fallbackMessages,
-        false,
-        false,
-        'low',
-        true
-      );
-    } catch (fallbackError: any) {
-      const fallbackMsg = fallbackError?.message || String(fallbackError);
-      throw new Error(`${primaryError?.message || 'Gemini request failed'} | fallback failed: ${fallbackMsg}`);
+      return await requestOnce(attempt);
+    } catch (error: any) {
+      const status = Number(error?.status || 0);
+      const message = error?.message || String(error);
+      errors.push(`attempt ${index + 1}: ${message}`);
+
+      const isAuthError = status === 401 || status === 403;
+      if (isAuthError) {
+        break;
+      }
     }
   }
+
+  throw new Error(errors.join(' | '));
 };
