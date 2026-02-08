@@ -28,7 +28,7 @@ import { saveOutputToSupabase, getOutputByTaskId, downloadOutput } from '../../s
 import { getCreditCost } from '../../services/credits';
 import { generateUGCPlan } from '../../services/ugcPlanner';
 import { generateUGCSceneFrame } from '../../services/ugcSceneGenerator';
-import UGCWorkspacePanel from './UGCWorkspacePanel';
+import { produceUGCSceneVideo } from '../../services/ugcVideoPipeline';
 import { DEFAULT_UGC_INPUT, UGC_BACKGROUND_CATEGORIES, getUGCBackgroundOption } from './presets/ugcPreset';
 import type {
   SpaceFlowData,
@@ -37,7 +37,13 @@ import type {
   SpaceNodeType,
   SpaceRecord,
 } from '../../types/spaces';
-import type { UGCPlannerOutput, UGCSceneFrameRole, UGCWorkflowInputPayload } from '../../types/ugcWorkflow';
+import type {
+  UGCPlannerOutput,
+  UGCSceneFrameRole,
+  UGCVideoMode,
+  UGCVideoProvider,
+  UGCWorkflowInputPayload,
+} from '../../types/ugcWorkflow';
 import type {
   NanoBananaEditInput,
   NanoBananaGenInput,
@@ -62,6 +68,20 @@ interface SpacesWorkspaceProps {
 const DEFAULT_SPACE_NAME = 'New Space';
 const FLOW_VERSION = '1.1';
 const UGC_ASPECT_RATIO_OPTIONS: Array<UGCWorkflowInputPayload['aspectRatioGlobal']> = ['9:16', '16:9', '1:1', '4:5', '3:4'];
+const NODE_LIBRARY: Array<{ type: SpaceNodeType; label: string }> = [
+  { type: 'prompt', label: 'Prompt' },
+  { type: 'script', label: 'Script' },
+  { type: 'image', label: 'Image' },
+  { type: 'video', label: 'Video' },
+  { type: 'upload', label: 'Upload' },
+  { type: 'camera', label: 'Camera Preset' },
+  { type: 'motion', label: 'Motion Preset' },
+  { type: 'angle', label: 'Angle Preset' },
+  { type: 'ugc_input', label: 'UGC Input' },
+  { type: 'ugc_plan', label: 'UGC Plan' },
+  { type: 'ugc_scene_image', label: 'UGC Scene Frame' },
+  { type: 'ugc_scene_video', label: 'UGC Scene Video' },
+];
 
 const createDefaultUGCInput = (): UGCWorkflowInputPayload => ({
   ...DEFAULT_UGC_INPUT,
@@ -156,6 +176,16 @@ const defaultNodeData = (type: SpaceNodeType): SpaceNodeData => {
         ugcFrameRole: 'scene_start',
         ugcUseContinuity: true,
         videoFrameRole: 'start',
+      };
+    case 'ugc_scene_video':
+      return {
+        label: 'UGC Video',
+        title: 'UGC Scene Video',
+        status: 'idle',
+        ugcSceneNumber: 1,
+        ugcVideoProvider: 'veo3_fast',
+        ugcVideoMode: 'A_NATIVE',
+        ugcMuteNativeAudio: true,
       };
     default:
       return { label: 'Node', status: 'idle' };
@@ -420,6 +450,21 @@ const SpaceNodeCard: React.FC<NodeProps<SpaceNodeData>> = ({ data, type, selecte
   const elapsedMs =
     status === 'running' ? Math.max(0, Date.now() - (data.startedAt || Date.now())) : 0;
   const countdownLabel = status === 'running' ? formatElapsed(elapsedMs) : '';
+  const typeHint = (() => {
+    if (type === 'ugc_input') return 'Isi brief + ref model/produk di Inspector.';
+    if (type === 'ugc_plan') return 'Run untuk generate 4 scene narasi Gemini.';
+    if (type === 'ugc_scene_image') {
+      const scene = data.ugcSceneNumber || 1;
+      const role = data.ugcFrameRole === 'scene_end' ? 'END' : 'START';
+      return `Scene ${scene} ${role} frame`;
+    }
+    if (type === 'ugc_scene_video') {
+      const scene = data.ugcSceneNumber || 1;
+      const mode = data.ugcVideoMode || 'A_NATIVE';
+      return `Scene ${scene} video (${mode})`;
+    }
+    return '';
+  })();
 
   return (
     <div
@@ -464,6 +509,8 @@ const SpaceNodeCard: React.FC<NodeProps<SpaceNodeData>> = ({ data, type, selecte
           />
         </div>
       )}
+
+      {typeHint && <div className="mt-2 text-[10px] text-zinc-400">{typeHint}</div>}
 
       {output?.text && (
         <div className="mt-2 text-[10px] text-zinc-300 line-clamp-4 whitespace-pre-wrap">
@@ -644,7 +691,6 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
 
   const [logs, setLogs] = useState<string[]>([]);
   const [outputPreview, setOutputPreview] = useState<SpaceNodeOutput | null>(null);
-  const [workspaceView, setWorkspaceView] = useState<'flow' | 'ugc'>('flow');
   const [outputsCollapsed, setOutputsCollapsed] = useState(true);
   const [compactMotionList, setCompactMotionList] = useState(false);
   const [previewSaving, setPreviewSaving] = useState(false);
@@ -704,6 +750,7 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
       ugc_input: SpaceNodeCard,
       ugc_plan: SpaceNodeCard,
       ugc_scene_image: SpaceNodeCard,
+      ugc_scene_video: SpaceNodeCard,
     }),
     []
   );
@@ -890,6 +937,140 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
     markDirty();
   };
 
+  const addUGCStarterFlow = () => {
+    const bounds = flowWrapperRef.current?.getBoundingClientRect();
+    const center = reactFlowInstance && bounds
+      ? reactFlowInstance.project({
+          x: bounds.width / 2 - 420,
+          y: bounds.height / 2 - 120,
+        })
+      : { x: 120, y: 120 };
+
+    const ugcInputId = crypto.randomUUID();
+    const ugcPlanId = crypto.randomUUID();
+    const scene1StartId = crypto.randomUUID();
+    const scene1EndId = crypto.randomUUID();
+    const scene1VideoId = crypto.randomUUID();
+
+    const newNodes: Array<Node<SpaceNodeData>> = [
+      {
+        id: ugcInputId,
+        type: 'ugc_input',
+        position: { x: center.x, y: center.y },
+        data: {
+          ...defaultNodeData('ugc_input'),
+          title: 'UGC Input',
+        },
+      },
+      {
+        id: ugcPlanId,
+        type: 'ugc_plan',
+        position: { x: center.x + 310, y: center.y },
+        data: {
+          ...defaultNodeData('ugc_plan'),
+          title: 'UGC Plan',
+        },
+      },
+      {
+        id: scene1StartId,
+        type: 'ugc_scene_image',
+        position: { x: center.x + 620, y: center.y - 80 },
+        data: {
+          ...defaultNodeData('ugc_scene_image'),
+          title: 'Scene 1 Start',
+          ugcSceneNumber: 1,
+          ugcFrameRole: 'scene_start',
+          videoFrameRole: 'start',
+          ugcUseContinuity: false,
+        },
+      },
+      {
+        id: scene1EndId,
+        type: 'ugc_scene_image',
+        position: { x: center.x + 620, y: center.y + 80 },
+        data: {
+          ...defaultNodeData('ugc_scene_image'),
+          title: 'Scene 1 End',
+          ugcSceneNumber: 1,
+          ugcFrameRole: 'scene_end',
+          videoFrameRole: 'end',
+          ugcUseContinuity: true,
+        },
+      },
+      {
+        id: scene1VideoId,
+        type: 'ugc_scene_video',
+        position: { x: center.x + 920, y: center.y },
+        data: {
+          ...defaultNodeData('ugc_scene_video'),
+          title: 'Scene 1 Video',
+          ugcSceneNumber: 1,
+          ugcVideoProvider: 'veo3_fast',
+          ugcVideoMode: 'A_NATIVE',
+          ugcMuteNativeAudio: true,
+        },
+      },
+    ];
+
+    const newEdges: Edge[] = [
+      {
+        id: crypto.randomUUID(),
+        source: ugcInputId,
+        target: ugcPlanId,
+        type: 'smoothstep',
+        animated: false,
+        style: { strokeWidth: 1.5, stroke: '#64748b' },
+      },
+      {
+        id: crypto.randomUUID(),
+        source: ugcPlanId,
+        target: scene1StartId,
+        type: 'smoothstep',
+        animated: false,
+        style: { strokeWidth: 1.5, stroke: '#64748b' },
+      },
+      {
+        id: crypto.randomUUID(),
+        source: scene1StartId,
+        target: scene1EndId,
+        type: 'smoothstep',
+        animated: false,
+        style: { strokeWidth: 1.5, stroke: '#64748b' },
+      },
+      {
+        id: crypto.randomUUID(),
+        source: ugcPlanId,
+        target: scene1VideoId,
+        type: 'smoothstep',
+        animated: false,
+        style: { strokeWidth: 1.5, stroke: '#64748b' },
+      },
+      {
+        id: crypto.randomUUID(),
+        source: scene1StartId,
+        target: scene1VideoId,
+        type: 'smoothstep',
+        animated: false,
+        style: { strokeWidth: 1.5, stroke: '#64748b' },
+      },
+      {
+        id: crypto.randomUUID(),
+        source: scene1EndId,
+        target: scene1VideoId,
+        type: 'smoothstep',
+        animated: false,
+        style: { strokeWidth: 1.5, stroke: '#64748b' },
+      },
+    ];
+
+    setNodes((prev) => [...prev, ...newNodes]);
+    setEdges((prev) => [...prev, ...newEdges]);
+    setSelectedNodeId(ugcInputId);
+    setSelectedNodeIds([ugcInputId]);
+    markDirty();
+    addLog('UGC starter workflow added: Input -> Plan -> Scene1 Start -> Scene1 End -> Scene1 Video');
+  };
+
   const onConnect = useCallback(
     (connection: Connection) => {
       setEdges((eds) =>
@@ -916,7 +1097,7 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
 
   const cloneNodeDataForPaste = useCallback((node: Node<SpaceNodeData>) => {
     const data = JSON.parse(JSON.stringify(node.data)) as SpaceNodeData;
-    const resetOutputTypes = ['prompt', 'script', 'image', 'video', 'ugc_input', 'ugc_plan', 'ugc_scene_image'];
+    const resetOutputTypes = ['prompt', 'script', 'image', 'video', 'ugc_input', 'ugc_plan', 'ugc_scene_image', 'ugc_scene_video'];
     if (resetOutputTypes.includes(node.type || '')) {
       data.status = 'idle';
       data.output = undefined;
@@ -1351,6 +1532,22 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
     return {
       continuityReferenceUrl: continuityReferenceUrl || undefined,
       anchorSceneStartUrl: sceneOneAnchor || undefined,
+    };
+  };
+
+  const resolveUGCSceneFramesForVideo = (
+    nodeId: string,
+    sceneNumber: 1 | 2 | 3 | 4
+  ): {
+    startFrameUrl?: string;
+    endFrameUrl?: string;
+  } => {
+    const frames = collectUpstreamUGCSceneFrames(nodeId);
+    const startFrame = pickLatestUGCFrame(frames, sceneNumber, 'scene_start')?.imageUrl;
+    const endFrame = pickLatestUGCFrame(frames, sceneNumber, 'scene_end')?.imageUrl;
+    return {
+      startFrameUrl: startFrame,
+      endFrameUrl: endFrame || startFrame,
     };
   };
 
@@ -1876,6 +2073,93 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
           },
         });
         addLog(`UGC scene ${sceneNumber} ${frameRole}: done via ${generated.sourceModel}.`);
+        return;
+      }
+
+      if (node.type === 'ugc_scene_video') {
+        const ugcInput = resolveUGCInput(nodeId);
+        if (!ugcInput) {
+          throw new Error('UGC input not found. Connect UGC Input node.');
+        }
+        const ugcPlan = resolveUGCPlan(nodeId);
+        if (!ugcPlan) {
+          throw new Error('UGC plan not found. Run UGC Plan node first.');
+        }
+
+        const sceneNumber = (node.data.ugcSceneNumber || 1) as 1 | 2 | 3 | 4;
+        const scene = ugcPlan.scenes.find((item) => item.scene_number === sceneNumber);
+        if (!scene) {
+          throw new Error(`Scene ${sceneNumber} not found in UGC plan.`);
+        }
+
+        const frames = resolveUGCSceneFramesForVideo(nodeId, sceneNumber);
+        if (!frames.startFrameUrl) {
+          throw new Error(
+            `Scene ${sceneNumber} start frame not found. Generate UGC Scene START image first and connect it upstream.`
+          );
+        }
+
+        const provider = (node.data.ugcVideoProvider || 'veo3_fast') as UGCVideoProvider;
+        const videoMode = (node.data.ugcVideoMode || 'A_NATIVE') as UGCVideoMode;
+        const muteNativeAudio = videoMode === 'B_ELEVENLABS' ? node.data.ugcMuteNativeAudio !== false : false;
+        const tonevoice = (ugcInput.tonevoice || '').trim() || 'middle-age, baritone';
+        const dialogueScript = scene.dialogue_text_id || scene.dialogue_id || '';
+
+        addLog(`UGC scene ${sceneNumber} video: creating (${provider}, ${videoMode})...`);
+        const video = await produceUGCSceneVideo({
+          apiKey,
+          provider,
+          aspectRatio: ugcInput.aspectRatioGlobal,
+          scenePlan: scene,
+          startFrameUrl: frames.startFrameUrl,
+          endFrameUrl: frames.endFrameUrl || frames.startFrameUrl,
+          audio: {
+            videoMode,
+            muteNativeAudio,
+            singleSpeakerTonevoice: tonevoice,
+            dialogueScript,
+          },
+        });
+
+        const taskId = video.sourceTaskId || `ugc-video-${nodeId}-${Date.now()}`;
+        updateNodeData(nodeId, {
+          status: 'success',
+          progress: 100,
+          model: provider,
+          output: {
+            contentType: 'video',
+            url: video.videoUrl,
+            metadata: {
+              kind: 'ugc_scene_video',
+              sceneNumber,
+              provider: video.provider,
+              videoMode: video.videoMode,
+              muted: video.muted,
+              audioUrl: video.audioUrl,
+              taskId,
+              promptUsed: video.promptUsed,
+            },
+          },
+        });
+
+        saveOutputToGallery({
+          taskId,
+          model: video.provider,
+          prompt: video.promptUsed,
+          outputUrl: video.videoUrl,
+          outputType: 'video',
+          metadata: {
+            kind: 'ugc_scene_video',
+            sceneNumber,
+            provider: video.provider,
+            videoMode: video.videoMode,
+            muted: video.muted,
+            audioUrl: video.audioUrl,
+            nodeId,
+            spaceId: activeSpace?.id,
+          },
+        });
+        addLog(`UGC scene ${sceneNumber} video: done via ${video.provider}.`);
         return;
       }
 
@@ -2412,31 +2696,10 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
               </option>
             ))}
           </select>
-          <div className={`flex items-center rounded-lg border ${isDark ? 'border-zinc-800 bg-zinc-900' : 'border-zinc-200 bg-zinc-50'}`}>
-            <button
-              onClick={() => setWorkspaceView('flow')}
-              className={`px-3 py-2 text-xs rounded-l-lg ${
-                workspaceView === 'flow'
-                  ? 'bg-emerald-500/20 text-emerald-300'
-                  : isDark
-                  ? 'text-zinc-400'
-                  : 'text-zinc-600'
-              }`}
-            >
-              Flow Builder
-            </button>
-            <button
-              onClick={() => setWorkspaceView('ugc')}
-              className={`px-3 py-2 text-xs rounded-r-lg border-l ${
-                workspaceView === 'ugc'
-                  ? 'bg-orange-500/20 text-orange-300'
-                  : isDark
-                  ? 'border-zinc-800 text-zinc-400'
-                  : 'border-zinc-200 text-zinc-600'
-              }`}
-            >
-              UGC Preset
-            </button>
+          <div className={`text-[11px] font-mono px-3 py-2 rounded-lg border ${
+            isDark ? 'border-zinc-800 bg-zinc-900 text-zinc-400' : 'border-zinc-200 bg-zinc-50 text-zinc-600'
+          }`}>
+            Flow Builder
           </div>
           {isDirty && <span className="text-[10px] text-amber-400 font-mono">Unsaved</span>}
         </div>
@@ -2473,25 +2736,27 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
         <div className="px-4 py-2 text-xs text-amber-400">{statusMessage}</div>
       )}
 
-      {workspaceView === 'ugc' ? (
-        <div className="flex-1 overflow-hidden">
-          <UGCWorkspacePanel apiKey={apiKey} spaceId={activeSpace?.id} />
-        </div>
-      ) : (
-        <>
       <div className="flex-1 flex overflow-hidden">
         <div className={`w-56 border-r ${isDark ? 'border-zinc-800 bg-zinc-950' : 'border-zinc-200 bg-white'}`}>
           <div className="px-4 py-4 space-y-3">
             <h4 className="text-xs font-mono text-zinc-500 uppercase tracking-widest">Nodes</h4>
-            {(['prompt', 'script', 'image', 'video', 'upload', 'camera', 'motion', 'angle', 'ugc_input', 'ugc_plan', 'ugc_scene_image'] as SpaceNodeType[]).map((type) => (
+            <button
+              onClick={addUGCStarterFlow}
+              className={`w-full text-left px-3 py-2 rounded-lg text-[11px] border ${
+                isDark ? 'border-emerald-500/50 text-emerald-300 hover:bg-emerald-500/10' : 'border-emerald-300 text-emerald-700 hover:bg-emerald-50'
+              }`}
+            >
+              + Add UGC Starter
+            </button>
+            {NODE_LIBRARY.map((item) => (
               <button
-                key={type}
-                onClick={() => addNode(type)}
+                key={item.type}
+                onClick={() => addNode(item.type)}
                 className={`w-full text-left px-3 py-2 rounded-lg text-[11px] border ${
                   isDark ? 'border-zinc-800 text-zinc-200 hover:bg-zinc-900' : 'border-zinc-200 text-zinc-700 hover:bg-zinc-50'
                 }`}
               >
-                + {type.toUpperCase()}
+                + {item.label}
               </button>
             ))}
           </div>
@@ -2556,6 +2821,8 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
                     return '#f97316';
                   case 'ugc_scene_image':
                     return '#eab308';
+                  case 'ugc_scene_video':
+                    return '#8b5cf6';
                   default:
                     return '#6b7280';
                 }
@@ -3038,6 +3305,377 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
                   </div>
                 )}
 
+                {selectedNode.type === 'ugc_input' && (() => {
+                  const ugcInput = normalizeUGCInput(selectedNode.data.ugcInput);
+                  const selectedCategory =
+                    UGC_BACKGROUND_CATEGORIES.find((category) => category.id === ugcInput.backgroundCategory) ||
+                    UGC_BACKGROUND_CATEGORIES[0];
+                  return (
+                    <div className="space-y-3">
+                      <div className="text-[10px] text-zinc-500">Input node for Gemini UGC planner.</div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <label className="text-[10px] text-zinc-400">
+                          Model Ref
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="block text-[10px] mt-1"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) handleUGCReferenceUpload(selectedNode.id, 'modelImageUrl', file);
+                            }}
+                          />
+                        </label>
+                        <label className="text-[10px] text-zinc-400">
+                          Product Ref
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="block text-[10px] mt-1"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) handleUGCReferenceUpload(selectedNode.id, 'productImageUrl', file);
+                            }}
+                          />
+                        </label>
+                      </div>
+
+                      <input
+                        value={ugcInput.modelImageUrl || ''}
+                        onChange={(e) => updateUGCInputNodeData(selectedNode.id, { modelImageUrl: e.target.value })}
+                        placeholder="Model image URL"
+                        className={`w-full px-3 py-2 rounded-lg text-xs border ${
+                          isDark ? 'bg-zinc-900 border-zinc-800 text-zinc-200' : 'bg-white border-zinc-200'
+                        }`}
+                      />
+                      <input
+                        value={ugcInput.productImageUrl || ''}
+                        onChange={(e) => updateUGCInputNodeData(selectedNode.id, { productImageUrl: e.target.value })}
+                        placeholder="Product image URL"
+                        className={`w-full px-3 py-2 rounded-lg text-xs border ${
+                          isDark ? 'bg-zinc-900 border-zinc-800 text-zinc-200' : 'bg-white border-zinc-200'
+                        }`}
+                      />
+
+                      <div className="grid grid-cols-2 gap-2">
+                        {ugcInput.modelImageUrl && (
+                          <img
+                            src={ugcInput.modelImageUrl}
+                            className="w-full h-20 object-cover rounded-lg border border-zinc-800"
+                            alt="UGC model"
+                          />
+                        )}
+                        {ugcInput.productImageUrl && (
+                          <img
+                            src={ugcInput.productImageUrl}
+                            className="w-full h-20 object-cover rounded-lg border border-zinc-800"
+                            alt="UGC product"
+                          />
+                        )}
+                      </div>
+
+                      <input
+                        value={ugcInput.productName}
+                        onChange={(e) => updateUGCInputNodeData(selectedNode.id, { productName: e.target.value })}
+                        placeholder="Product name"
+                        className={`w-full px-3 py-2 rounded-lg text-xs border ${
+                          isDark ? 'bg-zinc-900 border-zinc-800 text-zinc-200' : 'bg-white border-zinc-200'
+                        }`}
+                      />
+                      <textarea
+                        value={ugcInput.productShortDescription}
+                        onChange={(e) =>
+                          updateUGCInputNodeData(selectedNode.id, { productShortDescription: e.target.value })
+                        }
+                        rows={3}
+                        placeholder="Product short description"
+                        className={`w-full px-3 py-2 rounded-lg text-xs border ${
+                          isDark ? 'bg-zinc-900 border-zinc-800 text-zinc-200' : 'bg-white border-zinc-200'
+                        }`}
+                      />
+
+                      <div className="grid grid-cols-2 gap-2">
+                        <select
+                          value={ugcInput.aspectRatioGlobal}
+                          onChange={(e) =>
+                            updateUGCInputNodeData(selectedNode.id, {
+                              aspectRatioGlobal: e.target.value as UGCWorkflowInputPayload['aspectRatioGlobal'],
+                            })
+                          }
+                          className={`w-full px-3 py-2 rounded-lg text-xs border ${
+                            isDark ? 'bg-zinc-900 border-zinc-800 text-zinc-200' : 'bg-white border-zinc-200'
+                          }`}
+                        >
+                          {UGC_ASPECT_RATIO_OPTIONS.map((ratio) => (
+                            <option key={ratio} value={ratio}>
+                              Ratio: {ratio}
+                            </option>
+                          ))}
+                        </select>
+                        <input
+                          value={ugcInput.tonevoice}
+                          onChange={(e) => updateUGCInputNodeData(selectedNode.id, { tonevoice: e.target.value })}
+                          placeholder="Tonevoice single speaker"
+                          className={`w-full px-3 py-2 rounded-lg text-xs border ${
+                            isDark ? 'bg-zinc-900 border-zinc-800 text-zinc-200' : 'bg-white border-zinc-200'
+                          }`}
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2">
+                        <select
+                          value={ugcInput.backgroundCategory}
+                          onChange={(e) => {
+                            const category = e.target.value as UGCWorkflowInputPayload['backgroundCategory'];
+                            const group = UGC_BACKGROUND_CATEGORIES.find((item) => item.id === category);
+                            updateUGCInputNodeData(selectedNode.id, {
+                              backgroundCategory: category,
+                              backgroundPreset: group?.options?.[0]?.id || '',
+                            });
+                          }}
+                          className={`w-full px-3 py-2 rounded-lg text-xs border ${
+                            isDark ? 'bg-zinc-900 border-zinc-800 text-zinc-200' : 'bg-white border-zinc-200'
+                          }`}
+                        >
+                          {UGC_BACKGROUND_CATEGORIES.map((category) => (
+                            <option key={category.id} value={category.id}>
+                              {category.label}
+                            </option>
+                          ))}
+                        </select>
+                        <select
+                          value={ugcInput.backgroundPreset}
+                          onChange={(e) => updateUGCInputNodeData(selectedNode.id, { backgroundPreset: e.target.value })}
+                          className={`w-full px-3 py-2 rounded-lg text-xs border ${
+                            isDark ? 'bg-zinc-900 border-zinc-800 text-zinc-200' : 'bg-white border-zinc-200'
+                          }`}
+                        >
+                          {(selectedCategory?.options || []).map((preset) => (
+                            <option key={preset.id} value={preset.id}>
+                              {preset.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2">
+                        <input
+                          value={ugcInput.targetAudience || ''}
+                          onChange={(e) => updateUGCInputNodeData(selectedNode.id, { targetAudience: e.target.value })}
+                          placeholder="Target audience"
+                          className={`w-full px-3 py-2 rounded-lg text-xs border ${
+                            isDark ? 'bg-zinc-900 border-zinc-800 text-zinc-200' : 'bg-white border-zinc-200'
+                          }`}
+                        />
+                        <input
+                          value={ugcInput.campaignTone}
+                          onChange={(e) => updateUGCInputNodeData(selectedNode.id, { campaignTone: e.target.value })}
+                          placeholder="Campaign tone"
+                          className={`w-full px-3 py-2 rounded-lg text-xs border ${
+                            isDark ? 'bg-zinc-900 border-zinc-800 text-zinc-200' : 'bg-white border-zinc-200'
+                          }`}
+                        />
+                      </div>
+                      <input
+                        value={ugcInput.contentType || ''}
+                        onChange={(e) => updateUGCInputNodeData(selectedNode.id, { contentType: e.target.value })}
+                        placeholder="Content type"
+                        className={`w-full px-3 py-2 rounded-lg text-xs border ${
+                          isDark ? 'bg-zinc-900 border-zinc-800 text-zinc-200' : 'bg-white border-zinc-200'
+                        }`}
+                      />
+                      <textarea
+                        value={ugcInput.brief || ''}
+                        onChange={(e) => updateUGCInputNodeData(selectedNode.id, { brief: e.target.value })}
+                        rows={2}
+                        placeholder="Additional brief"
+                        className={`w-full px-3 py-2 rounded-lg text-xs border ${
+                          isDark ? 'bg-zinc-900 border-zinc-800 text-zinc-200' : 'bg-white border-zinc-200'
+                        }`}
+                      />
+                    </div>
+                  );
+                })()}
+
+                {selectedNode.type === 'ugc_plan' && (
+                  <div className="space-y-2">
+                    <div className="text-[10px] text-zinc-500">
+                      Connect from `UGC Input`, then run this node to request 4-scene narrative plan to Gemini.
+                    </div>
+                    <div className={`rounded-lg border px-3 py-2 text-[10px] ${
+                      isDark ? 'border-zinc-800 text-zinc-400' : 'border-zinc-200 text-zinc-600'
+                    }`}>
+                      Output metadata includes `ugcPlan` JSON and can be consumed by `UGC Scene` nodes.
+                    </div>
+                  </div>
+                )}
+
+                {selectedNode.type === 'ugc_scene_image' && (
+                  <div className="space-y-3">
+                    <div className="text-[10px] text-zinc-500">
+                      Connect from `UGC Plan` (and optionally previous `UGC Scene` nodes for continuity).
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <select
+                        value={selectedNode.data.ugcSceneNumber || 1}
+                        onChange={(e) =>
+                          updateNodeData(selectedNode.id, {
+                            ugcSceneNumber: Number(e.target.value) as 1 | 2 | 3 | 4,
+                          })
+                        }
+                        className={`w-full px-3 py-2 rounded-lg text-xs border ${
+                          isDark ? 'bg-zinc-900 border-zinc-800 text-zinc-200' : 'bg-white border-zinc-200'
+                        }`}
+                      >
+                        <option value={1}>Scene 1</option>
+                        <option value={2}>Scene 2</option>
+                        <option value={3}>Scene 3</option>
+                        <option value={4}>Scene 4</option>
+                      </select>
+                      <select
+                        value={selectedNode.data.ugcFrameRole || 'scene_start'}
+                        onChange={(e) => {
+                          const nextRole = e.target.value as UGCSceneFrameRole;
+                          updateNodeData(selectedNode.id, {
+                            ugcFrameRole: nextRole,
+                            videoFrameRole: nextRole === 'scene_start' ? 'start' : 'end',
+                          });
+                        }}
+                        className={`w-full px-3 py-2 rounded-lg text-xs border ${
+                          isDark ? 'bg-zinc-900 border-zinc-800 text-zinc-200' : 'bg-white border-zinc-200'
+                        }`}
+                      >
+                        <option value="scene_start">Start Frame</option>
+                        <option value="scene_end">End Frame</option>
+                      </select>
+                    </div>
+                    <div className="flex items-center justify-between rounded-lg border px-3 py-2 text-xs">
+                      <span className="text-zinc-400">Use Continuity</span>
+                      <button
+                        onClick={() =>
+                          updateNodeData(selectedNode.id, {
+                            ugcUseContinuity: !(selectedNode.data.ugcUseContinuity !== false),
+                          })
+                        }
+                        className={`w-11 h-6 rounded-full transition-colors relative ${
+                          selectedNode.data.ugcUseContinuity !== false
+                            ? 'bg-emerald-500/80'
+                            : isDark
+                            ? 'bg-zinc-800'
+                            : 'bg-zinc-200'
+                        }`}
+                      >
+                        <span
+                          className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${
+                            selectedNode.data.ugcUseContinuity !== false ? 'left-6' : 'left-1'
+                          }`}
+                        />
+                      </button>
+                    </div>
+                    <div className="text-[10px] text-zinc-500">
+                      Scene 1 start should be generated first as identity anchor. Scene 1 enforces character-only.
+                    </div>
+                  </div>
+                )}
+
+                {selectedNode.type === 'ugc_scene_video' && (() => {
+                  const sceneNumber = (selectedNode.data.ugcSceneNumber || 1) as 1 | 2 | 3 | 4;
+                  const frames = resolveUGCSceneFramesForVideo(selectedNode.id, sceneNumber);
+                  const hasStart = Boolean(frames.startFrameUrl);
+                  const hasEnd = Boolean(frames.endFrameUrl);
+                  return (
+                    <div className="space-y-3">
+                      <div className="text-[10px] text-zinc-500">
+                        Connect from `UGC Plan` and scene image nodes. This node produces scene video with mode A/B.
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <select
+                          value={selectedNode.data.ugcSceneNumber || 1}
+                          onChange={(e) =>
+                            updateNodeData(selectedNode.id, {
+                              ugcSceneNumber: Number(e.target.value) as 1 | 2 | 3 | 4,
+                            })
+                          }
+                          className={`w-full px-3 py-2 rounded-lg text-xs border ${
+                            isDark ? 'bg-zinc-900 border-zinc-800 text-zinc-200' : 'bg-white border-zinc-200'
+                          }`}
+                        >
+                          <option value={1}>Scene 1</option>
+                          <option value={2}>Scene 2</option>
+                          <option value={3}>Scene 3</option>
+                          <option value={4}>Scene 4</option>
+                        </select>
+                        <select
+                          value={selectedNode.data.ugcVideoProvider || 'veo3_fast'}
+                          onChange={(e) =>
+                            updateNodeData(selectedNode.id, {
+                              ugcVideoProvider: e.target.value as UGCVideoProvider,
+                            })
+                          }
+                          className={`w-full px-3 py-2 rounded-lg text-xs border ${
+                            isDark ? 'bg-zinc-900 border-zinc-800 text-zinc-200' : 'bg-white border-zinc-200'
+                          }`}
+                        >
+                          <option value="veo3_fast">Provider: Veo 3 Fast</option>
+                          <option value="veo3">Provider: Veo 3 Quality</option>
+                          <option value="grok-imagine/image-to-video">Provider: Grok I2V</option>
+                          <option value="sora-2-image-to-video">Provider: Sora I2V</option>
+                        </select>
+                      </div>
+
+                      <select
+                        value={selectedNode.data.ugcVideoMode || 'A_NATIVE'}
+                        onChange={(e) =>
+                          updateNodeData(selectedNode.id, {
+                            ugcVideoMode: e.target.value as UGCVideoMode,
+                          })
+                        }
+                        className={`w-full px-3 py-2 rounded-lg text-xs border ${
+                          isDark ? 'bg-zinc-900 border-zinc-800 text-zinc-200' : 'bg-white border-zinc-200'
+                        }`}
+                      >
+                        <option value="A_NATIVE">Mode A: Native Dialogue Voice</option>
+                        <option value="B_ELEVENLABS">Mode B: ElevenLabs Dialogue</option>
+                      </select>
+
+                      {(selectedNode.data.ugcVideoMode || 'A_NATIVE') === 'B_ELEVENLABS' && (
+                        <div className="flex items-center justify-between rounded-lg border px-3 py-2 text-xs">
+                          <span className="text-zinc-400">Mute Native Audio</span>
+                          <button
+                            onClick={() =>
+                              updateNodeData(selectedNode.id, {
+                                ugcMuteNativeAudio: !(selectedNode.data.ugcMuteNativeAudio !== false),
+                              })
+                            }
+                            className={`w-11 h-6 rounded-full transition-colors relative ${
+                              selectedNode.data.ugcMuteNativeAudio !== false
+                                ? 'bg-emerald-500/80'
+                                : isDark
+                                ? 'bg-zinc-800'
+                                : 'bg-zinc-200'
+                            }`}
+                          >
+                            <span
+                              className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${
+                                selectedNode.data.ugcMuteNativeAudio !== false ? 'left-6' : 'left-1'
+                              }`}
+                            />
+                          </button>
+                        </div>
+                      )}
+
+                      <div className={`rounded-lg border px-3 py-2 text-[10px] ${
+                        isDark ? 'border-zinc-800 text-zinc-400' : 'border-zinc-200 text-zinc-600'
+                      }`}>
+                        Start frame: {hasStart ? 'READY' : 'MISSING'} | End frame: {hasEnd ? 'READY' : 'MISSING'}
+                      </div>
+                      <div className="text-[10px] text-zinc-500">
+                        Audio rule: dialog only, no background music/SFX, no subtitle/text overlay.
+                      </div>
+                    </div>
+                  );
+                })()}
+
                 <div className="flex gap-2">
                   <button
                     onClick={() => runNode(selectedNode.id)}
@@ -3145,8 +3783,6 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
           </div>
         )}
       </div>
-        </>
-      )}
     </div>
   );
 };
