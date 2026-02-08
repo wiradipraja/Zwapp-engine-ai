@@ -26,6 +26,7 @@ import { ProgressBar } from '../ui/ProgressBar';
 import { normalizeTaskState, getFailureReason } from '../../services/taskState';
 import { saveOutputToSupabase, getOutputByTaskId, downloadOutput } from '../../services/outputSaving';
 import { getCreditCost } from '../../services/credits';
+import UGCWorkspacePanel from './UGCWorkspacePanel';
 import type {
   SpaceFlowData,
   SpaceNodeData,
@@ -610,6 +611,7 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
 
   const [logs, setLogs] = useState<string[]>([]);
   const [outputPreview, setOutputPreview] = useState<SpaceNodeOutput | null>(null);
+  const [workspaceView, setWorkspaceView] = useState<'flow' | 'ugc'>('flow');
   const [outputsCollapsed, setOutputsCollapsed] = useState(true);
   const [compactMotionList, setCompactMotionList] = useState(false);
   const [previewSaving, setPreviewSaving] = useState(false);
@@ -1999,6 +2001,32 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
               </option>
             ))}
           </select>
+          <div className={`flex items-center rounded-lg border ${isDark ? 'border-zinc-800 bg-zinc-900' : 'border-zinc-200 bg-zinc-50'}`}>
+            <button
+              onClick={() => setWorkspaceView('flow')}
+              className={`px-3 py-2 text-xs rounded-l-lg ${
+                workspaceView === 'flow'
+                  ? 'bg-emerald-500/20 text-emerald-300'
+                  : isDark
+                  ? 'text-zinc-400'
+                  : 'text-zinc-600'
+              }`}
+            >
+              Flow Builder
+            </button>
+            <button
+              onClick={() => setWorkspaceView('ugc')}
+              className={`px-3 py-2 text-xs rounded-r-lg border-l ${
+                workspaceView === 'ugc'
+                  ? 'bg-orange-500/20 text-orange-300'
+                  : isDark
+                  ? 'border-zinc-800 text-zinc-400'
+                  : 'border-zinc-200 text-zinc-600'
+              }`}
+            >
+              UGC Preset
+            </button>
+          </div>
           {isDirty && <span className="text-[10px] text-amber-400 font-mono">Unsaved</span>}
         </div>
         <div className="flex items-center gap-2">
@@ -2034,6 +2062,12 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
         <div className="px-4 py-2 text-xs text-amber-400">{statusMessage}</div>
       )}
 
+      {workspaceView === 'ugc' ? (
+        <div className="flex-1 overflow-hidden">
+          <UGCWorkspacePanel apiKey={apiKey} spaceId={activeSpace?.id} />
+        </div>
+      ) : (
+        <>
       <div className="flex-1 flex overflow-hidden">
         <div className={`w-56 border-r ${isDark ? 'border-zinc-800 bg-zinc-950' : 'border-zinc-200 bg-white'}`}>
           <div className="px-4 py-4 space-y-3">
@@ -2694,6 +2728,8 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
           </div>
         )}
       </div>
+        </>
+      )}
     </div>
   );
 };
