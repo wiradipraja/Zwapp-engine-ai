@@ -26,7 +26,10 @@ import { ProgressBar } from '../ui/ProgressBar';
 import { normalizeTaskState, getFailureReason } from '../../services/taskState';
 import { saveOutputToSupabase, getOutputByTaskId, downloadOutput } from '../../services/outputSaving';
 import { getCreditCost } from '../../services/credits';
+import { generateUGCPlan } from '../../services/ugcPlanner';
+import { generateUGCSceneFrame } from '../../services/ugcSceneGenerator';
 import UGCWorkspacePanel from './UGCWorkspacePanel';
+import { DEFAULT_UGC_INPUT, UGC_BACKGROUND_CATEGORIES, getUGCBackgroundOption } from './presets/ugcPreset';
 import type {
   SpaceFlowData,
   SpaceNodeData,
@@ -34,6 +37,7 @@ import type {
   SpaceNodeType,
   SpaceRecord,
 } from '../../types/spaces';
+import type { UGCPlannerOutput, UGCSceneFrameRole, UGCWorkflowInputPayload } from '../../types/ugcWorkflow';
 import type {
   NanoBananaEditInput,
   NanoBananaGenInput,
@@ -57,6 +61,11 @@ interface SpacesWorkspaceProps {
 
 const DEFAULT_SPACE_NAME = 'New Space';
 const FLOW_VERSION = '1.1';
+const UGC_ASPECT_RATIO_OPTIONS: Array<UGCWorkflowInputPayload['aspectRatioGlobal']> = ['9:16', '16:9', '1:1', '4:5', '3:4'];
+
+const createDefaultUGCInput = (): UGCWorkflowInputPayload => ({
+  ...DEFAULT_UGC_INPUT,
+});
 
 const defaultNodeData = (type: SpaceNodeType): SpaceNodeData => {
   switch (type) {
@@ -123,6 +132,30 @@ const defaultNodeData = (type: SpaceNodeType): SpaceNodeData => {
         status: 'success',
         presetId: 'eye',
         output: { contentType: 'text', text: anglePresets[0].snippet, metadata: { kind: 'angle_preset' } },
+      };
+    case 'ugc_input':
+      return {
+        label: 'UGC Input',
+        title: 'UGC Input',
+        status: 'idle',
+        ugcInput: createDefaultUGCInput(),
+      };
+    case 'ugc_plan':
+      return {
+        label: 'UGC Plan',
+        title: 'UGC Plan (Gemini)',
+        status: 'idle',
+      };
+    case 'ugc_scene_image':
+      return {
+        label: 'UGC Scene',
+        title: 'UGC Scene Frame',
+        status: 'idle',
+        model: 'gemini-3-pro-image-preview',
+        ugcSceneNumber: 1,
+        ugcFrameRole: 'scene_start',
+        ugcUseContinuity: true,
+        videoFrameRole: 'start',
       };
     default:
       return { label: 'Node', status: 'idle' };
@@ -668,6 +701,9 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
       camera: SpaceNodeCard,
       motion: SpaceNodeCard,
       angle: SpaceNodeCard,
+      ugc_input: SpaceNodeCard,
+      ugc_plan: SpaceNodeCard,
+      ugc_scene_image: SpaceNodeCard,
     }),
     []
   );
@@ -880,7 +916,7 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
 
   const cloneNodeDataForPaste = useCallback((node: Node<SpaceNodeData>) => {
     const data = JSON.parse(JSON.stringify(node.data)) as SpaceNodeData;
-    const resetOutputTypes = ['prompt', 'script', 'image', 'video'];
+    const resetOutputTypes = ['prompt', 'script', 'image', 'video', 'ugc_input', 'ugc_plan', 'ugc_scene_image'];
     if (resetOutputTypes.includes(node.type || '')) {
       data.status = 'idle';
       data.output = undefined;
@@ -1041,6 +1077,26 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
         if (text.trim()) items.push({ text, kind: 'angle_preset' });
         return;
       }
+      if (node.type === 'ugc_plan') {
+        const text = node.data.output?.text || '';
+        if (text.trim()) items.push({ text, kind: 'ugc_plan' });
+        return;
+      }
+      if (node.type === 'ugc_input') {
+        const input = getUGCInputFromNode(node);
+        if (!input) return;
+        const text = [
+          `Product: ${input.productName}`,
+          `Description: ${input.productShortDescription}`,
+          `Target audience: ${input.targetAudience || '-'}`,
+          `Campaign tone: ${input.campaignTone || '-'}`,
+          `Background preset: ${input.backgroundPreset}`,
+        ]
+          .filter(Boolean)
+          .join('\n');
+        if (text.trim()) items.push({ text, kind: 'ugc_input' });
+        return;
+      }
     });
 
     return items;
@@ -1153,6 +1209,175 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
       start: start?.url || remaining[0]?.url || uniqueFrames[0]?.url,
       end: end?.url || remaining[1]?.url || uniqueFrames[1]?.url || remaining[0]?.url || uniqueFrames[0]?.url,
     };
+  };
+
+  const normalizeUGCInput = (raw?: Partial<UGCWorkflowInputPayload> | null): UGCWorkflowInputPayload => {
+    return {
+      ...createDefaultUGCInput(),
+      ...(raw || {}),
+      language: 'id',
+    };
+  };
+
+  const getUGCInputFromNode = (node?: Node<SpaceNodeData> | null): UGCWorkflowInputPayload | null => {
+    if (!node) return null;
+    const metadataInput = (node.data.output?.metadata as any)?.ugcInput;
+    const candidate = (node.data.ugcInput || metadataInput) as Partial<UGCWorkflowInputPayload> | undefined;
+    if (!candidate) return null;
+    return normalizeUGCInput(candidate);
+  };
+
+  const getUGCPlanFromNode = (node?: Node<SpaceNodeData> | null): UGCPlannerOutput | null => {
+    if (!node) return null;
+    const metadata = node.data.output?.metadata as any;
+    const plan = metadata?.ugcPlan || metadata?.plan;
+    if (!plan || !Array.isArray(plan?.scenes)) return null;
+    return plan as UGCPlannerOutput;
+  };
+
+  const resolveUGCInput = (nodeId: string): UGCWorkflowInputPayload | null => {
+    const current = nodes.find((item) => item.id === nodeId) || null;
+    if (current?.type === 'ugc_input') {
+      const fromCurrent = getUGCInputFromNode(current);
+      if (fromCurrent) return fromCurrent;
+    }
+
+    const upstream = getUpstreamNodes(nodeId);
+    for (const upstreamNode of upstream) {
+      if (upstreamNode.type === 'ugc_input') {
+        const input = getUGCInputFromNode(upstreamNode);
+        if (input) return input;
+      }
+    }
+
+    for (const upstreamNode of upstream) {
+      const input = getUGCInputFromNode(upstreamNode);
+      if (input) return input;
+    }
+
+    return null;
+  };
+
+  const resolveUGCPlan = (nodeId: string): UGCPlannerOutput | null => {
+    const current = nodes.find((item) => item.id === nodeId) || null;
+    if (current?.type === 'ugc_plan') {
+      const fromCurrent = getUGCPlanFromNode(current);
+      if (fromCurrent) return fromCurrent;
+    }
+
+    const upstream = getUpstreamNodes(nodeId);
+    for (const upstreamNode of upstream) {
+      if (upstreamNode.type === 'ugc_plan') {
+        const plan = getUGCPlanFromNode(upstreamNode);
+        if (plan) return plan;
+      }
+    }
+
+    return null;
+  };
+
+  const collectUpstreamUGCSceneFrames = (
+    nodeId: string
+  ): Array<{
+    nodeId: string;
+    sceneNumber: 1 | 2 | 3 | 4;
+    frameRole: UGCSceneFrameRole;
+    imageUrl: string;
+    updatedAt: number;
+  }> => {
+    return getUpstreamNodes(nodeId)
+      .map((node) => {
+        if (node.type !== 'ugc_scene_image') return null;
+        if (node.data.output?.contentType !== 'image' || !node.data.output?.url) return null;
+        const meta = (node.data.output.metadata || {}) as any;
+        const sceneNumber = Number(meta.sceneNumber || node.data.ugcSceneNumber);
+        const frameRole = (meta.frameRole || node.data.ugcFrameRole || 'scene_start') as UGCSceneFrameRole;
+        if (sceneNumber < 1 || sceneNumber > 4) return null;
+        return {
+          nodeId: node.id,
+          sceneNumber: sceneNumber as 1 | 2 | 3 | 4,
+          frameRole,
+          imageUrl: node.data.output.url,
+          updatedAt: Number(node.data.updatedAt || 0),
+        };
+      })
+      .filter(Boolean) as Array<{
+      nodeId: string;
+      sceneNumber: 1 | 2 | 3 | 4;
+      frameRole: UGCSceneFrameRole;
+      imageUrl: string;
+      updatedAt: number;
+    }>;
+  };
+
+  const pickLatestUGCFrame = (
+    frames: Array<{
+      sceneNumber: 1 | 2 | 3 | 4;
+      frameRole: UGCSceneFrameRole;
+      imageUrl: string;
+      updatedAt: number;
+    }>,
+    sceneNumber: 1 | 2 | 3 | 4,
+    frameRole: UGCSceneFrameRole
+  ) => {
+    return frames
+      .filter((frame) => frame.sceneNumber === sceneNumber && frame.frameRole === frameRole)
+      .sort((a, b) => b.updatedAt - a.updatedAt)[0];
+  };
+
+  const resolveUGCContinuity = (params: {
+    nodeId: string;
+    sceneNumber: 1 | 2 | 3 | 4;
+    frameRole: UGCSceneFrameRole;
+    useContinuity: boolean;
+  }): { continuityReferenceUrl?: string; anchorSceneStartUrl?: string } => {
+    if (!params.useContinuity) return {};
+    const frames = collectUpstreamUGCSceneFrames(params.nodeId);
+    const sceneOneAnchor = pickLatestUGCFrame(frames, 1, 'scene_start')?.imageUrl;
+
+    let continuityReferenceUrl = '';
+    if (params.sceneNumber === 1 && params.frameRole === 'scene_end') {
+      continuityReferenceUrl = pickLatestUGCFrame(frames, 1, 'scene_start')?.imageUrl || '';
+    } else if (params.sceneNumber > 1 && params.frameRole === 'scene_start') {
+      continuityReferenceUrl =
+        pickLatestUGCFrame(frames, (params.sceneNumber - 1) as 1 | 2 | 3 | 4, 'scene_end')?.imageUrl || '';
+    } else if (params.sceneNumber > 1 && params.frameRole === 'scene_end') {
+      continuityReferenceUrl =
+        pickLatestUGCFrame(frames, params.sceneNumber, 'scene_start')?.imageUrl ||
+        pickLatestUGCFrame(frames, (params.sceneNumber - 1) as 1 | 2 | 3 | 4, 'scene_end')?.imageUrl ||
+        '';
+    }
+
+    return {
+      continuityReferenceUrl: continuityReferenceUrl || undefined,
+      anchorSceneStartUrl: sceneOneAnchor || undefined,
+    };
+  };
+
+  const buildUGCInputSummary = (input: UGCWorkflowInputPayload) => {
+    const lines = [
+      `Product: ${input.productName || '-'}`,
+      `Aspect Ratio: ${input.aspectRatioGlobal}`,
+      `Background: ${input.backgroundCategory} / ${input.backgroundPreset}`,
+      `Tonevoice: ${input.tonevoice || '-'}`,
+      `Campaign Tone: ${input.campaignTone || '-'}`,
+      `Target Audience: ${input.targetAudience || '-'}`,
+      `Has Model Ref: ${input.modelImageUrl ? 'yes' : 'no'}`,
+      `Has Product Ref: ${input.productImageUrl ? 'yes' : 'no'}`,
+    ];
+    return lines.join('\n');
+  };
+
+  const buildUGCPlanSummary = (plan: UGCPlannerOutput) => {
+    const sceneLines = plan.scenes.map((scene) => {
+      const dialogue = scene.dialogue_text_id || scene.dialogue_id || '-';
+      return `Scene ${scene.scene_number} [${scene.goal}] product=${scene.show_product ? 'yes' : 'no'}\n${dialogue}`;
+    });
+    return [
+      `Caption: ${plan.caption_id || '-'}`,
+      `Hashtags: ${plan.hashtags.length > 0 ? plan.hashtags.join(' ') : '-'}`,
+      ...sceneLines,
+    ].join('\n\n');
   };
 
   const buildIdentityLockText = (subjectUrls: string[], objectUrls: string[]) => {
@@ -1501,6 +1726,156 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
           progress: 100,
           output: { contentType: 'text', text, metadata: { kind: 'script' } },
         });
+        return;
+      }
+
+      if (node.type === 'ugc_input') {
+        const ugcInput = normalizeUGCInput(node.data.ugcInput);
+        const missing: string[] = [];
+        if (!ugcInput.modelImageUrl) missing.push('modelImageUrl');
+        if (!ugcInput.productImageUrl) missing.push('productImageUrl');
+        if (!ugcInput.productName.trim()) missing.push('productName');
+        if (!ugcInput.productShortDescription.trim()) missing.push('productShortDescription');
+        if (!ugcInput.backgroundPreset.trim()) missing.push('backgroundPreset');
+        if (!ugcInput.tonevoice.trim()) missing.push('tonevoice');
+        if (missing.length > 0) {
+          throw new Error(`UGC input incomplete: ${missing.join(', ')}`);
+        }
+
+        updateNodeData(nodeId, {
+          status: 'success',
+          progress: 100,
+          output: {
+            contentType: 'text',
+            text: buildUGCInputSummary(ugcInput),
+            metadata: { kind: 'ugc_input', ugcInput },
+          },
+        });
+        addLog('UGC input validated.');
+        return;
+      }
+
+      if (node.type === 'ugc_plan') {
+        const ugcInput = resolveUGCInput(nodeId);
+        if (!ugcInput) {
+          throw new Error('UGC input not found. Connect a UGC Input node upstream.');
+        }
+        const backgroundOption = getUGCBackgroundOption(ugcInput.backgroundPreset);
+        if (!backgroundOption) {
+          throw new Error(`UGC background preset invalid: ${ugcInput.backgroundPreset}`);
+        }
+
+        addLog('UGC plan: requesting Gemini planner...');
+        const ugcPlan = await generateUGCPlan({
+          apiKey,
+          input: ugcInput,
+          backgroundLabel: backgroundOption.label,
+          backgroundPromptHint: backgroundOption.promptHintEn,
+        });
+
+        updateNodeData(nodeId, {
+          status: 'success',
+          progress: 100,
+          output: {
+            contentType: 'text',
+            text: buildUGCPlanSummary(ugcPlan),
+            metadata: {
+              kind: 'ugc_plan',
+              ugcPlan,
+              ugcInput,
+              backgroundLabel: backgroundOption.label,
+              backgroundPromptHint: backgroundOption.promptHintEn,
+            },
+          },
+        });
+        addLog('UGC plan generated (4 scenes).');
+        return;
+      }
+
+      if (node.type === 'ugc_scene_image') {
+        const ugcInput = resolveUGCInput(nodeId);
+        if (!ugcInput) {
+          throw new Error('UGC input not found. Connect UGC Input node.');
+        }
+        const ugcPlan = resolveUGCPlan(nodeId);
+        if (!ugcPlan) {
+          throw new Error('UGC plan not found. Run UGC Plan node first.');
+        }
+        const backgroundOption = getUGCBackgroundOption(ugcInput.backgroundPreset);
+        if (!backgroundOption) {
+          throw new Error(`UGC background preset invalid: ${ugcInput.backgroundPreset}`);
+        }
+
+        const sceneNumber = (node.data.ugcSceneNumber || 1) as 1 | 2 | 3 | 4;
+        const frameRole = (node.data.ugcFrameRole || 'scene_start') as UGCSceneFrameRole;
+        const useContinuity = node.data.ugcUseContinuity !== false;
+
+        const scene = ugcPlan.scenes.find((item) => item.scene_number === sceneNumber);
+        if (!scene) {
+          throw new Error(`Scene ${sceneNumber} not found in UGC plan.`);
+        }
+
+        const continuity = resolveUGCContinuity({
+          nodeId,
+          sceneNumber,
+          frameRole,
+          useContinuity,
+        });
+
+        addLog(
+          `UGC scene ${sceneNumber} ${frameRole}: generating (${scene.show_product ? 'with product' : 'character only'})...`
+        );
+        const generated = await generateUGCSceneFrame({
+          apiKey,
+          input: ugcInput,
+          backgroundLabel: backgroundOption.label,
+          backgroundPromptHint: backgroundOption.promptHintEn,
+          scene,
+          frameRole,
+          continuityReferenceUrl: continuity.continuityReferenceUrl,
+          anchorSceneStartUrl: continuity.anchorSceneStartUrl,
+        });
+
+        const taskId = generated.sourceTaskId || `ugc-scene-${nodeId}-${Date.now()}`;
+        const frameVideoRole = frameRole === 'scene_start' ? 'start' : 'end';
+        updateNodeData(nodeId, {
+          status: 'success',
+          progress: 100,
+          videoFrameRole: frameVideoRole,
+          model: generated.sourceModel,
+          output: {
+            contentType: 'image',
+            url: generated.imageUrl,
+            metadata: {
+              kind: 'ugc_scene_image',
+              sceneNumber,
+              frameRole,
+              goal: scene.goal,
+              showProduct: scene.show_product,
+              taskId,
+              model: generated.sourceModel,
+              sourceUrl: generated.sourceUrl,
+              promptUsed: generated.promptUsed,
+            },
+          },
+        });
+
+        saveOutputToGallery({
+          taskId,
+          model: generated.sourceModel,
+          prompt: generated.promptUsed,
+          outputUrl: generated.imageUrl,
+          outputType: 'image',
+          metadata: {
+            kind: 'ugc_scene_image',
+            sceneNumber,
+            frameRole,
+            sourceUrl: generated.sourceUrl,
+            nodeId,
+            spaceId: activeSpace?.id,
+          },
+        });
+        addLog(`UGC scene ${sceneNumber} ${frameRole}: done via ${generated.sourceModel}.`);
         return;
       }
 
@@ -1947,6 +2322,42 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
     }
   };
 
+  const updateUGCInputNodeData = (
+    nodeId: string,
+    patch: Partial<UGCWorkflowInputPayload>
+  ) => {
+    const node = nodes.find((item) => item.id === nodeId);
+    const current = normalizeUGCInput(node?.data.ugcInput);
+    updateNodeData(nodeId, {
+      ugcInput: {
+        ...current,
+        ...patch,
+      },
+    });
+  };
+
+  const handleUGCReferenceUpload = async (
+    nodeId: string,
+    target: 'modelImageUrl' | 'productImageUrl',
+    file: File
+  ) => {
+    if (!file) return;
+    try {
+      updateNodeData(nodeId, { status: 'running', error: undefined, progress: 0, startedAt: Date.now() });
+      const url = await uploadImageToKieAI(file, apiKey);
+      updateUGCInputNodeData(nodeId, { [target]: url } as Partial<UGCWorkflowInputPayload>);
+      updateNodeData(nodeId, {
+        status: 'idle',
+        progress: 100,
+        error: undefined,
+      });
+      addLog(`UGC ${target === 'modelImageUrl' ? 'model' : 'product'} reference uploaded.`);
+    } catch (error: any) {
+      updateNodeData(nodeId, { status: 'error', error: error.message || String(error), progress: 100 });
+      addLog(`UGC reference upload failed: ${error.message || error}`);
+    }
+  };
+
   if (!apiKey) {
     return (
       <div className="w-full h-[calc(100vh-4rem)] flex items-center justify-center">
@@ -2072,7 +2483,7 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
         <div className={`w-56 border-r ${isDark ? 'border-zinc-800 bg-zinc-950' : 'border-zinc-200 bg-white'}`}>
           <div className="px-4 py-4 space-y-3">
             <h4 className="text-xs font-mono text-zinc-500 uppercase tracking-widest">Nodes</h4>
-            {(['prompt', 'script', 'image', 'video', 'upload', 'camera', 'motion', 'angle'] as SpaceNodeType[]).map((type) => (
+            {(['prompt', 'script', 'image', 'video', 'upload', 'camera', 'motion', 'angle', 'ugc_input', 'ugc_plan', 'ugc_scene_image'] as SpaceNodeType[]).map((type) => (
               <button
                 key={type}
                 onClick={() => addNode(type)}
@@ -2139,6 +2550,12 @@ const SpacesWorkspace: React.FC<SpacesWorkspaceProps> = ({ apiKey, googleApiKey,
                     return '#22d3ee';
                   case 'upload':
                     return '#3b82f6';
+                  case 'ugc_input':
+                    return '#14b8a6';
+                  case 'ugc_plan':
+                    return '#f97316';
+                  case 'ugc_scene_image':
+                    return '#eab308';
                   default:
                     return '#6b7280';
                 }

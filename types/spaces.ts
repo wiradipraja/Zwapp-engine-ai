@@ -1,4 +1,5 @@
 import type { Edge, Node, Viewport } from 'reactflow';
+import type { UGCSceneFrameRole, UGCWorkflowInputPayload } from './ugcWorkflow';
 
 export type SpaceNodeType =
   | 'prompt'
@@ -8,7 +9,10 @@ export type SpaceNodeType =
   | 'upload'
   | 'camera'
   | 'motion'
-  | 'angle';
+  | 'angle'
+  | 'ugc_input'
+  | 'ugc_plan'
+  | 'ugc_scene_image';
 export type SpaceNodeStatus = 'idle' | 'running' | 'success' | 'error';
 export type SpaceAssetType = 'image' | 'video';
 export type SpaceAssetRole = 'auto' | 'subject' | 'object';
@@ -39,6 +43,10 @@ export interface SpaceNodeData {
   assetName?: string;
   assetRole?: SpaceAssetRole;
   presetId?: string;
+  ugcInput?: UGCWorkflowInputPayload;
+  ugcSceneNumber?: 1 | 2 | 3 | 4;
+  ugcFrameRole?: UGCSceneFrameRole;
+  ugcUseContinuity?: boolean;
   output?: SpaceNodeOutput;
   error?: string;
   progress?: number;
