@@ -221,12 +221,16 @@ export const generateUGCSceneFrame = async (
     anchorSceneStartUrl,
   });
 
-  const referenceImages = [
+  const identityReferenceImages = [
     input.modelImageUrl,
     scene.show_product ? input.productImageUrl : '',
+  ].filter(Boolean);
+
+  const continuityReferenceImages = [
     continuityReferenceUrl || '',
     anchorSceneStartUrl || '',
   ].filter(Boolean);
+  const referenceImages = Array.from(new Set([...identityReferenceImages, ...continuityReferenceImages]));
 
   const primaryCandidates = [
     {
@@ -244,7 +248,7 @@ export const generateUGCSceneFrame = async (
   const fallbackCandidates = [
     {
       prompt,
-      image_urls: referenceImages.slice(0, 3),
+      image_urls: identityReferenceImages.slice(0, 2),
       output_format: 'png',
       image_size: mapNanoAspectRatio(input.aspectRatioGlobal),
     },
@@ -269,7 +273,7 @@ export const generateUGCSceneFrame = async (
     taskId = generated.taskId;
     modelUsed = generated.model;
   } catch (_primaryError) {
-    const fallbackModel = referenceImages.length > 0 ? 'google/nano-banana-edit' : 'google/nano-banana';
+    const fallbackModel = identityReferenceImages.length > 0 ? 'google/nano-banana-edit' : 'google/nano-banana';
     const generated = await runModelWithPayloadCandidates({
       apiKey,
       model: fallbackModel,

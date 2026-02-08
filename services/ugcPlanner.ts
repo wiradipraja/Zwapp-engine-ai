@@ -70,6 +70,12 @@ const toText = (value: any, fallback = ''): string => {
   return fallback;
 };
 
+const clampText = (value: string, max: number): string => {
+  const clean = toText(value).replace(/\s+/g, ' ').trim();
+  if (!clean) return '';
+  return clean.length > max ? `${clean.slice(0, max)}...` : clean;
+};
+
 const extractJsonBlock = (text: string): string => {
   const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
   if (fenced?.[1]) return fenced[1].trim();
@@ -144,20 +150,30 @@ const buildUserPrompt = (
   backgroundLabel: string,
   backgroundPromptHint: string
 ): string => {
+  const productName = clampText(input.productName, 80);
+  const productShortDescription = clampText(input.productShortDescription, 320);
+  const targetAudience = clampText(input.targetAudience || 'General Indonesia audience', 80);
+  const contentType = clampText(input.contentType || 'UGC product recommendation', 80);
+  const campaignTone = clampText(input.campaignTone || 'Kasual, Gaul', 80);
+  const tonevoice = clampText(input.tonevoice, 80);
+  const brief = clampText(input.brief || '-', 300);
+  const bgLabel = clampText(backgroundLabel, 120);
+  const bgHint = clampText(backgroundPromptHint, 220);
+
   return [
     'Create a production-ready 4-scene UGC plan.',
-    `Product name: ${input.productName}`,
-    `Product short description: ${input.productShortDescription}`,
-    `Target audience: ${input.targetAudience || 'General Indonesia audience'}`,
-    `Content type: ${input.contentType || 'UGC product recommendation'}`,
-    `Campaign tone: ${input.campaignTone || 'Kasual, Gaul'}`,
+    `Product name: ${productName}`,
+    `Product short description: ${productShortDescription}`,
+    `Target audience: ${targetAudience}`,
+    `Content type: ${contentType}`,
+    `Campaign tone: ${campaignTone}`,
     `Global aspect ratio: ${input.aspectRatioGlobal}`,
     `Background category: ${input.backgroundCategory}`,
-    `Background preset: ${backgroundLabel}`,
-    `Background visual hint: ${backgroundPromptHint}`,
-    `Tonevoice (single speaker): ${input.tonevoice}`,
+    `Background preset: ${bgLabel}`,
+    `Background visual hint: ${bgHint}`,
+    `Tonevoice (single speaker): ${tonevoice}`,
     `Language: ${input.language}`,
-    `Additional brief: ${input.brief || '-'}`,
+    `Additional brief: ${brief}`,
     'Scene rules:',
     '- Scene 1 = hook + problem, character only, product hidden.',
     '- Scene 2 = solution, product clearly visible.',
@@ -184,26 +200,54 @@ const requestUGCPlanner = async (params: {
   systemPrompt: string;
   userPrompt: string;
 }): Promise<any> => {
-  const requestBody = {
-    messages: [
-      {
-        role: 'developer',
-        content: [{ type: 'text', text: params.systemPrompt }],
-      },
-      {
-        role: 'user',
-        content: [{ type: 'text', text: params.userPrompt }],
-      },
-    ],
-    stream: false,
-    include_thoughts: false,
-    reasoning_effort: 'low',
-  };
+  const payloadVariants = [
+    // Variant 1: system + user in structured content array (recommended by docs)
+    {
+      messages: [
+        {
+          role: 'system',
+          content: [{ type: 'text', text: params.systemPrompt }],
+        },
+        {
+          role: 'user',
+          content: [{ type: 'text', text: params.userPrompt }],
+        },
+      ],
+      stream: false,
+      include_thoughts: false,
+      reasoning_effort: 'low',
+    },
+    // Variant 2: developer + user in structured content array
+    {
+      messages: [
+        {
+          role: 'developer',
+          content: [{ type: 'text', text: params.systemPrompt }],
+        },
+        {
+          role: 'user',
+          content: [{ type: 'text', text: params.userPrompt }],
+        },
+      ],
+      stream: false,
+      include_thoughts: false,
+      reasoning_effort: 'low',
+    },
+    // Variant 3: compact user-only content as simple string
+    {
+      messages: [
+        {
+          role: 'user',
+          content: `${params.systemPrompt}\n\n${params.userPrompt}`,
+        },
+      ],
+      stream: false,
+    },
+  ];
 
-  const maxAttempts = 2;
-  let lastError: Error | null = null;
+  const errors: string[] = [];
 
-  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+  for (let variantIndex = 0; variantIndex < payloadVariants.length; variantIndex += 1) {
     try {
       const response = await fetch(UGC_PLANNER_ENDPOINT, {
         method: 'POST',
@@ -211,14 +255,12 @@ const requestUGCPlanner = async (params: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${params.apiKey}`,
         },
-        body: JSON.stringify(requestBody),
+        body: JSON.stringify(payloadVariants[variantIndex]),
       });
 
       if (!response.ok) {
         const errorText = await response.text();
-        const err = new Error(
-          `UGC planner request failed (${response.status}) on attempt ${attempt}: ${errorText.slice(0, 320)}`
-        );
+        const err = new Error(`UGC planner request failed (${response.status}): ${errorText.slice(0, 320)}`);
         (err as any).status = response.status;
         throw err;
       }
@@ -226,24 +268,33 @@ const requestUGCPlanner = async (params: {
       const json = await response.json();
       const rawCode = Number(json?.code);
       if (!Number.isNaN(rawCode) && rawCode !== 200) {
-        const err = new Error(
-          `Gemini provider error (${rawCode}) on attempt ${attempt}: ${json?.msg || 'Unknown provider error'}`
-        );
+        const err = new Error(`Gemini provider error (${rawCode}): ${json?.msg || 'Unknown provider error'}`);
         (err as any).status = rawCode;
         throw err;
       }
 
       return json;
     } catch (error: any) {
-      lastError = error instanceof Error ? error : new Error(String(error));
       const status = Number((error as any)?.status || 0);
+      const message = error?.message || String(error);
+      errors.push(`variant ${variantIndex + 1}: ${message}`);
+
+      // Non-retryable auth/config issue.
+      if (status === 401 || status === 403) {
+        throw error;
+      }
+
+      // Retry only for transient/server/network style errors.
       const retryable = status === 500 || status === 502 || status === 503 || status === 504;
-      if (!retryable || attempt >= maxAttempts) break;
-      await new Promise((resolve) => setTimeout(resolve, 900));
+      const networkLike = message.toLowerCase().includes('failed to fetch') || message.toLowerCase().includes('network');
+      if (!retryable && !networkLike) {
+        throw error;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 700));
     }
   }
 
-  throw lastError || new Error('UGC planner request failed.');
+  throw new Error(errors.join(' | '));
 };
 
 export const buildUGCDialogueScript = (plan: UGCPlannerOutput): string => {
