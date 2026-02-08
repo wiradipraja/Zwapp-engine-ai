@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
 import { uploadImageToKieAI } from '../../services/kieFileUpload';
 import { generateUGCPlan } from '../../services/ugcPlanner';
-import { generateUGCSceneSequence } from '../../services/ugcSceneGenerator';
+import { generateUGCSceneSequenceByCount } from '../../services/ugcSceneGenerator';
 import { produceUGCSceneVideo } from '../../services/ugcVideoPipeline';
 import { getCreditCost } from '../../services/credits';
 import { getOutputByTaskId, saveOutputToSupabase } from '../../services/outputSaving';
@@ -69,6 +69,7 @@ const UGCWorkspacePanel: React.FC<UGCWorkspacePanelProps> = ({ apiKey, spaceId }
   const [plan, setPlan] = useState<UGCPlannerOutput | null>(null);
   const [sceneImages, setSceneImages] = useState<SceneImageMap>(createEmptySceneImageMap);
   const [sceneVideos, setSceneVideos] = useState<SceneVideoMap>(createEmptySceneVideoMap);
+  const [sceneGenerateCount, setSceneGenerateCount] = useState<1 | 2 | 3 | 4>(1);
   const [videoProvider, setVideoProvider] = useState<UGCVideoProvider>('veo3_fast');
   const [videoMode, setVideoMode] = useState<UGCVideoMode>('A_NATIVE');
   const [muteNativeAudio, setMuteNativeAudio] = useState(true);
@@ -191,15 +192,20 @@ const UGCWorkspacePanel: React.FC<UGCWorkspacePanelProps> = ({ apiKey, spaceId }
     setStatusText('');
     setIsGeneratingSequence(true);
     try {
-      const generated = await generateUGCSceneSequence({
+      const generated = await generateUGCSceneSequenceByCount({
         apiKey,
         input,
         backgroundLabel: selectedBackgroundOption.label,
         backgroundPromptHint: selectedBackgroundOption.promptHintEn,
         scenes: plan.scenes,
+        sceneCount: sceneGenerateCount,
       });
       setSceneImages(generated);
-      setStatusText('Scene sequence berhasil dibuat. Scene 1 start frame jadi anchor.');
+      setStatusText(
+        sceneGenerateCount === 1
+          ? 'Scene 1 anchor (start+end) berhasil dibuat.'
+          : `Scene 1-${sceneGenerateCount} berhasil dibuat berurutan dengan anchor continuity.`
+      );
     } catch (error: any) {
       setErrorText(error.message || 'Generate scene sequence gagal.');
     } finally {
@@ -515,7 +521,19 @@ const UGCWorkspacePanel: React.FC<UGCWorkspacePanelProps> = ({ apiKey, spaceId }
               }`}
             />
 
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-2 items-center">
+              <select
+                value={sceneGenerateCount}
+                onChange={(e) => setSceneGenerateCount(Number(e.target.value) as 1 | 2 | 3 | 4)}
+                className={`px-3 py-2 rounded-lg text-xs border ${
+                  isDark ? 'bg-zinc-900 border-zinc-800 text-zinc-200' : 'bg-white border-zinc-200'
+                }`}
+              >
+                <option value={1}>Generate: Scene 1 only (Anchor)</option>
+                <option value={2}>Generate: Scene 1-2</option>
+                <option value={3}>Generate: Scene 1-3</option>
+                <option value={4}>Generate: Scene 1-4</option>
+              </select>
               <button
                 onClick={handleGeneratePlan}
                 disabled={isPlanning}
@@ -530,7 +548,11 @@ const UGCWorkspacePanel: React.FC<UGCWorkspacePanelProps> = ({ apiKey, spaceId }
                   isDark ? 'border-zinc-700 text-zinc-200' : 'border-zinc-300 text-zinc-700'
                 } disabled:opacity-50`}
               >
-                {isGeneratingSequence ? 'Generating Sequence...' : 'Step 3: Generate Image Sequence'}
+                {isGeneratingSequence
+                  ? 'Generating Sequence...'
+                  : sceneGenerateCount === 1
+                  ? 'Step 3: Generate Scene 1 Anchor'
+                  : `Step 3: Generate Scene 1-${sceneGenerateCount}`}
               </button>
             </div>
           </div>

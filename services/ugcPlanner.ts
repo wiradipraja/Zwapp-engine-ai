@@ -1,7 +1,3 @@
-import {
-  createGemini3FlashChatCompletion,
-  DEFAULT_GEMINI_CHAT_DEVELOPER_PROMPT,
-} from './geminiChat';
 import type {
   UGCPlannerOutput,
   UGCSceneGoal,
@@ -9,77 +5,43 @@ import type {
   UGCWorkflowInputPayload,
 } from '../types/ugcWorkflow';
 
-const PLANNER_SYSTEM_PROMPT = `${DEFAULT_GEMINI_CHAT_DEVELOPER_PROMPT}
-You are also The Creative Director and Copywriter for UGC campaign production.
-Return JSON only. No markdown. No explanation.
-Use Indonesian language for dialogue/caption/hashtags.
-Use English language for visual descriptions/camera/negative prompts.
-Hard rules:
-1. Always output exactly 4 scenes with scene_number 1..4.
-2. Scene 1 goal=hook_problem and show_product=false.
-3. Scene 2 goal=solution and show_product=true.
-4. Scene 3 goal=benefit and show_product=true.
-5. Scene 4 goal=cta and show_product=true.
-6. Keep global aspect ratio consistency.
-7. Never include subtitles, text overlays, logos, or watermark.
-8. Scene 1 must show character only (no product visible).
-9. Scene 2-4 must show product clearly and recognizable.
-10. Make dialogue concise and actionable for Indonesian audience.
-Output schema:
-{
-  "visual_anchor": {
-    "model_identity_lock": "string",
-    "product_identity_lock": "string"
-  },
-  "scenes": [
-    {
-      "scene_number": 1,
-      "goal": "hook_problem",
-      "show_product": false,
-      "duration_seconds": 3,
-      "dialogue_id": "string",
-      "dialogue_text_id": "string",
-      "visual_description_en": "string",
-      "camera_direction_en": "string",
-      "negative_prompt_en": "string"
-    },
-    {
-      "scene_number": 2,
-      "goal": "solution",
-      "show_product": true,
-      "duration_seconds": 3,
-      "dialogue_id": "string",
-      "dialogue_text_id": "string",
-      "visual_description_en": "string",
-      "camera_direction_en": "string",
-      "negative_prompt_en": "string"
-    },
-    {
-      "scene_number": 3,
-      "goal": "benefit",
-      "show_product": true,
-      "duration_seconds": 3,
-      "dialogue_id": "string",
-      "dialogue_text_id": "string",
-      "visual_description_en": "string",
-      "camera_direction_en": "string",
-      "negative_prompt_en": "string"
-    },
-    {
-      "scene_number": 4,
-      "goal": "cta",
-      "show_product": true,
-      "duration_seconds": 3,
-      "dialogue_id": "string",
-      "dialogue_text_id": "string",
-      "visual_description_en": "string",
-      "camera_direction_en": "string",
-      "negative_prompt_en": "string"
-    }
-  ],
-  "caption_id": "string",
-  "hashtags": ["string"]
-}`;
+const UGC_PLANNER_ENDPOINT = '/api/proxy/gemini-3-flash/v1/chat/completions';
+
+const PLANNER_SYSTEM_PROMPT = [
+  'You are The Creative Director and Copywriter for Indonesian UGC ads.',
+  'Return JSON only, no markdown, no extra text.',
+  'Language policy:',
+  '- dialogue_id, dialogue_text_id, caption_id, hashtags -> Indonesian',
+  '- visual_description_en, camera_direction_en, negative_prompt_en -> English',
+  'Hard constraints:',
+  '1) Exactly 4 scenes with scene_number 1..4.',
+  '2) Scene 1 goal=hook_problem and show_product=false.',
+  '3) Scene 2 goal=solution and show_product=true.',
+  '4) Scene 3 goal=benefit and show_product=true.',
+  '5) Scene 4 goal=cta and show_product=true.',
+  '6) Keep continuity and identity consistency.',
+  '7) No subtitle, no caption, no text overlay, no watermark, no logo.',
+  '8) Keep each visual_description_en concise and practical.',
+  'Required output schema keys:',
+  '{',
+  '  "visual_anchor": { "model_identity_lock": "string", "product_identity_lock": "string" },',
+  '  "scenes": [',
+  '    {',
+  '      "scene_number": 1|2|3|4,',
+  '      "goal": "hook_problem"|"solution"|"benefit"|"cta",',
+  '      "show_product": boolean,',
+  '      "duration_seconds": number,',
+  '      "dialogue_id": "string",',
+  '      "dialogue_text_id": "string",',
+  '      "visual_description_en": "string",',
+  '      "camera_direction_en": "string",',
+  '      "negative_prompt_en": "string"',
+  '    }',
+  '  ],',
+  '  "caption_id": "string",',
+  '  "hashtags": ["string"]',
+  '}',
+].join('\n');
 
 const GOALS_BY_SCENE: Record<number, UGCSceneGoal> = {
   1: 'hook_problem',
@@ -99,13 +61,18 @@ const toText = (value: any, fallback = ''): string => {
   if (value === null || value === undefined) return fallback;
   if (typeof value === 'string') return value.trim() || fallback;
   if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  if (Array.isArray(value)) return value.map((v) => toText(v)).join(' ').trim() || fallback;
+  if (typeof value === 'object') {
+    if (typeof value.text === 'string') return value.text.trim() || fallback;
+    if (typeof value.content === 'string') return value.content.trim() || fallback;
+    if (Array.isArray(value.content)) return value.content.map((v) => toText(v)).join(' ').trim() || fallback;
+  }
   return fallback;
 };
 
 const extractJsonBlock = (text: string): string => {
   const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
   if (fenced?.[1]) return fenced[1].trim();
-
   const firstBrace = text.indexOf('{');
   const lastBrace = text.lastIndexOf('}');
   if (firstBrace >= 0 && lastBrace > firstBrace) {
@@ -145,10 +112,8 @@ const normalizePlannerOutput = (raw: any): UGCPlannerOutput => {
   const scenesRaw = Array.isArray(raw?.scenes) ? raw.scenes : [];
   const bySceneNumber = new Map<number, any>();
   scenesRaw.forEach((scene: any) => {
-    const parsedSceneNumber = Number(scene?.scene_number);
-    if (parsedSceneNumber >= 1 && parsedSceneNumber <= 4) {
-      bySceneNumber.set(parsedSceneNumber, scene);
-    }
+    const n = Number(scene?.scene_number);
+    if (n >= 1 && n <= 4) bySceneNumber.set(n, scene);
   });
 
   const scenes: UGCScenePlan[] = [1, 2, 3, 4].map((sceneNumber) =>
@@ -180,7 +145,7 @@ const buildUserPrompt = (
   backgroundPromptHint: string
 ): string => {
   return [
-    'Build a 4-scene UGC storyboard and copywriting payload.',
+    'Create a production-ready 4-scene UGC plan.',
     `Product name: ${input.productName}`,
     `Product short description: ${input.productShortDescription}`,
     `Target audience: ${input.targetAudience || 'General Indonesia audience'}`,
@@ -193,163 +158,92 @@ const buildUserPrompt = (
     `Tonevoice (single speaker): ${input.tonevoice}`,
     `Language: ${input.language}`,
     `Additional brief: ${input.brief || '-'}`,
-    'Visual constraints:',
+    'Scene rules:',
     '- Scene 1 = hook + problem, character only, product hidden.',
     '- Scene 2 = solution, product clearly visible.',
     '- Scene 3 = benefit, product clearly visible.',
     '- Scene 4 = CTA, product clearly visible.',
-    '- Keep visual consistency and identity lock from reference images.',
-    '- No subtitle, no caption, no text overlay, no watermark, no logo.',
+    '- Keep identity lock from model + product references.',
   ].join('\n');
 };
 
-const isProviderOutageError = (error: any): boolean => {
-  const text = String(error?.message || error || '').toLowerCase();
-  const status = Number((error as any)?.status || (error as any)?.apiCode || 0);
-  return (
-    status === 500 ||
-    status === 502 ||
-    status === 503 ||
-    status === 504 ||
-    text.includes('provider error (500)') ||
-    text.includes('server exception') ||
-    text.includes('maintained') ||
-    text.includes('maintenance') ||
-    text.includes('try again later') ||
-    text.includes('http 500') ||
-    text.includes('http 502') ||
-    text.includes('http 503') ||
-    text.includes('failed to fetch') ||
-    text.includes('networkerror') ||
-    text.includes('network error')
-  );
+const extractAssistantContentText = (payload: any): string => {
+  const root = payload?.data || payload;
+  const choice = root?.choices?.[0];
+  const message = choice?.message || choice?.delta || root?.message || {};
+  const text =
+    toText(message?.content) ||
+    toText(choice?.content) ||
+    toText(root?.content) ||
+    toText(root?.output_text);
+  return text;
 };
 
-const isAuthOrConfigError = (error: any): boolean => {
-  const text = String(error?.message || error || '').toLowerCase();
-  const status = Number((error as any)?.status || (error as any)?.apiCode || 0);
-  return (
-    status === 401 ||
-    status === 403 ||
-    text.includes('api key') ||
-    text.includes('authentication') ||
-    text.includes('unauthorized') ||
-    text.includes('forbidden') ||
-    text.includes('kie api key is required')
-  );
-};
-
-const safeSentence = (value: string, fallback: string): string => {
-  const cleaned = toText(value).replace(/\s+/g, ' ').trim();
-  return cleaned || fallback;
-};
-
-const buildLocalFallbackPlan = (params: {
-  input: UGCWorkflowInputPayload;
-  backgroundLabel: string;
-  backgroundPromptHint: string;
-}): UGCPlannerOutput => {
-  const { input, backgroundLabel, backgroundPromptHint } = params;
-  const productName = safeSentence(input.productName, 'produk ini');
-  const productDesc = safeSentence(input.productShortDescription, 'manfaat produk yang relevan');
-  const audience = safeSentence(input.targetAudience || '', 'audiens Indonesia');
-  const tone = safeSentence(input.campaignTone || '', 'kasual');
-  const messyRealismRule =
-    input.backgroundCategory === 'INDONESIA_KELAS_BAWAH'
-      ? 'Keep lower-income Indonesian environment realistic, slightly messy, and authentic without beautifying it.'
-      : '';
-  const negativeGlobal =
-    'No subtitle, no caption, no text overlay, no watermark, no logo, no extra text artifacts.';
-
-  const scenes: UGCScenePlan[] = [
-    {
-      scene_number: 1,
-      goal: 'hook_problem',
-      show_product: false,
-      duration_seconds: 3,
-      dialogue_id: `Kamu juga pernah ngerasain masalah ini sebelum pakai ${productName}?`,
-      dialogue_text_id: `Kamu juga pernah ngerasain masalah ini sebelum pakai ${productName}?`,
-      visual_description_en: [
-        `Vertical UGC opening shot in ${backgroundLabel}.`,
-        'Character-only frame, product is not visible.',
-        `Convey daily problem related to: ${productDesc}.`,
-        `Background hint: ${backgroundPromptHint}.`,
-        messyRealismRule,
-      ]
-        .filter(Boolean)
-        .join(' '),
-      camera_direction_en:
-        'Handheld phone framing, eye-level medium close-up, natural movement, emotional hook in first 3 seconds.',
-      negative_prompt_en: negativeGlobal,
-    },
-    {
-      scene_number: 2,
-      goal: 'solution',
-      show_product: true,
-      duration_seconds: 3,
-      dialogue_id: `Aku pilih ${productName} buat jadi solusi yang praktis.`,
-      dialogue_text_id: `Aku pilih ${productName} buat jadi solusi yang praktis.`,
-      visual_description_en: [
-        `Same character and same environment continuity in ${backgroundLabel}.`,
-        `Character introduces ${productName} clearly to camera.`,
-        'Product must be fully visible and recognizable.',
-        `Background hint: ${backgroundPromptHint}.`,
-      ].join(' '),
-      camera_direction_en:
-        'Start from previous pose continuity, slight push-in to product reveal, keep handheld UGC realism.',
-      negative_prompt_en: negativeGlobal,
-    },
-    {
-      scene_number: 3,
-      goal: 'benefit',
-      show_product: true,
-      duration_seconds: 3,
-      dialogue_id: `Setelah pakai ${productName}, manfaatnya langsung kerasa: ${productDesc}.`,
-      dialogue_text_id: `Setelah pakai ${productName}, manfaatnya langsung kerasa: ${productDesc}.`,
-      visual_description_en: [
-        `Same model identity lock and same ${productName} identity lock.`,
-        'Show practical usage moment and positive expression.',
-        'Product remains visible, clear label/shape consistency.',
-      ].join(' '),
-      camera_direction_en:
-        'UGC close-up with natural hand interaction, brief reaction shot, maintain continuity from scene 2.',
-      negative_prompt_en: negativeGlobal,
-    },
-    {
-      scene_number: 4,
-      goal: 'cta',
-      show_product: true,
-      duration_seconds: 3,
-      dialogue_id: `Kalau kamu ${audience}, cobain ${productName} sekarang juga.`,
-      dialogue_text_id: `Kalau kamu ${audience}, cobain ${productName} sekarang juga.`,
-      visual_description_en: [
-        `Final CTA frame in ${backgroundLabel}.`,
-        'Character looks directly at camera while holding product confidently.',
-        'Product must be visible and recognizable for final conversion moment.',
-      ].join(' '),
-      camera_direction_en:
-        'Stable handheld closing shot, slight hold for CTA delivery, natural eye contact with camera.',
-      negative_prompt_en: negativeGlobal,
-    },
-  ];
-
-  return {
-    visual_anchor: {
-      model_identity_lock:
-        'Preserve same face, age, skin tone, hairstyle, body proportions, and wardrobe continuity across all scenes.',
-      product_identity_lock:
-        'Preserve same product shape, size, color, branding, and material details across all scenes.',
-    },
-    scenes,
-    caption_id: `${productName} bikin hidup lebih praktis. Cocok buat gaya ${tone}.`,
-    hashtags: [
-      `#${productName.replace(/[^a-zA-Z0-9]/g, '')}`,
-      '#UGCIndonesia',
-      '#KontenProduk',
-      '#ReviewJujur',
-      '#ZwappEngine',
+const requestUGCPlanner = async (params: {
+  apiKey: string;
+  systemPrompt: string;
+  userPrompt: string;
+}): Promise<any> => {
+  const requestBody = {
+    messages: [
+      {
+        role: 'developer',
+        content: [{ type: 'text', text: params.systemPrompt }],
+      },
+      {
+        role: 'user',
+        content: [{ type: 'text', text: params.userPrompt }],
+      },
     ],
+    stream: false,
+    include_thoughts: false,
+    reasoning_effort: 'low',
   };
+
+  const maxAttempts = 2;
+  let lastError: Error | null = null;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      const response = await fetch(UGC_PLANNER_ENDPOINT, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${params.apiKey}`,
+        },
+        body: JSON.stringify(requestBody),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        const err = new Error(
+          `UGC planner request failed (${response.status}) on attempt ${attempt}: ${errorText.slice(0, 320)}`
+        );
+        (err as any).status = response.status;
+        throw err;
+      }
+
+      const json = await response.json();
+      const rawCode = Number(json?.code);
+      if (!Number.isNaN(rawCode) && rawCode !== 200) {
+        const err = new Error(
+          `Gemini provider error (${rawCode}) on attempt ${attempt}: ${json?.msg || 'Unknown provider error'}`
+        );
+        (err as any).status = rawCode;
+        throw err;
+      }
+
+      return json;
+    } catch (error: any) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+      const status = Number((error as any)?.status || 0);
+      const retryable = status === 500 || status === 502 || status === 503 || status === 504;
+      if (!retryable || attempt >= maxAttempts) break;
+      await new Promise((resolve) => setTimeout(resolve, 900));
+    }
+  }
+
+  throw lastError || new Error('UGC planner request failed.');
 };
 
 export const buildUGCDialogueScript = (plan: UGCPlannerOutput): string => {
@@ -370,49 +264,25 @@ export const generateUGCPlan = async (params: {
 }): Promise<UGCPlannerOutput> => {
   const { apiKey, input, backgroundLabel, backgroundPromptHint } = params;
   const userPrompt = buildUserPrompt(input, backgroundLabel, backgroundPromptHint);
-  try {
-    const completion = await createGemini3FlashChatCompletion(
-      apiKey,
-      [
-        { role: 'developer', content: PLANNER_SYSTEM_PROMPT },
-        { role: 'user', content: userPrompt },
-      ],
-      {
-        stream: false,
-        includeThoughts: false,
-        reasoningEffort: 'low',
-      }
-    );
 
-    const rawText = toText(completion.content);
-    if (!rawText) {
-      throw new Error('Planner returned empty response.');
-    }
+  const payload = await requestUGCPlanner({
+    apiKey,
+    systemPrompt: PLANNER_SYSTEM_PROMPT,
+    userPrompt,
+  });
 
-    const jsonText = extractJsonBlock(rawText);
-    const parsed = JSON.parse(jsonText);
-    return normalizePlannerOutput(parsed);
-  } catch (error: any) {
-    if (isAuthOrConfigError(error)) {
-      throw error;
-    }
-
-    if (isProviderOutageError(error)) {
-      console.warn('[UGC Planner] Provider outage detected, using local fallback plan.', error?.message || error);
-      return buildLocalFallbackPlan({ input, backgroundLabel, backgroundPromptHint });
-    }
-
-    const parseLikeError =
-      error instanceof SyntaxError ||
-      String(error?.message || '').toLowerCase().includes('unexpected token') ||
-      String(error?.message || '').toLowerCase().includes('json');
-    if (parseLikeError) {
-      console.warn('[UGC Planner] JSON parse failed, using local fallback plan.');
-      return buildLocalFallbackPlan({ input, backgroundLabel, backgroundPromptHint });
-    }
-
-    // For planner UX, fail closed to deterministic local plan for any non-auth runtime error.
-    console.warn('[UGC Planner] Non-auth planner error, using local fallback plan.', error?.message || error);
-    return buildLocalFallbackPlan({ input, backgroundLabel, backgroundPromptHint });
+  const rawText = extractAssistantContentText(payload);
+  if (!rawText) {
+    throw new Error('UGC planner returned empty content.');
   }
+
+  const jsonText = extractJsonBlock(rawText);
+  let parsed: any;
+  try {
+    parsed = JSON.parse(jsonText);
+  } catch (error: any) {
+    throw new Error(`UGC planner JSON parse failed: ${error.message || String(error)}`);
+  }
+
+  return normalizePlannerOutput(parsed);
 };

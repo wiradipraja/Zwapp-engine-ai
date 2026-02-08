@@ -114,6 +114,13 @@ const buildScenePrompt = (params: {
     anchorSceneStartUrl,
   } = params;
 
+  const identityLockText = [
+    'Reference image #1 is the main character identity lock. Keep face, body, skin tone, and hairstyle unchanged.',
+    scene.show_product
+      ? 'Reference image #2 is the product lock. Product shape, label, color, and branding must match exactly.'
+      : 'Do not show the product object in this scene.',
+  ].join(' ');
+
   const productVisibilityRule = scene.show_product
     ? 'Product must be visible and recognizable.'
     : 'Do not show product. Character only.';
@@ -145,6 +152,7 @@ const buildScenePrompt = (params: {
     `Camera direction: ${scene.camera_direction_en}`,
     `Negative prompt: ${scene.negative_prompt_en}`,
     `Dialogue context (Indonesian): ${scene.dialogue_text_id || scene.dialogue_id}`,
+    identityLockText,
     productVisibilityRule,
     frameRule,
     continuityRule,
@@ -236,7 +244,7 @@ export const generateUGCSceneFrame = async (
   const fallbackCandidates = [
     {
       prompt,
-      image_urls: referenceImages.slice(0, 4),
+      image_urls: referenceImages.slice(0, 3),
       output_format: 'png',
       image_size: mapNanoAspectRatio(input.aspectRatioGlobal),
     },
@@ -341,4 +349,25 @@ export const generateUGCSceneSequence = async (params: {
   }
 
   return result;
+};
+
+export const generateUGCSceneSequenceByCount = async (params: {
+  apiKey: string;
+  input: UGCWorkflowInputPayload;
+  backgroundLabel: string;
+  backgroundPromptHint: string;
+  scenes: UGCScenePlan[];
+  sceneCount: number;
+}): Promise<Record<number, { start?: UGCSceneImageAsset; end?: UGCSceneImageAsset }>> => {
+  const limitedScenes = [...params.scenes]
+    .sort((a, b) => a.scene_number - b.scene_number)
+    .slice(0, Math.max(1, Math.min(4, params.sceneCount)));
+
+  return generateUGCSceneSequence({
+    apiKey: params.apiKey,
+    input: params.input,
+    backgroundLabel: params.backgroundLabel,
+    backgroundPromptHint: params.backgroundPromptHint,
+    scenes: limitedScenes,
+  });
 };
