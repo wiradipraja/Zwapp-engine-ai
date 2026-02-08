@@ -203,6 +203,155 @@ const buildUserPrompt = (
   ].join('\n');
 };
 
+const isProviderOutageError = (error: any): boolean => {
+  const text = String(error?.message || error || '').toLowerCase();
+  const status = Number((error as any)?.status || (error as any)?.apiCode || 0);
+  return (
+    status === 500 ||
+    status === 502 ||
+    status === 503 ||
+    status === 504 ||
+    text.includes('provider error (500)') ||
+    text.includes('server exception') ||
+    text.includes('maintained') ||
+    text.includes('maintenance') ||
+    text.includes('try again later') ||
+    text.includes('http 500') ||
+    text.includes('http 502') ||
+    text.includes('http 503') ||
+    text.includes('failed to fetch') ||
+    text.includes('networkerror') ||
+    text.includes('network error')
+  );
+};
+
+const isAuthOrConfigError = (error: any): boolean => {
+  const text = String(error?.message || error || '').toLowerCase();
+  const status = Number((error as any)?.status || (error as any)?.apiCode || 0);
+  return (
+    status === 401 ||
+    status === 403 ||
+    text.includes('api key') ||
+    text.includes('authentication') ||
+    text.includes('unauthorized') ||
+    text.includes('forbidden') ||
+    text.includes('kie api key is required')
+  );
+};
+
+const safeSentence = (value: string, fallback: string): string => {
+  const cleaned = toText(value).replace(/\s+/g, ' ').trim();
+  return cleaned || fallback;
+};
+
+const buildLocalFallbackPlan = (params: {
+  input: UGCWorkflowInputPayload;
+  backgroundLabel: string;
+  backgroundPromptHint: string;
+}): UGCPlannerOutput => {
+  const { input, backgroundLabel, backgroundPromptHint } = params;
+  const productName = safeSentence(input.productName, 'produk ini');
+  const productDesc = safeSentence(input.productShortDescription, 'manfaat produk yang relevan');
+  const audience = safeSentence(input.targetAudience || '', 'audiens Indonesia');
+  const tone = safeSentence(input.campaignTone || '', 'kasual');
+  const messyRealismRule =
+    input.backgroundCategory === 'INDONESIA_KELAS_BAWAH'
+      ? 'Keep lower-income Indonesian environment realistic, slightly messy, and authentic without beautifying it.'
+      : '';
+  const negativeGlobal =
+    'No subtitle, no caption, no text overlay, no watermark, no logo, no extra text artifacts.';
+
+  const scenes: UGCScenePlan[] = [
+    {
+      scene_number: 1,
+      goal: 'hook_problem',
+      show_product: false,
+      duration_seconds: 3,
+      dialogue_id: `Kamu juga pernah ngerasain masalah ini sebelum pakai ${productName}?`,
+      dialogue_text_id: `Kamu juga pernah ngerasain masalah ini sebelum pakai ${productName}?`,
+      visual_description_en: [
+        `Vertical UGC opening shot in ${backgroundLabel}.`,
+        'Character-only frame, product is not visible.',
+        `Convey daily problem related to: ${productDesc}.`,
+        `Background hint: ${backgroundPromptHint}.`,
+        messyRealismRule,
+      ]
+        .filter(Boolean)
+        .join(' '),
+      camera_direction_en:
+        'Handheld phone framing, eye-level medium close-up, natural movement, emotional hook in first 3 seconds.',
+      negative_prompt_en: negativeGlobal,
+    },
+    {
+      scene_number: 2,
+      goal: 'solution',
+      show_product: true,
+      duration_seconds: 3,
+      dialogue_id: `Aku pilih ${productName} buat jadi solusi yang praktis.`,
+      dialogue_text_id: `Aku pilih ${productName} buat jadi solusi yang praktis.`,
+      visual_description_en: [
+        `Same character and same environment continuity in ${backgroundLabel}.`,
+        `Character introduces ${productName} clearly to camera.`,
+        'Product must be fully visible and recognizable.',
+        `Background hint: ${backgroundPromptHint}.`,
+      ].join(' '),
+      camera_direction_en:
+        'Start from previous pose continuity, slight push-in to product reveal, keep handheld UGC realism.',
+      negative_prompt_en: negativeGlobal,
+    },
+    {
+      scene_number: 3,
+      goal: 'benefit',
+      show_product: true,
+      duration_seconds: 3,
+      dialogue_id: `Setelah pakai ${productName}, manfaatnya langsung kerasa: ${productDesc}.`,
+      dialogue_text_id: `Setelah pakai ${productName}, manfaatnya langsung kerasa: ${productDesc}.`,
+      visual_description_en: [
+        `Same model identity lock and same ${productName} identity lock.`,
+        'Show practical usage moment and positive expression.',
+        'Product remains visible, clear label/shape consistency.',
+      ].join(' '),
+      camera_direction_en:
+        'UGC close-up with natural hand interaction, brief reaction shot, maintain continuity from scene 2.',
+      negative_prompt_en: negativeGlobal,
+    },
+    {
+      scene_number: 4,
+      goal: 'cta',
+      show_product: true,
+      duration_seconds: 3,
+      dialogue_id: `Kalau kamu ${audience}, cobain ${productName} sekarang juga.`,
+      dialogue_text_id: `Kalau kamu ${audience}, cobain ${productName} sekarang juga.`,
+      visual_description_en: [
+        `Final CTA frame in ${backgroundLabel}.`,
+        'Character looks directly at camera while holding product confidently.',
+        'Product must be visible and recognizable for final conversion moment.',
+      ].join(' '),
+      camera_direction_en:
+        'Stable handheld closing shot, slight hold for CTA delivery, natural eye contact with camera.',
+      negative_prompt_en: negativeGlobal,
+    },
+  ];
+
+  return {
+    visual_anchor: {
+      model_identity_lock:
+        'Preserve same face, age, skin tone, hairstyle, body proportions, and wardrobe continuity across all scenes.',
+      product_identity_lock:
+        'Preserve same product shape, size, color, branding, and material details across all scenes.',
+    },
+    scenes,
+    caption_id: `${productName} bikin hidup lebih praktis. Cocok buat gaya ${tone}.`,
+    hashtags: [
+      `#${productName.replace(/[^a-zA-Z0-9]/g, '')}`,
+      '#UGCIndonesia',
+      '#KontenProduk',
+      '#ReviewJujur',
+      '#ZwappEngine',
+    ],
+  };
+};
+
 export const buildUGCDialogueScript = (plan: UGCPlannerOutput): string => {
   return plan.scenes
     .map((scene) => {
@@ -221,31 +370,49 @@ export const generateUGCPlan = async (params: {
 }): Promise<UGCPlannerOutput> => {
   const { apiKey, input, backgroundLabel, backgroundPromptHint } = params;
   const userPrompt = buildUserPrompt(input, backgroundLabel, backgroundPromptHint);
-  const completion = await createGemini3FlashChatCompletion(
-    apiKey,
-    [
-      { role: 'developer', content: PLANNER_SYSTEM_PROMPT },
-      { role: 'user', content: userPrompt },
-    ],
-    {
-      stream: false,
-      includeThoughts: false,
-      reasoningEffort: 'low',
-    }
-  );
-
-  const rawText = toText(completion.content);
-  if (!rawText) {
-    throw new Error('Planner returned empty response.');
-  }
-
-  const jsonText = extractJsonBlock(rawText);
-  let parsed: any;
   try {
-    parsed = JSON.parse(jsonText);
-  } catch (error: any) {
-    throw new Error(`Planner JSON parse failed: ${error.message || String(error)}`);
-  }
+    const completion = await createGemini3FlashChatCompletion(
+      apiKey,
+      [
+        { role: 'developer', content: PLANNER_SYSTEM_PROMPT },
+        { role: 'user', content: userPrompt },
+      ],
+      {
+        stream: false,
+        includeThoughts: false,
+        reasoningEffort: 'low',
+      }
+    );
 
-  return normalizePlannerOutput(parsed);
+    const rawText = toText(completion.content);
+    if (!rawText) {
+      throw new Error('Planner returned empty response.');
+    }
+
+    const jsonText = extractJsonBlock(rawText);
+    const parsed = JSON.parse(jsonText);
+    return normalizePlannerOutput(parsed);
+  } catch (error: any) {
+    if (isAuthOrConfigError(error)) {
+      throw error;
+    }
+
+    if (isProviderOutageError(error)) {
+      console.warn('[UGC Planner] Provider outage detected, using local fallback plan.', error?.message || error);
+      return buildLocalFallbackPlan({ input, backgroundLabel, backgroundPromptHint });
+    }
+
+    const parseLikeError =
+      error instanceof SyntaxError ||
+      String(error?.message || '').toLowerCase().includes('unexpected token') ||
+      String(error?.message || '').toLowerCase().includes('json');
+    if (parseLikeError) {
+      console.warn('[UGC Planner] JSON parse failed, using local fallback plan.');
+      return buildLocalFallbackPlan({ input, backgroundLabel, backgroundPromptHint });
+    }
+
+    // For planner UX, fail closed to deterministic local plan for any non-auth runtime error.
+    console.warn('[UGC Planner] Non-auth planner error, using local fallback plan.', error?.message || error);
+    return buildLocalFallbackPlan({ input, backgroundLabel, backgroundPromptHint });
+  }
 };
